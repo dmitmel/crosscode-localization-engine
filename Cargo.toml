@@ -8,8 +8,15 @@ license = "MIT"
 repository = "https://github.com/dmitmel/crosscode-localization-engine.git"
 homepage = "https://github.com/dmitmel/crosscode-localization-engine"
 
+[[bin]]
+name = "crosslocale"
+path = "src/main.rs"
+
 [dependencies]
 serde = { version = "1.0.118", features = ["derive"] }
-serde_json = "1.0.61"
+serde_json = { version = "1.0.61", features = ["preserve_order"] }
 simd-json = { version = "0.3.23", optional = true }
 env_logger = { version = "0.8.2", default-features = false, features = ["termcolor", "atty", "humantime"] }
+log = { version = "0.4.11" }
+clap = { version = "2.33.3", default-features = false, features = ["color"] }
+anyhow = { version = "1.0.38" }
