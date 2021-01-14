@@ -5,7 +5,8 @@ use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct CommonOpts {
-  pretty_json: bool,
+  pub verbose: bool,
+  pub pretty_json: bool,
 }
 
 #[derive(Debug)]
@@ -29,7 +30,7 @@ pub fn parse_opts() -> AnyResult<Opts> {
   let matches = create_arg_parser().get_matches();
   Ok(Opts {
     common_opts: CommonOpts {
-      //
+      verbose: matches.is_present("verbose"),
       pretty_json: matches.is_present("pretty_json"),
     },
     command_opts: match matches.subcommand() {
@@ -52,6 +53,13 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
       AppSettings::AllowLeadingHyphen,
     ])
     .settings(&[AppSettings::SubcommandRequiredElseHelp])
+    .arg(
+      Arg::with_name("verbose")
+        .short("v")
+        .long("verbose")
+        .help("Print more logs, may help with troubleshooting")
+        .global(true),
+    )
     .arg(
       Arg::with_name("pretty_json")
         .long("pretty-json")
