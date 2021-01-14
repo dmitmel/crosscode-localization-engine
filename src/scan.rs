@@ -66,22 +66,20 @@ fn find_all_json_files_in(assets_dir: &Path) -> AnyResult<Vec<PathBuf>> {
     }? {
       for entry in dir_iter {
         let entry: fs::DirEntry = entry?;
-        let path = entry.path();
+        let entry_path = entry.path();
         let file_type: fs::FileType = entry
           .file_type()
-          .with_context(|| format!("Failed to get the file type of '{}'", path.display()))?;
+          .with_context(|| format!("Failed to get the file type of '{}'", entry_path.display()))?;
 
         if !file_type.is_dir() {
           continue;
         }
 
-        if let Some(name) = entry.file_name().to_str() {
-          json_dirs.push(path.join(DATA_DIR_NAME));
+        json_dirs.push(entry_path.join(DATA_DIR_NAME));
 
-          let metadata_file = path.join(name.to_owned() + ".json");
-          if metadata_file.exists() {
-            push_json_file_path(assets_dir, json_files, &metadata_file);
-          }
+        let metadata_file = entry_path.join(entry.file_name()).with_extension("json");
+        if metadata_file.exists() {
+          push_json_file_path(assets_dir, json_files, &metadata_file);
         }
       }
     }
