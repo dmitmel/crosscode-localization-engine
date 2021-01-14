@@ -3,6 +3,7 @@
 
 pub mod cli;
 pub mod impl_prelude;
+pub mod scan;
 
 use crate::impl_prelude::*;
 
@@ -14,13 +15,16 @@ pub fn main() {
     if log::log_enabled!(log::Level::Error) {
       error!("{:?}", err);
     } else {
-      eprintln!("ERROR: ${:?}", err);
+      eprintln!("ERROR: {:?}", err);
     }
   }
 }
 
 pub fn try_main() -> AnyResult<()> {
-  let args = cli::parse_args().context("Failed to parse command-line arguments")?;
-  println!("{:?}", args);
-  Ok(())
+  env_logger::init_from_env(env_logger::Env::default().default_filter_or("debug"));
+  let cli::Opts { common_opts, command_opts } =
+    cli::parse_opts().context("Failed to parse command-line arguments")?;
+  match command_opts {
+    cli::CommandOpts::Scan(command_opts) => scan::run(&common_opts, &command_opts),
+  }
 }

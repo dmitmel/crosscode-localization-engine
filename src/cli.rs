@@ -1,39 +1,42 @@
 use crate::impl_prelude::*;
+
 use clap::{App, AppSettings, Arg};
 use std::path::PathBuf;
 
 #[derive(Debug)]
-pub struct CommonOptions {
+pub struct CommonOpts {
   pretty_json: bool,
 }
 
 #[derive(Debug)]
-pub struct Args {
-  common: CommonOptions,
-  command: CommandArgs,
+pub struct Opts {
+  pub common_opts: CommonOpts,
+  pub command_opts: CommandOpts,
 }
 
 #[derive(Debug)]
-pub enum CommandArgs {
-  Scan {
-    //
-    assets_dir: PathBuf,
-    output: Option<PathBuf>,
-  },
+pub enum CommandOpts {
+  Scan(ScanCommandOpts),
 }
 
-pub fn parse_args() -> AnyResult<Args> {
+#[derive(Debug)]
+pub struct ScanCommandOpts {
+  pub assets_dir: PathBuf,
+  pub output: Option<PathBuf>,
+}
+
+pub fn parse_opts() -> AnyResult<Opts> {
   let matches = create_arg_parser().get_matches();
-  Ok(Args {
-    common: CommonOptions {
+  Ok(Opts {
+    common_opts: CommonOpts {
       //
       pretty_json: matches.is_present("pretty_json"),
     },
-    command: match matches.subcommand() {
-      ("scan", Some(matches)) => CommandArgs::Scan {
+    command_opts: match matches.subcommand() {
+      ("scan", Some(matches)) => CommandOpts::Scan(ScanCommandOpts {
         assets_dir: PathBuf::from(matches.value_of_os("assets_dir").unwrap()),
         output: matches.value_of_os("output").map(PathBuf::from),
-      },
+      }),
       _ => unreachable!(),
     },
   })
