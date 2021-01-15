@@ -30,6 +30,7 @@ impl<'a> CommonPaths<'a> {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct FoundJsonFile {
+  // TODO: split `path` into `asset_root` and `relative_path`
   pub path: String,
   pub is_lang_file: bool,
 }
