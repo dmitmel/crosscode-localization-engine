@@ -28,7 +28,7 @@ impl<'a> CommonPaths<'a> {
   pub fn resolve(&self, path: &Path) -> PathBuf { self.assets_dir.join(path) }
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct FoundJsonFile {
   pub path: String,
   pub is_lang_file: bool,
@@ -103,7 +103,7 @@ pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>
     trace!("Found {} JSON files", file_count);
   }
 
-  found_files.sort();
+  found_files.sort_by(|a, b| a.path.cmp(&b.path));
   Ok(found_files)
 }
 

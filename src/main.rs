@@ -4,6 +4,7 @@
 pub mod cli;
 pub mod impl_prelude;
 pub mod scan;
+pub mod utils;
 
 use crate::impl_prelude::*;
 
