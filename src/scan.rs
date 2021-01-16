@@ -21,6 +21,7 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
     .context("Failed to find all JSON files in the assets dir")?;
   info!("Found {} JSON files in total", all_json_files.len());
 
+  info!("Extracting localizable strings");
   let mut all_lang_labels: Vec<LangLabel> = Vec::with_capacity(37000);
   let lang_label_ignores = LangLabelIgnores::new();
   let mut ignored_lang_labels_count = 0;
@@ -35,11 +36,14 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
     let json_data = serde_json::from_slice::<json::Value>(&json_bytes)
       .with_context(|| format!("Failed to parse JSON file '{}'", found_file.path))?;
 
-    for lang_label in lang_label_extractor::extract_from_file(&found_file, &json_data) {
-      if !lang_label_ignores.is_ignored(&lang_label, &found_file) {
-        all_lang_labels.push(lang_label);
-      } else {
-        ignored_lang_labels_count += 1;
+    if let Some(lang_label_iter) = lang_label_extractor::extract_from_file(&found_file, &json_data)
+    {
+      for lang_label in lang_label_iter {
+        if !lang_label_ignores.is_ignored(&lang_label, &found_file) {
+          all_lang_labels.push(lang_label);
+        } else {
+          ignored_lang_labels_count += 1;
+        }
       }
     }
   }
