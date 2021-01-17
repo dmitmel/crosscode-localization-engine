@@ -1,10 +1,12 @@
 #![deny(missing_debug_implementations)]
 #![allow(clippy::new_without_default)]
 
+#[macro_use]
+pub mod utils;
+
 pub mod cli;
 pub mod impl_prelude;
 pub mod scan;
-pub mod utils;
 
 use crate::impl_prelude::*;
 

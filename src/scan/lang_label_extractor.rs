@@ -3,6 +3,8 @@ use crate::utils::json::{self, ValueExt as _};
 
 use std::convert::TryFrom;
 
+pub const EXTRACTED_LOCALE: &str = "en_US";
+
 pub fn extract_from_file<'json>(
   found_file: &'json super::json_file_finder::FoundJsonFile,
   json_data: &'json json::Value,
@@ -33,11 +35,12 @@ fn try_extract_lang_label<'json>(
 ) -> Option<LangLabel> {
   let object = value.as_object()?;
 
-  let text = object.get("en_US")?.as_str().or_else(|| {
+  let text = object.get(EXTRACTED_LOCALE)?.as_str().or_else(|| {
     warn!(
-      "{}: lang label {} is invalid: property 'en_US' is not a string",
+      "{}: lang label {} is invalid: property '{}' is not a string",
       file_path,
-      json_path.join("/")
+      json_path.join("/"),
+      EXTRACTED_LOCALE,
     );
     None
   })?;

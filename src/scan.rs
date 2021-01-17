@@ -2,6 +2,7 @@ pub mod database;
 pub mod json_file_finder;
 pub mod lang_label_extractor;
 
+use self::database as db;
 use self::json_file_finder::FoundJsonFile;
 use self::lang_label_extractor::LangLabel;
 use crate::cli;
@@ -9,11 +10,15 @@ use crate::impl_prelude::*;
 use crate::utils;
 use crate::utils::json;
 
+use indexmap::IndexMap;
 use lazy_static::lazy_static;
+use serde::Deserialize;
 use std::borrow::Cow;
 use std::char;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
+use std::io;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -28,17 +33,24 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
     .context("Failed to find all JSON files in the assets dir")?;
   info!("Found {} JSON files in total", all_json_files.len());
 
-  let version =
+  let game_version =
     read_game_version(&command_opts.assets_dir).context("Failed to read the game version")?;
-  info!("Game version is {}", version);
+  info!("Game version is {}", game_version);
+
+  let mut files = IndexMap::<String, db::FileData>::new();
+  // Currently all fragments are generated with the one and only `en_US` locale
+  // anyway, so let's reuse the hashmap and just clone it.
+  let mut fragment_text_map = HashMap::<String, String>::with_capacity(1);
 
   info!("Extracting localizable strings");
-  let mut all_lang_labels: Vec<LangLabel> = Vec::with_capacity(37000);
+  let mut lang_labels_count = 0;
   let mut ignored_lang_labels_count = 0;
 
   let all_json_files_len = all_json_files.len();
   for (i, found_file) in all_json_files.into_iter().enumerate() {
     trace!("[{}/{}] {}", i + 1, all_json_files_len, found_file.path);
+
+    let mut fragments = IndexMap::<String, db::FragmentData>::new();
 
     let abs_path = command_opts.assets_dir.join(&found_file.path);
     let json_bytes = fs::read(&abs_path)
@@ -50,19 +62,56 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
     {
       for lang_label in lang_label_iter {
         if !is_lang_label_ignored(&lang_label, &found_file) {
-          all_lang_labels.push(lang_label);
+          fragment_text_map
+            .insert(lang_label_extractor::EXTRACTED_LOCALE.to_owned(), lang_label.text);
+          fragments.insert(
+            lang_label.json_path.join("/"),
+            db::FragmentData {
+              lang_uid: lang_label.lang_uid,
+              description: Vec::new(),
+              text: fragment_text_map.clone(),
+            },
+          );
+          lang_labels_count += 1;
         } else {
           ignored_lang_labels_count += 1;
         }
       }
     }
+
+    if !fragments.is_empty() {
+      files.insert(
+        found_file.path,
+        db::FileData { is_lang_file: found_file.is_lang_file, fragments },
+      );
+    }
   }
 
   info!(
     "Found {} localizable strings in total, {} were ignored",
-    all_lang_labels.len(),
-    ignored_lang_labels_count,
+    lang_labels_count, ignored_lang_labels_count,
   );
+
+  info!("Writing the scan database");
+  let database = db::DatabaseData { game_version, files };
+
+  let mut database_writer: Box<dyn io::Write> = match &command_opts.output {
+    Some(path) => Box::new(io::BufWriter::new(fs::File::create(&path).with_context(|| {
+      format!("Failed to open file '{}' for writing the scan database", path.display())
+    })?)),
+    _ => Box::new(io::stdout()),
+  };
+
+  let mut write_database = || -> AnyResult<()> {
+    if common_opts.pretty_json {
+      serde_json::to_writer_pretty(&mut database_writer, &database)?;
+    } else {
+      serde_json::to_writer(&mut database_writer, &database)?;
+    }
+    database_writer.flush()?;
+    Ok(())
+  };
+  write_database().context("Failed to serialize the scan database")?;
 
   Ok(())
 }
@@ -71,13 +120,13 @@ lazy_static! {
   static ref CHANGELOG_FILE_PATH: &'static Path = Path::new("data/changelog.json");
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
 struct ChangelogFileRef<'a> {
   #[serde(borrow)]
   changelog: Vec<ChangelogEntryRef<'a>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
 struct ChangelogEntryRef<'a> {
   #[serde(borrow)]
   name: Cow<'a, str>,
@@ -135,16 +184,14 @@ pub fn read_game_version(assets_dir: &Path) -> AnyResult<String> {
 }
 
 lazy_static! {
-  static ref IGNORED_STRINGS: HashSet<&'static str> = {
-    let mut s = HashSet::with_capacity(5);
-    s.insert("");
-    s.insert("en_US");
-    s.insert("LOL, DO NOT TRANSLATE THIS!");
-    s.insert("LOL, DO NOT TRANSLATE THIS! (hologram)");
-    s.insert("\\c[1][DO NOT TRANSLATE THE FOLLOWING]\\c[0]");
-    s.insert("\\c[1][DO NOT TRANSLATE FOLLOWING TEXTS]\\c[0]");
-    s
-  };
+  static ref IGNORED_STRINGS: HashSet<&'static str> = hashset![
+    "",
+    "en_US",
+    "LOL, DO NOT TRANSLATE THIS!",
+    "LOL, DO NOT TRANSLATE THIS! (hologram)",
+    "\\c[1][DO NOT TRANSLATE THE FOLLOWING]\\c[0]",
+    "\\c[1][DO NOT TRANSLATE FOLLOWING TEXTS]\\c[0]",
+  ];
 }
 
 fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &FoundJsonFile) -> bool {
