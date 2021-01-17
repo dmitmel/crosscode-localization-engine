@@ -2,17 +2,6 @@ use std::borrow::Cow;
 
 pub use serde_json::Value;
 
-pub fn type_name_of(v: &Value) -> &'static str {
-  match v {
-    Value::Null => "null",
-    Value::Bool(_) => "bool",
-    Value::Number(_) => "number",
-    Value::String(_) => "string",
-    Value::Array(_) => "array",
-    Value::Object(_) => "object",
-  }
-}
-
 pub trait ValueExt {
   fn entries_iter(&self) -> Option<ValueEntriesIter>;
 }

@@ -6,11 +6,16 @@ use self::json_file_finder::FoundJsonFile;
 use self::lang_label_extractor::LangLabel;
 use crate::cli;
 use crate::impl_prelude::*;
+use crate::utils;
 use crate::utils::json;
 
 use lazy_static::lazy_static;
+use std::borrow::Cow;
+use std::char;
 use std::collections::HashSet;
 use std::fs;
+use std::path::Path;
+use std::str::FromStr;
 
 pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -> AnyResult<()> {
   info!(
@@ -22,6 +27,10 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
   let all_json_files = json_file_finder::find_all_in_assets_dir(&command_opts.assets_dir)
     .context("Failed to find all JSON files in the assets dir")?;
   info!("Found {} JSON files in total", all_json_files.len());
+
+  let version =
+    read_game_version(&command_opts.assets_dir).context("Failed to read the game version")?;
+  info!("Game version is {}", version);
 
   info!("Extracting localizable strings");
   let mut all_lang_labels: Vec<LangLabel> = Vec::with_capacity(37000);
@@ -56,6 +65,73 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
   );
 
   Ok(())
+}
+
+lazy_static! {
+  static ref CHANGELOG_FILE_PATH: &'static Path = Path::new("data/changelog.json");
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Deserialize)]
+struct ChangelogFileRef<'a> {
+  #[serde(borrow)]
+  changelog: Vec<ChangelogEntryRef<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Deserialize)]
+struct ChangelogEntryRef<'a> {
+  #[serde(borrow)]
+  name: Cow<'a, str>,
+  #[serde(borrow)]
+  version: Cow<'a, str>,
+  #[serde(borrow)]
+  date: Cow<'a, str>,
+  #[serde(borrow, default)]
+  fixes: Vec<Cow<'a, str>>,
+  #[serde(borrow, default)]
+  changes: Vec<Cow<'a, str>>,
+}
+
+pub fn read_game_version(assets_dir: &Path) -> AnyResult<String> {
+  let abs_changelog_path = assets_dir.join(*CHANGELOG_FILE_PATH);
+  let changelog_bytes = fs::read(&abs_changelog_path)
+    .with_context(|| format!("Failed to read file '{}'", abs_changelog_path.display()))?;
+  let changelog_data = serde_json::from_slice::<ChangelogFileRef>(&changelog_bytes)
+    .with_context(|| format!("Failed to parse JSON file '{}'", CHANGELOG_FILE_PATH.display()))?;
+  let latest_entry = changelog_data
+    .changelog
+    .get(0)
+    .ok_or_else(|| format_err!("Changelog is empty, can't determine the game version"))?;
+
+  let mut max_hotfix: u32 = 0;
+  let mut max_hotfix_str = "";
+  for change in latest_entry.changes.iter().chain(latest_entry.fixes.iter()) {
+    if let Some((hotfix_str, hotfix)) = try_extract_hotfix(change) {
+      if hotfix > max_hotfix {
+        max_hotfix = hotfix;
+        max_hotfix_str = hotfix_str;
+      }
+    }
+
+    #[allow(unused_assignments)]
+    fn try_extract_hotfix(mut change: &str) -> Option<(&str, u32)> {
+      let (i, _): (usize, char) =
+        change.char_indices().find(|(_, c)| !matches!(c, '+' | '-' | '~' | ' '))?;
+      change = unsafe { change.get_unchecked(i..) };
+      change = change.strip_prefix("HOTFIX(")?;
+      let i = change.char_indices().take_while(|(_, c)| char::is_ascii_digit(c)).count();
+      let hotfix_str = unsafe { change.get_unchecked(..i) };
+      let hotfix = u32::from_str(hotfix_str).ok()?;
+      change = unsafe { change.get_unchecked(i..) };
+      change = change.strip_prefix(")")?;
+      Some((hotfix_str, hotfix))
+    }
+  }
+
+  if max_hotfix > 0 {
+    Ok(utils::fast_concat(&[&latest_entry.version, "-", max_hotfix_str]))
+  } else {
+    Ok(latest_entry.version.clone().into_owned())
+  }
 }
 
 lazy_static! {
