@@ -1,31 +1,15 @@
 use crate::impl_prelude::*;
 
+use lazy_static::lazy_static;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 
-#[derive(Debug)]
-struct CommonPaths<'a> {
-  pub assets_dir: &'a Path,
-  pub data_dir: &'static Path,
-  pub extensions_dir: &'static Path,
-  pub lang_files_dir: &'static Path,
-  pub json_extension: &'static OsStr,
-}
-
-impl<'a> CommonPaths<'a> {
-  pub fn new(assets_dir: &'a Path) -> Self {
-    Self {
-      assets_dir,
-      data_dir: Path::new("data"),
-      extensions_dir: Path::new("extension"),
-      lang_files_dir: Path::new("lang"),
-      json_extension: OsStr::new("json"),
-    }
-  }
-
-  #[inline(always)]
-  pub fn resolve(&self, path: &Path) -> PathBuf { self.assets_dir.join(path) }
+lazy_static! {
+  static ref DATA_DIR: &'static Path = Path::new("data");
+  static ref EXTENSIONS_DIR: &'static Path = Path::new("extension");
+  static ref LANG_DIR: &'static Path = Path::new("lang");
+  static ref JSON_EXTENSION: &'static OsStr = OsStr::new("json");
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -36,12 +20,10 @@ pub struct FoundJsonFile {
 }
 
 pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>> {
-  let common_paths = CommonPaths::new(assets_dir);
-
   // Bail out early to warn the user instead of failing on some obscure "file
   // not found" IO error later.
   ensure!(
-    common_paths.resolve(common_paths.data_dir).is_dir(),
+    assets_dir.join(*DATA_DIR).is_dir(),
     "The data dir doesn't exist in the assets dir, path to the assets dir is incorrect"
   );
 
@@ -62,16 +44,16 @@ pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>
   asset_roots.push(PathBuf::new());
 
   info!("Listing the extensions");
-  let extension_count = read_extensions_dir(&common_paths, &mut asset_roots, &mut found_files)
+  let extension_count = read_extensions_dir(assets_dir, &mut asset_roots, &mut found_files)
     .context("Failed to read the extensions dir")?;
   info!("Found {} extensions", extension_count);
 
   let asset_roots_len = asset_roots.len();
   for (i, asset_root) in asset_roots.into_iter().enumerate() {
-    let data_dir = asset_root.join(common_paths.data_dir);
+    let data_dir = asset_root.join(*DATA_DIR);
     info!("[{}/{}] Listing all JSON files in '{}'", i + 1, asset_roots_len, data_dir.display());
 
-    let data_dir_abs = common_paths.resolve(&data_dir);
+    let data_dir_abs = assets_dir.join(&data_dir);
 
     let mut file_count: usize = 0;
     for entry in walkdir::WalkDir::new(&data_dir_abs).into_iter() {
@@ -79,9 +61,7 @@ pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>
         format!("Failed to list all files in dir '{}'", data_dir_abs.display())
       })?;
 
-      if !entry.file_type().is_file()
-        || entry.path().extension() != Some(common_paths.json_extension)
-      {
+      if !entry.file_type().is_file() || entry.path().extension() != Some(*JSON_EXTENSION) {
         continue;
       }
 
@@ -92,7 +72,7 @@ pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>
       let path = data_dir.join(relative_path);
       let path_str = path_to_str_with_error(&path)?;
 
-      let is_lang_file = relative_path.starts_with(&common_paths.lang_files_dir);
+      let is_lang_file = relative_path.starts_with(*LANG_DIR);
       // Hacky, but good enough for CC.
       if is_lang_file && !path_str.ends_with(".en_US.json") {
         continue;
@@ -109,13 +89,13 @@ pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>
 }
 
 fn read_extensions_dir(
-  common_paths: &CommonPaths<'_>,
+  assets_dir: &Path,
   asset_roots: &mut Vec<PathBuf>,
   found_files: &mut Vec<FoundJsonFile>,
 ) -> AnyResult<usize> {
   let mut extension_count = 0;
 
-  if let Some(dir_iter) = match common_paths.resolve(common_paths.extensions_dir).read_dir() {
+  if let Some(dir_iter) = match assets_dir.join(*EXTENSIONS_DIR).read_dir() {
     Ok(v) => Ok(Some(v)),
     Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
     Err(e) => Err(e),
@@ -131,11 +111,11 @@ fn read_extensions_dir(
       }
 
       let extension_dir_name = PathBuf::from(entry.file_name());
-      let extension_dir = common_paths.extensions_dir.join(&extension_dir_name);
-      let metadata_file_name = extension_dir_name.with_extension(common_paths.json_extension);
+      let extension_dir = EXTENSIONS_DIR.join(&extension_dir_name);
+      let metadata_file_name = extension_dir_name.with_extension(*JSON_EXTENSION);
       let metadata_file = extension_dir.join(metadata_file_name);
 
-      if !common_paths.resolve(&metadata_file).exists() {
+      if !assets_dir.join(&metadata_file).exists() {
         trace!(
           "Dir '{}' is not an extension - the metadata file '{}' doesn't exist",
           extension_dir_name.display(),
