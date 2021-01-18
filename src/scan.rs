@@ -108,6 +108,7 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
     } else {
       serde_json::to_writer(&mut database_writer, &database)?;
     }
+    database_writer.write_all(b"\n")?;
     database_writer.flush()?;
     Ok(())
   };
