@@ -2,9 +2,8 @@ use crate::impl_prelude::*;
 use crate::project::splitting_strategies;
 
 use clap::{App, AppSettings, Arg};
-use lazy_static::lazy_static;
 use std::ffi::{OsStr, OsString};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct CommonOpts {
@@ -19,54 +18,56 @@ pub struct Opts {
 
 #[derive(Debug)]
 pub enum CommandOpts {
-  Scan(ScanCommandOpts),
-  CreateProject(CreateProjectCommandOpts),
+  // Individual command options structs are boxed to prevent wasting memory on
+  // small variants because their sizes vary a lot.
+  Scan(Box<ScanCommandOpts>),
+  CreateProject(Box<CreateProjectCommandOpts>),
 }
 
 #[derive(Debug)]
 pub struct ScanCommandOpts {
   pub assets_dir: PathBuf,
-  pub output: Option<FileOrStdStream>,
+  pub output: Option<FileOrStdio>,
 }
 
 #[derive(Debug)]
 pub struct CreateProjectCommandOpts {
-  pub scan_db: FileOrStdStream,
+  pub project_dir: PathBuf,
+  pub scan_db: FileOrStdio,
   pub original_locale: String,
   pub reference_locales: Vec<String>,
   pub translation_locale: String,
   pub splitting_strategy: String,
-}
-
-#[derive(Debug)]
-pub enum FileOrStdStream {
-  File(PathBuf),
-  StdStream,
+  pub translations_dir: String,
 }
 
 pub fn parse_opts() -> AnyResult<Opts> {
   let matches = create_arg_parser().get_matches();
   Ok(Opts {
-    common_opts: CommonOpts {
-      verbose: matches.is_present("verbose"),
-    },
+    common_opts: CommonOpts { verbose: matches.is_present("verbose") },
     command_opts: match matches.subcommand() {
-      ("scan", Some(matches)) => CommandOpts::Scan(ScanCommandOpts {
-        assets_dir: PathBuf::from(matches.value_of_os("assets_dir").unwrap()),
-        output: matches.value_of_os("output").map(FileOrStdStream::from),
-      }),
+      ("scan", Some(matches)) => {
+        //
+        CommandOpts::Scan(Box::new(ScanCommandOpts {
+          assets_dir: PathBuf::from(matches.value_of_os("assets_dir").unwrap()),
+          output: matches.value_of_os("output").map(FileOrStdio::from),
+        }))
+      }
 
-      ("create-project", Some(matches)) => CommandOpts::CreateProject(CreateProjectCommandOpts {
-        scan_db: FileOrStdStream::from(matches.value_of_os("scan_db").unwrap()),
-        original_locale: matches.value_of("original_locale").unwrap().to_owned(),
-        reference_locales: matches
-          .values_of("original_locale")
-          .unwrap()
-          .map(ToOwned::to_owned)
-          .collect(),
-        translation_locale: matches.value_of("translation_locale").unwrap().to_owned(),
-        splitting_strategy: matches.value_of("splitting_strategy").unwrap().to_owned(),
-      }),
+      ("create-project", Some(matches)) => {
+        CommandOpts::CreateProject(Box::new(CreateProjectCommandOpts {
+          project_dir: PathBuf::from(matches.value_of_os("project_dir").unwrap()),
+          scan_db: FileOrStdio::from(matches.value_of_os("scan_db").unwrap()),
+          original_locale: matches.value_of("original_locale").unwrap().to_owned(),
+          reference_locales: matches
+            .values_of("reference_locales")
+            .map(|values| values.map(ToOwned::to_owned).collect())
+            .unwrap_or_else(Vec::new),
+          translation_locale: matches.value_of("translation_locale").unwrap().to_owned(),
+          splitting_strategy: matches.value_of("splitting_strategy").unwrap().to_owned(),
+          translations_dir: matches.value_of("translations_dir").unwrap().to_owned(),
+        }))
+      }
 
       _ => unreachable!("{:#?}", matches),
     },
@@ -162,22 +163,39 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
               "Strategy used for assigning game files (and individual fragments in them) to \
               translation storage files",
             ),
+        )
+        .arg(
+          Arg::with_name("translations_dir")
+            .value_name("PATH")
+            .long("translations-dir")
+            .validator_os(|s| {
+              if !Path::new(s).is_relative() {
+                return Err(OsString::from("Path must be relative"));
+              }
+              Ok(())
+            })
+            .default_value("tr")
+            .help("Path to project's translation storage files, relative to project's directory"),
         ),
     )
 }
 
-lazy_static! {
-  static ref STD_STREAM_STR: &'static OsStr = OsStr::new("-");
+const STD_STREAM_STRING: &str = "-";
+
+#[derive(Debug)]
+pub enum FileOrStdio {
+  File(PathBuf),
+  Stdio,
 }
 
-impl<T: ?Sized + AsRef<OsStr>> From<&T> for FileOrStdStream {
+impl<T: ?Sized + AsRef<OsStr>> From<&T> for FileOrStdio {
   fn from(s: &T) -> Self { Self::from(s.as_ref().to_os_string()) }
 }
 
-impl From<OsString> for FileOrStdStream {
+impl From<OsString> for FileOrStdio {
   fn from(v: OsString) -> Self {
-    if v == *STD_STREAM_STR {
-      Self::StdStream
+    if v == *OsStr::new(STD_STREAM_STRING) {
+      Self::Stdio
     } else {
       Self::File(PathBuf::from(v))
     }

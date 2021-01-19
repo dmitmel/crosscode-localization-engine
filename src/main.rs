@@ -52,10 +52,10 @@ pub fn try_main() -> AnyResult<()> {
   match command_opts {
     cli::CommandOpts::Scan(command_opts) => {
       //
-      scan::run(&common_opts, &command_opts)
+      scan::run(common_opts, *command_opts)
     }
     cli::CommandOpts::CreateProject(command_opts) => {
-      create_project::run(&common_opts, &command_opts)
+      create_project::run(common_opts, *command_opts)
     }
   }
 }

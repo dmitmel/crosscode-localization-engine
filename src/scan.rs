@@ -23,20 +23,21 @@ use std::io;
 use std::path::Path;
 use std::str::FromStr;
 
-pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -> AnyResult<()> {
+pub fn run(common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) -> AnyResult<()> {
+  let timestamp = utils::get_timestamp();
   info!(
     "Performing a scan of game files in the assets dir '{}'",
     command_opts.assets_dir.display()
   );
 
+  let game_version =
+    read_game_version(&command_opts.assets_dir).context("Failed to read the game version")?;
+  info!("Game version is {}", game_version);
+
   info!("Finding all JSON files");
   let all_json_files = json_file_finder::find_all_in_assets_dir(&command_opts.assets_dir)
     .context("Failed to find all JSON files in the assets dir")?;
   info!("Found {} JSON files in total", all_json_files.len());
-
-  let game_version =
-    read_game_version(&command_opts.assets_dir).context("Failed to read the game version")?;
-  info!("Game version is {}", game_version);
 
   let mut files = IndexMap::<String, db::FileData>::new();
   // Currently all fragments are generated with the one and only `en_US` locale
@@ -118,31 +119,25 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
   );
 
   info!("Writing the scan database");
-  let database = db::DatabaseData {
-    uuid: utils::new_uuid(),
-    generated_at: utils::get_timestamp(),
-    game_version,
-    files,
-  };
-
-  let mut database_writer: Box<dyn io::Write> = match &command_opts.output {
-    Some(cli::FileOrStdio::File(path)) => {
-      Box::new(io::BufWriter::new(fs::File::create(&path).with_context(|| {
-        format!("Failed to open file '{}' for writing the scan database", path.display())
-      })?))
-    }
-    Some(cli::FileOrStdio::Stdio) => Box::new(io::stdout()),
-    None => Box::new(io::sink()),
-  };
+  let database =
+    db::DatabaseData { uuid: utils::new_uuid(), generated_at: timestamp, game_version, files };
 
   try_any_result_hint(
     try {
-      serde_json::to_writer_pretty(&mut database_writer, &database)?;
-      database_writer.write_all(b"\n")?;
-      database_writer.flush()?;
+      let mut writer: Box<dyn io::Write> = match &command_opts.output {
+        Some(cli::FileOrStdio::File(path)) => Box::new(io::BufWriter::new(
+          fs::File::create(&path)
+            .with_context(|| format!("Failed to open file '{}'", path.display()))?,
+        )),
+        Some(cli::FileOrStdio::Stdio) => Box::new(io::stdout()),
+        None => Box::new(io::sink()),
+      };
+      serde_json::to_writer_pretty(&mut writer, &database)?;
+      writer.write_all(b"\n")?;
+      writer.flush()?;
     },
   )
-  .context("Failed to serialize the scan database")?;
+  .context("Failed to write the scan database")?;
 
   Ok(())
 }
