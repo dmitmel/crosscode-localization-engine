@@ -43,6 +43,8 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
   // anyway, so let's reuse the hashmap and just clone it.
   let mut tmp_fragment_text = HashMap::<String, String>::with_capacity(1);
 
+  // let mut strategy: Box<dyn SplittingStrategy> = Box::new(NotabenoidChapters);
+
   info!("Extracting localizable strings");
   let mut lang_labels_count = 0;
   let mut ignored_lang_labels_count = 0;
@@ -63,6 +65,12 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
       Some(v) => v,
       _ => continue,
     };
+
+    // let global_translation_file: Cow<'static, str> = match strategy.mode() {
+    //   SplittingStrategyMode::PerFile => strategy.get_translation_file(&found_file.path, ""),
+    //   SplittingStrategyMode::PerFragment => "".into(),
+    // };
+
     for lang_label in lang_labels_iter {
       if is_lang_label_ignored(&lang_label, &found_file) {
         ignored_lang_labels_count += 1;
@@ -76,6 +84,13 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
           continue;
         }
       };
+
+      // let fragment_translation_file: Cow<'static, str> = match strategy.mode() {
+      //   SplittingStrategyMode::PerFile => global_translation_file.clone(),
+      //   SplittingStrategyMode::PerFragment => {
+      //     strategy.get_translation_file(&found_file.path, &lang_label.json_path)
+      //   }
+      // };
 
       tmp_fragment_text.insert(lang_label_extractor::EXTRACTED_LOCALE.to_owned(), lang_label.text);
       fragments.insert(
@@ -98,8 +113,10 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
   }
 
   info!(
-    "Found {} localizable strings, {} were ignored",
-    lang_labels_count, ignored_lang_labels_count,
+    "Found {} localizable strings in {} files, {} were ignored",
+    lang_labels_count,
+    files.len(),
+    ignored_lang_labels_count,
   );
 
   info!("Writing the scan database");
