@@ -239,7 +239,8 @@ fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &FoundJsonFile) -> 
   // TODO: check the relative file path
   if found_file.path.starts_with("data/credits/") && {
     let mut iter = lang_label.json_path.split('/');
-    iter.nth(0) == Some("entries") && iter.nth(2) == Some("names")
+    // Note that `nth` advances the iterator
+    iter.nth(0) == Some("entries") && iter.nth(1) == Some("names")
   } {
     return true;
   }
