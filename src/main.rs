@@ -2,12 +2,14 @@
 #![allow(clippy::new_without_default)]
 
 #[macro_use]
-pub mod utils;
+pub mod macros;
 
 pub mod cli;
+pub mod create_project;
 pub mod impl_prelude;
 pub mod project;
 pub mod scan;
+pub mod utils;
 
 use crate::impl_prelude::*;
 
@@ -47,6 +49,12 @@ pub fn try_main() -> AnyResult<()> {
   info!("{}/{} v{}", CRATE_TITLE, CRATE_NAME, CRATE_VERSION);
 
   match command_opts {
-    cli::CommandOpts::Scan(command_opts) => scan::run(&common_opts, &command_opts),
+    cli::CommandOpts::Scan(command_opts) => {
+      //
+      scan::run(&common_opts, &command_opts)
+    }
+    cli::CommandOpts::CreateProject(command_opts) => {
+      create_project::run(&common_opts, &command_opts)
+    }
   }
 }

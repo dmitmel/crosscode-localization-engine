@@ -1,4 +1,5 @@
 use crate::impl_prelude::*;
+use crate::project::splitting_strategies;
 
 use clap::{App, AppSettings, Arg};
 use lazy_static::lazy_static;
@@ -20,12 +21,22 @@ pub struct Opts {
 #[derive(Debug)]
 pub enum CommandOpts {
   Scan(ScanCommandOpts),
+  CreateProject(CreateProjectCommandOpts),
 }
 
 #[derive(Debug)]
 pub struct ScanCommandOpts {
   pub assets_dir: PathBuf,
   pub output: Option<FileOrStdStream>,
+}
+
+#[derive(Debug)]
+pub struct CreateProjectCommandOpts {
+  pub scan_db: FileOrStdStream,
+  pub original_locale: String,
+  pub reference_locales: Vec<String>,
+  pub translation_locale: String,
+  pub splitting_strategy: String,
 }
 
 #[derive(Debug)]
@@ -46,7 +57,20 @@ pub fn parse_opts() -> AnyResult<Opts> {
         assets_dir: PathBuf::from(matches.value_of_os("assets_dir").unwrap()),
         output: matches.value_of_os("output").map(FileOrStdStream::from),
       }),
-      _ => unreachable!(),
+
+      ("create-project", Some(matches)) => CommandOpts::CreateProject(CreateProjectCommandOpts {
+        scan_db: FileOrStdStream::from(matches.value_of_os("scan_db").unwrap()),
+        original_locale: matches.value_of("original_locale").unwrap().to_owned(),
+        reference_locales: matches
+          .values_of("original_locale")
+          .unwrap()
+          .map(ToOwned::to_owned)
+          .collect(),
+        translation_locale: matches.value_of("translation_locale").unwrap().to_owned(),
+        splitting_strategy: matches.value_of("splitting_strategy").unwrap().to_owned(),
+      }),
+
+      _ => unreachable!("{:#?}", matches),
     },
   })
 }
@@ -78,13 +102,13 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
       App::new("scan")
         .about(
           "Scans the assets directory of the game and extracts the localizable strings and other \
-          interesting data",
+          interesting data.",
         )
         .arg(
           Arg::with_name("assets_dir")
-            .value_name("ASSETS DIR")
-            .help("Path to the assets directory")
-            .required(true),
+            .value_name("PATH")
+            .required(true)
+            .help("Path to the assets directory"),
         )
         .arg(
           Arg::with_name("output")
@@ -92,6 +116,60 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
             .short("o")
             .long("output")
             .help("Path to the output JSON file"),
+        ),
+    )
+    .subcommand(
+      App::new("create-project")
+        .about(
+          "Creates an empty translation project using the data obtained by scanning the game.",
+        )
+        .arg(
+          Arg::with_name("project_dir")
+            .value_name("PATH")
+            .required(true)
+            .help("Path to the project directory"),
+        )
+        .arg(
+          Arg::with_name("scan_db")
+            .value_name("PATH")
+            .long("scan-db")
+            .required(true)
+            .help("Path to the scan database"),
+        )
+        .arg(
+          Arg::with_name("original_locale")
+            .value_name("LOCALE")
+            .long("original-locale")
+            .default_value("en_US")
+            .help("Locale to translate from"),
+        )
+        .arg(
+          Arg::with_name("reference_locales")
+            .value_name("LOCALE")
+            .multiple(true)
+            .number_of_values(1)
+            .long("reference-locales")
+            .help("Other original locales to include for reference"),
+        )
+        .arg(
+          Arg::with_name("translation_locale")
+            .value_name("LOCALE")
+            .long("translation-locale")
+            .required(true)
+            .help("Locale of the translation"),
+        )
+        .arg(
+          Arg::with_name("splitting_strategy")
+            .value_name("NAME")
+            .long("splitting-strategy")
+            .possible_values(
+              &splitting_strategies::STRATEGIES_MAP.keys().copied().collect::<Vec<&'static str>>(),
+            )
+            .default_value(splitting_strategies::SameFileTreeStrategy::ID)
+            .help(
+              "Strategy used for assigning game files (and individual fragments in them) to \
+              translation storage files",
+            ),
         ),
     )
 }

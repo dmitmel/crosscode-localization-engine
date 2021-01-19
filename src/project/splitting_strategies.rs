@@ -18,13 +18,21 @@ pub trait SplittingStrategy {
 }
 
 lazy_static! {
-  static ref STRATEGIES_MAP: HashMap<&'static str, fn() -> Box<dyn SplittingStrategy>> = {
-    // Don't ask me why the compiler requires the following type annotation
-    let mut m: HashMap<_, fn() -> _> = HashMap::new();
-    m.insert("monolithic-file", MonolithicFileStrategy::new_box);
-    m.insert("same-file-tree", SameFileTreeStrategy::new_box);
-    m.insert("notabenoid-chapters", NotabenoidChaptersStrategy::new_box);
-    m
+  pub static ref STRATEGIES_MAP: HashMap<&'static str, fn() -> Box<dyn SplittingStrategy>> = {
+    macro_rules! strategies_map {
+      ($($strat:ident,)+) => { strategies_map![$($strat),+] };
+      ($($strat:ident),*) => {
+        {
+          let _cap = count_exprs!($($strat),*);
+          // Don't ask me why the compiler requires the following type
+          // annotation.
+          let mut _map: HashMap<_, fn() -> _> = HashMap::with_capacity(_cap);
+          $(let _ = _map.insert($strat::ID, $strat::new_box);)*
+          _map
+        }
+      };
+    }
+    strategies_map![MonolithicFileStrategy, SameFileTreeStrategy, NotabenoidChaptersStrategy]
   };
 }
 
@@ -47,6 +55,7 @@ fn split_filename_extension(filename: &str) -> (&str, Option<&str>) {
 pub struct MonolithicFileStrategy;
 
 impl MonolithicFileStrategy {
+  pub const ID: &'static str = "monolithic-file";
   fn new_box() -> Box<dyn SplittingStrategy> { Box::new(Self) }
 }
 
@@ -63,6 +72,7 @@ impl SplittingStrategy for MonolithicFileStrategy {
 pub struct SameFileTreeStrategy;
 
 impl SameFileTreeStrategy {
+  pub const ID: &'static str = "same-file-tree";
   fn new_box() -> Box<dyn SplittingStrategy> { Box::new(Self) }
 }
 
@@ -80,6 +90,7 @@ impl SplittingStrategy for SameFileTreeStrategy {
 pub struct NotabenoidChaptersStrategy;
 
 impl NotabenoidChaptersStrategy {
+  pub const ID: &'static str = "notabenoid-chapters";
   fn new_box() -> Box<dyn SplittingStrategy> { Box::new(Self) }
 }
 
