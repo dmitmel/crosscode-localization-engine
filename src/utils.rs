@@ -1,5 +1,7 @@
 pub mod json;
 
+use crate::impl_prelude::*;
+
 use std::time::SystemTime;
 use uuid::Uuid;
 
@@ -25,3 +27,10 @@ pub fn fast_concat(strings: &[&str]) -> String {
   }
   result
 }
+
+// Type hints for the `try { ... }` blocks
+
+#[inline(always)]
+pub fn try_any_result_hint<T>(r: AnyResult<T>) -> AnyResult<T> { r }
+#[inline(always)]
+pub fn try_option_hint<T>(r: Option<T>) -> Option<T> { r }

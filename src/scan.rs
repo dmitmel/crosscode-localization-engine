@@ -8,8 +8,8 @@ use self::json_file_finder::FoundJsonFile;
 use self::lang_label_extractor::LangLabel;
 use crate::cli;
 use crate::impl_prelude::*;
-use crate::utils;
 use crate::utils::json;
+use crate::utils::{self, try_any_result_hint};
 
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
@@ -126,26 +126,27 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
   };
 
   let mut database_writer: Box<dyn io::Write> = match &command_opts.output {
-    Some(cli::FileOrStdStream::File(path)) => {
+    Some(cli::FileOrStdio::File(path)) => {
       Box::new(io::BufWriter::new(fs::File::create(&path).with_context(|| {
         format!("Failed to open file '{}' for writing the scan database", path.display())
       })?))
     }
-    Some(cli::FileOrStdStream::StdStream) => Box::new(io::stdout()),
+    Some(cli::FileOrStdio::Stdio) => Box::new(io::stdout()),
     None => Box::new(io::sink()),
   };
 
-  let mut write_database = || -> AnyResult<()> {
-    if common_opts.pretty_json {
-      serde_json::to_writer_pretty(&mut database_writer, &database)?;
-    } else {
-      serde_json::to_writer(&mut database_writer, &database)?;
-    }
-    database_writer.write_all(b"\n")?;
-    database_writer.flush()?;
-    Ok(())
-  };
-  write_database().context("Failed to serialize the scan database")?;
+  try_any_result_hint(
+    try {
+      if common_opts.pretty_json {
+        serde_json::to_writer_pretty(&mut database_writer, &database)?;
+      } else {
+        serde_json::to_writer(&mut database_writer, &database)?;
+      }
+      database_writer.write_all(b"\n")?;
+      database_writer.flush()?;
+    },
+  )
+  .context("Failed to serialize the scan database")?;
 
   Ok(())
 }
