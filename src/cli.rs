@@ -9,7 +9,6 @@ use std::path::PathBuf;
 #[derive(Debug)]
 pub struct CommonOpts {
   pub verbose: bool,
-  pub pretty_json: bool,
 }
 
 #[derive(Debug)]
@@ -50,7 +49,6 @@ pub fn parse_opts() -> AnyResult<Opts> {
   Ok(Opts {
     common_opts: CommonOpts {
       verbose: matches.is_present("verbose"),
-      pretty_json: matches.is_present("pretty_json"),
     },
     command_opts: match matches.subcommand() {
       ("scan", Some(matches)) => CommandOpts::Scan(ScanCommandOpts {
@@ -90,12 +88,6 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
         .short("v")
         .long("verbose")
         .help("Print more logs, may help with troubleshooting")
-        .global(true),
-    )
-    .arg(
-      Arg::with_name("pretty_json")
-        .long("pretty-json")
-        .help("Pretty-print the JSON files")
         .global(true),
     )
     .subcommand(

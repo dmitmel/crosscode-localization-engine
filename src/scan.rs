@@ -137,11 +137,7 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
 
   try_any_result_hint(
     try {
-      if common_opts.pretty_json {
-        serde_json::to_writer_pretty(&mut database_writer, &database)?;
-      } else {
-        serde_json::to_writer(&mut database_writer, &database)?;
-      }
+      serde_json::to_writer_pretty(&mut database_writer, &database)?;
       database_writer.write_all(b"\n")?;
       database_writer.flush()?;
     },
