@@ -1,18 +1,31 @@
 use lazy_static::lazy_static;
 use std::borrow::Cow;
-use std::collections::HashSet;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SplittingStrategyMode {
-  PerFile,
-  PerFragment,
-}
+use std::collections::{HashMap, HashSet};
 
 pub trait SplittingStrategy {
-  #[inline(always)]
-  fn mode(&self) -> SplittingStrategyMode { SplittingStrategyMode::PerFile }
+  fn get_translation_file_for_entire_game_file(
+    &mut self,
+    file_path: &str,
+  ) -> Option<Cow<'static, str>>;
 
-  fn get_translation_file(&mut self, file_path: &str, json_path: &str) -> Cow<'static, str>;
+  fn get_translation_file_for_fragment(
+    &mut self,
+    file_path: &str,
+    _json_path: &str,
+  ) -> Cow<'static, str> {
+    self.get_translation_file_for_entire_game_file(file_path).unwrap()
+  }
+}
+
+lazy_static! {
+  static ref STRATEGIES_MAP: HashMap<&'static str, fn() -> Box<dyn SplittingStrategy>> = {
+    // Don't ask me why the compiler requires the following type annotation
+    let mut m: HashMap<_, fn() -> _> = HashMap::new();
+    m.insert("monolithic-file", MonolithicFileStrategy::new_box);
+    m.insert("same-file-tree", SameFileTreeStrategy::new_box);
+    m.insert("notabenoid-chapters", NotabenoidChaptersStrategy::new_box);
+    m
+  };
 }
 
 fn split_filename_extension(filename: &str) -> (&str, Option<&str>) {
@@ -31,98 +44,120 @@ fn split_filename_extension(filename: &str) -> (&str, Option<&str>) {
 }
 
 #[derive(Debug)]
-pub struct SameFileTree;
+pub struct MonolithicFileStrategy;
 
-impl SplittingStrategy for SameFileTree {
-  fn get_translation_file(&mut self, file_path: &str, _json_path: &str) -> Cow<'static, str> {
-    let (file_path, _) = split_filename_extension(file_path);
-    Cow::Owned(file_path.to_owned())
+impl MonolithicFileStrategy {
+  fn new_box() -> Box<dyn SplittingStrategy> { Box::new(Self) }
+}
+
+impl SplittingStrategy for MonolithicFileStrategy {
+  fn get_translation_file_for_entire_game_file(
+    &mut self,
+    _file_path: &str,
+  ) -> Option<Cow<'static, str>> {
+    Some("translation".into())
   }
 }
 
 #[derive(Debug)]
-pub struct NotabenoidChapters;
+pub struct SameFileTreeStrategy;
 
-impl SplittingStrategy for NotabenoidChapters {
+impl SameFileTreeStrategy {
+  fn new_box() -> Box<dyn SplittingStrategy> { Box::new(Self) }
+}
+
+impl SplittingStrategy for SameFileTreeStrategy {
+  fn get_translation_file_for_entire_game_file(
+    &mut self,
+    file_path: &str,
+  ) -> Option<Cow<'static, str>> {
+    let (file_path, _) = split_filename_extension(file_path);
+    Some(file_path.to_owned().into())
+  }
+}
+
+#[derive(Debug)]
+pub struct NotabenoidChaptersStrategy;
+
+impl NotabenoidChaptersStrategy {
+  fn new_box() -> Box<dyn SplittingStrategy> { Box::new(Self) }
+}
+
+impl SplittingStrategy for NotabenoidChaptersStrategy {
   // Rewritten from <https://github.com/CCDirectLink/crosscode-ru/blob/93415096b4f01ed4a7f50a20e642e0c9ae07dade/tool/src/Notabenoid.ts#L418-L459>
   #[allow(clippy::single_match)]
-  fn get_translation_file(&mut self, file_path: &str, _json_path: &str) -> Cow<'static, str> {
-    let mut file_path_components = file_path.split('/');
+  fn get_translation_file_for_entire_game_file(
+    &mut self,
+    file_path: &str,
+  ) -> Option<Cow<'static, str>> {
+    return Some(inner(file_path).into());
 
-    match file_path_components.next() {
-      Some("extension") => return "extension".into(),
+    fn inner(file_path: &str) -> &'static str {
+      let components: Vec<_> = file_path.split('/').collect();
+      if !components.is_empty() {
+        match components[0] {
+          "extension" => return "extension",
+          "data" if components.len() > 1 => match components[1] {
+            "lang" => return "lang",
+            "arena" => return "arena",
+            "enemies" => return "enemies",
+            "characters" => return "characters",
 
-      Some("data") => match file_path_components.next() {
-        Some("lang") => return "lang".into(),
-        Some("arena") => return "arena".into(),
-        Some("enemies") => return "enemies".into(),
-        Some("characters") => return "characters".into(),
+            "maps" if components.len() > 2 => match AREAS_WITH_CHAPTERS.get(components[2]) {
+              Some(chapter) => return chapter,
+              _ => {}
+            },
 
-        Some("maps") => match file_path_components.next() {
-          Some(name1) => match AREAS_WITH_CHAPTERS.get(name1) {
-            Some(&chapter) => return chapter.into(),
-            _ => {}
-          },
-          _ => {}
-        },
-
-        Some("areas") => match file_path_components.next() {
-          Some(name1) => match file_path_components.next() {
-            None => match split_filename_extension(name1) {
-              (file_name, Some("json")) => match AREAS_WITH_CHAPTERS.get(file_name) {
-                Some(&chapter) => return chapter.into(),
+            "areas" if components.len() == 3 => match split_filename_extension(components[2]) {
+              (area_name, Some("json")) => match AREAS_WITH_CHAPTERS.get(area_name) {
+                Some(&chapter) => return chapter,
                 _ => {}
               },
               _ => {}
             },
+
+            _ if components.len() == 2 => match components[1] {
+              "database.json" => return "database",
+              "item-database.json" => return "item-database",
+              _ => {}
+            },
+
             _ => {}
           },
           _ => {}
-        },
+        }
+      }
 
-        Some(name1) => match file_path_components.next() {
-          None => match split_filename_extension(name1) {
-            ("database", Some("json")) => return "database".into(),
-            ("item-database", Some("json")) => return "item-database".into(),
-            _ => {}
-          },
-          _ => {}
-        },
+      return "etc";
 
-        _ => {}
-      },
-      _ => {}
-    };
-
-    return "etc".into();
-
-    lazy_static! {
-      static ref AREAS_WITH_CHAPTERS: HashSet<&'static str> = hashset![
-        "arena",
-        "arid-dng",
-        "arid",
-        "autumn-fall",
-        "autumn",
-        "bergen-trail",
-        "bergen",
-        "cargo-ship",
-        "cold-dng",
-        "dreams",
-        "flashback",
-        "forest",
-        "heat-dng",
-        "heat-village",
-        "heat",
-        "hideout",
-        "jungle-city",
-        "jungle",
-        "rhombus-dng",
-        "rhombus-sqr",
-        "rookie-harbor",
-        "shock-dng",
-        "tree-dng",
-        "wave-dng",
-      ];
+      lazy_static! {
+        static ref AREAS_WITH_CHAPTERS: HashSet<&'static str> = hashset![
+          "arena",
+          "arid-dng",
+          "arid",
+          "autumn-fall",
+          "autumn",
+          "bergen-trail",
+          "bergen",
+          "cargo-ship",
+          "cold-dng",
+          "dreams",
+          "flashback",
+          "forest",
+          "heat-dng",
+          "heat-village",
+          "heat",
+          "hideout",
+          "jungle-city",
+          "jungle",
+          "rhombus-dng",
+          "rhombus-sqr",
+          "rookie-harbor",
+          "shock-dng",
+          "tree-dng",
+          "wave-dng",
+        ];
+      }
     }
   }
 }

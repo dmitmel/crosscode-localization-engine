@@ -1,4 +1,3 @@
-use super::lang_label_extractor::LangLabel;
 use crate::impl_prelude::*;
 use crate::utils;
 use crate::utils::json::{self, Value};
@@ -17,10 +16,7 @@ struct GeneratorState<'json> {
 // Rewritten from <https://github.com/dmitmel/crosscode-ru/blob/ea8ee6244d0c89e3118f2344440181f594d95783/tool/src/Notabenoid.ts#L499-L667>
 // LMT's tagging algorithm also looks interesting, maybe we can learn something from it as well:
 // <https://github.com/L-Sherry/Localize-Me-Tools/blob/cb8863cef80d1c7361b7142ab9206226e9669bdf/tags.py>
-pub fn generate(
-  file_data: &json::Value,
-  fragment_lang_label: &LangLabel,
-) -> AnyResult<Vec<String>> {
+pub fn generate(file_data: &json::Value, fragment_json_path: &str) -> AnyResult<Vec<String>> {
   let mut state = GeneratorState {
     file_data,
     description: Vec::new(),
@@ -29,7 +25,7 @@ pub fn generate(
   };
 
   let mut current_value = file_data;
-  for (depth, key) in fragment_lang_label.json_path.split('/').enumerate() {
+  for (depth, key) in fragment_json_path.split('/').enumerate() {
     let step = || -> Option<&json::Value> {
       match current_value {
         json::Value::Object(object) => object.get(key),

@@ -43,7 +43,7 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
   // anyway, so let's reuse the hashmap and just clone it.
   let mut tmp_fragment_text = HashMap::<String, String>::with_capacity(1);
 
-  // let mut strategy: Box<dyn SplittingStrategy> = Box::new(NotabenoidChapters);
+  // let mut strategy: Box<dyn SplittingStrategy> = Box::new(NotabenoidChaptersStrategy);
 
   info!("Extracting localizable strings");
   let mut lang_labels_count = 0;
@@ -66,37 +66,35 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
       _ => continue,
     };
 
-    // let global_translation_file: Cow<'static, str> = match strategy.mode() {
-    //   SplittingStrategyMode::PerFile => strategy.get_translation_file(&found_file.path, ""),
-    //   SplittingStrategyMode::PerFragment => "".into(),
-    // };
+    // let global_translation_file: Option<Cow<'static, str>> =
+    //   strategy.get_translation_file_for_entire_game_file(&found_file.path);
 
     for lang_label in lang_labels_iter {
       if is_lang_label_ignored(&lang_label, &found_file) {
         ignored_lang_labels_count += 1;
         continue;
       }
+      let LangLabel { json_path, lang_uid, text } = lang_label;
 
-      let description = match fragment_descriptions::generate(&json_data, &lang_label) {
+      let description = match fragment_descriptions::generate(&json_data, &json_path) {
         Ok(v) => v,
         Err(e) => {
-          warn!("file '{}': fragment '{}': {:?}", found_file.path, lang_label.json_path, e);
+          warn!("file '{}': fragment '{}': {:?}", found_file.path, json_path, e);
           continue;
         }
       };
 
-      // let fragment_translation_file: Cow<'static, str> = match strategy.mode() {
-      //   SplittingStrategyMode::PerFile => global_translation_file.clone(),
-      //   SplittingStrategyMode::PerFragment => {
-      //     strategy.get_translation_file(&found_file.path, &lang_label.json_path)
-      //   }
+      // let fragment_translation_file: Cow<'static, str> = match &global_translation_file {
+      //   Some(v) => v.clone(),
+      //   None => strategy.get_translation_file_for_fragment(&found_file.path, &json_path),
       // };
 
-      tmp_fragment_text.insert(lang_label_extractor::EXTRACTED_LOCALE.to_owned(), lang_label.text);
+      tmp_fragment_text.insert(lang_label_extractor::EXTRACTED_LOCALE.to_owned(), text);
       fragments.insert(
-        lang_label.json_path,
+        json_path,
         db::FragmentData {
-          lang_uid: lang_label.lang_uid,
+          // translation_file: fragment_translation_file.into_owned(),
+          lang_uid,
           description,
           text: tmp_fragment_text.clone(),
         },

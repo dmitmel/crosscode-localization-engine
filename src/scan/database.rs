@@ -21,6 +21,7 @@ pub struct FileData {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FragmentData {
+  // pub translation_file: String,
   pub lang_uid: i32,
   pub description: Vec<String>,
   pub text: HashMap<String, String>,
