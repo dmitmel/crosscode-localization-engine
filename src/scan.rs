@@ -108,7 +108,12 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
   );
 
   info!("Writing the scan database");
-  let database = db::DatabaseData { game_version, files };
+  let database = db::DatabaseData {
+    uuid: utils::new_uuid(),
+    generated_at: utils::get_timestamp(),
+    game_version,
+    files,
+  };
 
   let mut database_writer: Box<dyn io::Write> = match &command_opts.output {
     Some(cli::FileOrStdStream::File(path)) => {

@@ -128,6 +128,8 @@ fn generate_for_json_object<'json>(
           state.words.push(spawn_condition.into());
         }
       }
+
+      //
     } else {
       // Most likely an event step.
 
