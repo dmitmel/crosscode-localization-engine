@@ -1,4 +1,5 @@
 pub mod database;
+pub mod fragment_descriptions;
 pub mod json_file_finder;
 pub mod lang_label_extractor;
 
@@ -40,7 +41,7 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
   let mut files = IndexMap::<String, db::FileData>::new();
   // Currently all fragments are generated with the one and only `en_US` locale
   // anyway, so let's reuse the hashmap and just clone it.
-  let mut fragment_text_map = HashMap::<String, String>::with_capacity(1);
+  let mut tmp_fragment_text = HashMap::<String, String>::with_capacity(1);
 
   info!("Extracting localizable strings");
   let mut lang_labels_count = 0;
@@ -58,25 +59,39 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
     let json_data = serde_json::from_slice::<json::Value>(&json_bytes)
       .with_context(|| format!("Failed to parse JSON file '{}'", found_file.path))?;
 
-    if let Some(lang_label_iter) = lang_label_extractor::extract_from_file(&found_file, &json_data)
-    {
-      for lang_label in lang_label_iter {
-        if !is_lang_label_ignored(&lang_label, &found_file) {
-          fragment_text_map
-            .insert(lang_label_extractor::EXTRACTED_LOCALE.to_owned(), lang_label.text);
-          fragments.insert(
-            lang_label.json_path.join("/"),
-            db::FragmentData {
-              lang_uid: lang_label.lang_uid,
-              description: Vec::new(),
-              text: fragment_text_map.clone(),
-            },
-          );
-          lang_labels_count += 1;
-        } else {
-          ignored_lang_labels_count += 1;
-        }
+    let lang_labels_iter = match lang_label_extractor::extract_from_file(&found_file, &json_data) {
+      Some(v) => v,
+      _ => continue,
+    };
+    for lang_label in lang_labels_iter {
+      if is_lang_label_ignored(&lang_label, &found_file) {
+        ignored_lang_labels_count += 1;
+        continue;
       }
+
+      let description = match fragment_descriptions::generate(&json_data, &lang_label) {
+        Ok(v) => v,
+        Err(e) => {
+          warn!(
+            "file '{}': fragment '{}': {:?}",
+            found_file.path,
+            lang_label.json_path.join("/"),
+            e,
+          );
+          continue;
+        }
+      };
+
+      tmp_fragment_text.insert(lang_label_extractor::EXTRACTED_LOCALE.to_owned(), lang_label.text);
+      fragments.insert(
+        lang_label.json_path.join("/"),
+        db::FragmentData {
+          lang_uid: lang_label.lang_uid,
+          description,
+          text: tmp_fragment_text.clone(),
+        },
+      );
+      lang_labels_count += 1;
     }
 
     if !fragments.is_empty() {
