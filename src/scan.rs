@@ -88,7 +88,7 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
   }
 
   info!(
-    "Found {} localizable strings in total, {} were ignored",
+    "Found {} localizable strings, {} were ignored",
     lang_labels_count, ignored_lang_labels_count,
   );
 
@@ -96,10 +96,13 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
   let database = db::DatabaseData { game_version, files };
 
   let mut database_writer: Box<dyn io::Write> = match &command_opts.output {
-    Some(path) => Box::new(io::BufWriter::new(fs::File::create(&path).with_context(|| {
-      format!("Failed to open file '{}' for writing the scan database", path.display())
-    })?)),
-    _ => Box::new(io::stdout()),
+    Some(cli::FileOrStdStream::File(path)) => {
+      Box::new(io::BufWriter::new(fs::File::create(&path).with_context(|| {
+        format!("Failed to open file '{}' for writing the scan database", path.display())
+      })?))
+    }
+    Some(cli::FileOrStdStream::StdStream) => Box::new(io::stdout()),
+    None => Box::new(io::sink()),
   };
 
   let mut write_database = || -> AnyResult<()> {

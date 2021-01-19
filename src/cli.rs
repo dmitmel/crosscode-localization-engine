@@ -1,6 +1,8 @@
 use crate::impl_prelude::*;
 
 use clap::{App, AppSettings, Arg};
+use lazy_static::lazy_static;
+use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 
 #[derive(Debug)]
@@ -23,7 +25,13 @@ pub enum CommandOpts {
 #[derive(Debug)]
 pub struct ScanCommandOpts {
   pub assets_dir: PathBuf,
-  pub output: Option<PathBuf>,
+  pub output: Option<FileOrStdStream>,
+}
+
+#[derive(Debug)]
+pub enum FileOrStdStream {
+  File(PathBuf),
+  StdStream,
 }
 
 pub fn parse_opts() -> AnyResult<Opts> {
@@ -36,7 +44,7 @@ pub fn parse_opts() -> AnyResult<Opts> {
     command_opts: match matches.subcommand() {
       ("scan", Some(matches)) => CommandOpts::Scan(ScanCommandOpts {
         assets_dir: PathBuf::from(matches.value_of_os("assets_dir").unwrap()),
-        output: matches.value_of_os("output").map(PathBuf::from),
+        output: matches.value_of_os("output").map(FileOrStdStream::from),
       }),
       _ => unreachable!(),
     },
@@ -86,4 +94,22 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
             .help("Path to the output JSON file"),
         ),
     )
+}
+
+lazy_static! {
+  static ref STD_STREAM_STR: &'static OsStr = OsStr::new("-");
+}
+
+impl<T: ?Sized + AsRef<OsStr>> From<&T> for FileOrStdStream {
+  fn from(s: &T) -> Self { Self::from(s.as_ref().to_os_string()) }
+}
+
+impl From<OsString> for FileOrStdStream {
+  fn from(v: OsString) -> Self {
+    if v == *STD_STREAM_STR {
+      Self::StdStream
+    } else {
+      Self::File(PathBuf::from(v))
+    }
+  }
 }
