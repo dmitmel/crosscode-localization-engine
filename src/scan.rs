@@ -72,19 +72,14 @@ pub fn run(common_opts: &cli::CommonOpts, command_opts: &cli::ScanCommandOpts) -
       let description = match fragment_descriptions::generate(&json_data, &lang_label) {
         Ok(v) => v,
         Err(e) => {
-          warn!(
-            "file '{}': fragment '{}': {:?}",
-            found_file.path,
-            lang_label.json_path.join("/"),
-            e,
-          );
+          warn!("file '{}': fragment '{}': {:?}", found_file.path, lang_label.json_path, e);
           continue;
         }
       };
 
       tmp_fragment_text.insert(lang_label_extractor::EXTRACTED_LOCALE.to_owned(), lang_label.text);
       fragments.insert(
-        lang_label.json_path.join("/"),
+        lang_label.json_path,
         db::FragmentData {
           lang_uid: lang_label.lang_uid,
           description,
@@ -218,16 +213,17 @@ lazy_static! {
   ];
 }
 
+#[allow(clippy::iter_nth_zero)]
 fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &FoundJsonFile) -> bool {
   if IGNORED_STRINGS.contains(lang_label.text.trim()) {
     return true;
   }
 
   // TODO: check the relative file path
-  if found_file.path.starts_with("data/credits/")
-    && lang_label.json_path[0] == "entries"
-    && lang_label.json_path[2] == "names"
-  {
+  if found_file.path.starts_with("data/credits/") && {
+    let mut iter = lang_label.json_path.split('/');
+    iter.nth(0) == Some("entries") && iter.nth(2) == Some("names")
+  } {
     return true;
   }
 

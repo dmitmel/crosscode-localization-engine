@@ -29,7 +29,7 @@ pub fn generate(
   };
 
   let mut current_value = file_data;
-  for (depth, key) in fragment_lang_label.json_path.iter().enumerate() {
+  for (depth, key) in fragment_lang_label.json_path.split('/').enumerate() {
     let step = || -> Option<&json::Value> {
       match current_value {
         json::Value::Object(object) => object.get(key),

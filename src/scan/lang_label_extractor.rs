@@ -23,7 +23,7 @@ pub fn extract_from_file<'json>(
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct LangLabel {
-  pub json_path: Vec<String>,
+  pub json_path: String,
   pub lang_uid: i32, // 0 represents the lack of a lang UID
   pub text: String,
 }
@@ -66,7 +66,7 @@ fn try_extract_lang_label<'json>(
     }
   };
 
-  Some(LangLabel { json_path: json_path.to_vec(), lang_uid, text: text.to_owned() })
+  Some(LangLabel { json_path: json_path.join("/"), lang_uid, text: text.to_owned() })
 }
 
 fn try_extract_lang_label_from_lang_file<'json>(
@@ -78,7 +78,7 @@ fn try_extract_lang_label_from_lang_file<'json>(
     return None;
   }
   let text = value.as_str()?;
-  Some(LangLabel { json_path: json_path.to_vec(), lang_uid: 0, text: text.to_owned() })
+  Some(LangLabel { json_path: json_path.join("/"), lang_uid: 0, text: text.to_owned() })
 }
 
 type TryExtractLangLabelFn<'json> =
