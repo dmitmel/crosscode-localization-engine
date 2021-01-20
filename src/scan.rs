@@ -119,8 +119,13 @@ pub fn run(common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) -> 
   );
 
   info!("Writing the scan database");
-  let database =
-    db::DatabaseData { uuid: utils::new_uuid(), generated_at: timestamp, game_version, files };
+  let database = db::DatabaseData {
+    uuid: utils::new_uuid(),
+    generated_at: timestamp,
+    game_version,
+    extracted_locales: vec![lang_label_extractor::EXTRACTED_LOCALE.to_owned()],
+    files,
+  };
 
   try_any_result_hint(
     try {

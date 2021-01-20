@@ -10,6 +10,7 @@ pub struct DatabaseData {
   pub uuid: Uuid,
   pub generated_at: Timestamp,
   pub game_version: String,
+  pub extracted_locales: Vec<String>,
   pub files: IndexMap<String, FileData>,
 }
 
