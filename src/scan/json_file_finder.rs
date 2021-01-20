@@ -1,3 +1,4 @@
+use super::db::ScanDbFileInitOpts;
 use crate::impl_prelude::*;
 
 use lazy_static::lazy_static;
@@ -12,14 +13,7 @@ lazy_static! {
   static ref JSON_EXTENSION: &'static OsStr = OsStr::new("json");
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct FoundJsonFile {
-  // TODO: split `path` into `asset_root` and `relative_path`
-  pub path: String,
-  pub is_lang_file: bool,
-}
-
-pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>> {
+pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<ScanDbFileInitOpts>> {
   // Bail out early to warn the user instead of failing on some obscure "file
   // not found" IO error later.
   ensure!(
@@ -27,7 +21,7 @@ pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>
     "The data dir doesn't exist in the assets dir, path to the assets dir is incorrect"
   );
 
-  let mut found_files: Vec<FoundJsonFile> = Vec::with_capacity(
+  let mut found_files: Vec<ScanDbFileInitOpts> = Vec::with_capacity(
     // As of 1.3.0-4 the stock game comes with 2132 JSON assets, 1.2.0-5
     // included 1943 of those, we can use this knowledge (and a simple
     // assumption that the user doesn't put too many additional files) to avoid
@@ -79,7 +73,7 @@ pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>
       }
 
       file_count += 1;
-      found_files.push(FoundJsonFile { path: path_str.to_owned(), is_lang_file });
+      found_files.push(ScanDbFileInitOpts { path: path_str.to_owned(), is_lang_file });
     }
     trace!("Found {} JSON files", file_count);
   }
@@ -91,7 +85,7 @@ pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>
 fn read_extensions_dir(
   assets_dir: &Path,
   asset_roots: &mut Vec<PathBuf>,
-  found_files: &mut Vec<FoundJsonFile>,
+  found_files: &mut Vec<ScanDbFileInitOpts>,
 ) -> AnyResult<usize> {
   let mut extension_count = 0;
 
@@ -130,7 +124,7 @@ fn read_extensions_dir(
         extension_dir_name.display(),
         metadata_file.display(),
       );
-      found_files.push(FoundJsonFile {
+      found_files.push(ScanDbFileInitOpts {
         path: path_to_str_with_error(&metadata_file)?.to_owned(),
         is_lang_file: false,
       });

@@ -1,6 +1,6 @@
 #![deny(missing_debug_implementations)]
 #![allow(clippy::new_without_default)]
-#![feature(try_blocks)]
+#![feature(try_blocks, cell_update)]
 
 #[macro_use]
 pub mod macros;

@@ -2,6 +2,7 @@ pub mod json;
 
 use crate::impl_prelude::*;
 
+use std::rc::{Rc, Weak as RcWeak};
 use std::time::SystemTime;
 use uuid::Uuid;
 
@@ -34,3 +35,22 @@ pub fn fast_concat(strings: &[&str]) -> String {
 pub fn try_any_result_hint<T>(r: AnyResult<T>) -> AnyResult<T> { r }
 #[inline(always)]
 pub fn try_option_hint<T>(r: Option<T>) -> Option<T> { r }
+
+pub trait ShareRc: private::Sealed {
+  fn share_rc(&self) -> Self;
+}
+
+impl<T: ?Sized> ShareRc for Rc<T> {
+  #[inline(always)]
+  fn share_rc(&self) -> Self { Rc::clone(self) }
+}
+
+impl<T: ?Sized> ShareRc for RcWeak<T> {
+  #[inline(always)]
+  fn share_rc(&self) -> Self { RcWeak::clone(self) }
+}
+
+mod private {
+  pub trait Sealed {}
+  impl<T: ?Sized> Sealed for T {}
+}

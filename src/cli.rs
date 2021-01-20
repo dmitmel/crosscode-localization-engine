@@ -2,7 +2,7 @@ use crate::impl_prelude::*;
 use crate::project::splitting_strategies;
 
 use clap::{App, AppSettings, Arg};
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
@@ -27,13 +27,13 @@ pub enum CommandOpts {
 #[derive(Debug)]
 pub struct ScanCommandOpts {
   pub assets_dir: PathBuf,
-  pub output: Option<FileOrStdio>,
+  pub output: PathBuf,
 }
 
 #[derive(Debug)]
 pub struct CreateProjectCommandOpts {
   pub project_dir: PathBuf,
-  pub scan_db: FileOrStdio,
+  pub scan_db: PathBuf,
   pub original_locale: String,
   pub reference_locales: Vec<String>,
   pub translation_locale: String,
@@ -50,14 +50,14 @@ pub fn parse_opts() -> AnyResult<Opts> {
         //
         CommandOpts::Scan(Box::new(ScanCommandOpts {
           assets_dir: PathBuf::from(matches.value_of_os("assets_dir").unwrap()),
-          output: matches.value_of_os("output").map(FileOrStdio::from),
+          output: PathBuf::from(matches.value_of_os("output").unwrap()),
         }))
       }
 
       ("create-project", Some(matches)) => {
         CommandOpts::CreateProject(Box::new(CreateProjectCommandOpts {
           project_dir: PathBuf::from(matches.value_of_os("project_dir").unwrap()),
-          scan_db: FileOrStdio::from(matches.value_of_os("scan_db").unwrap()),
+          scan_db: PathBuf::from(matches.value_of_os("scan_db").unwrap()),
           original_locale: matches.value_of("original_locale").unwrap().to_owned(),
           reference_locales: matches
             .values_of("reference_locales")
@@ -108,6 +108,7 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
             .value_name("PATH")
             .short("o")
             .long("output")
+            .required(true)
             .help("Path to the output JSON file"),
         ),
     )
@@ -178,26 +179,4 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
             .help("Path to project's translation storage files, relative to project's directory"),
         ),
     )
-}
-
-const STD_STREAM_STRING: &str = "-";
-
-#[derive(Debug)]
-pub enum FileOrStdio {
-  File(PathBuf),
-  Stdio,
-}
-
-impl<T: ?Sized + AsRef<OsStr>> From<&T> for FileOrStdio {
-  fn from(s: &T) -> Self { Self::from(s.as_ref().to_os_string()) }
-}
-
-impl From<OsString> for FileOrStdio {
-  fn from(v: OsString) -> Self {
-    if v == *OsStr::new(STD_STREAM_STRING) {
-      Self::Stdio
-    } else {
-      Self::File(PathBuf::from(v))
-    }
-  }
 }

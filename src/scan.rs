@@ -1,17 +1,14 @@
-pub mod database;
+pub mod db;
 pub mod fragment_descriptions;
 pub mod json_file_finder;
 pub mod lang_label_extractor;
 
-use self::database as db;
-use self::json_file_finder::FoundJsonFile;
 use self::lang_label_extractor::LangLabel;
 use crate::cli;
 use crate::impl_prelude::*;
+use crate::utils;
 use crate::utils::json;
-use crate::utils::{self, try_any_result_hint};
 
-use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use std::borrow::Cow;
@@ -19,12 +16,11 @@ use std::char;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
-use std::io;
 use std::path::Path;
+use std::rc::Rc;
 use std::str::FromStr;
 
-pub fn run(common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) -> AnyResult<()> {
-  let timestamp = utils::get_timestamp();
+pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) -> AnyResult<()> {
   info!(
     "Performing a scan of game files in the assets dir '{}'",
     command_opts.assets_dir.display()
@@ -39,7 +35,9 @@ pub fn run(common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) -> 
     .context("Failed to find all JSON files in the assets dir")?;
   info!("Found {} JSON files in total", all_json_files.len());
 
-  let mut files = IndexMap::<String, db::FileData>::new();
+  let scan_db =
+    db::ScanDb::create(command_opts.output.clone(), db::ScanDbCreateOpts { game_version });
+
   // Currently all fragments are generated with the one and only `en_US` locale
   // anyway, so let's reuse the hashmap and just clone it.
   let mut tmp_fragment_text = HashMap::<String, String>::with_capacity(1);
@@ -47,14 +45,12 @@ pub fn run(common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) -> 
   // let mut strategy: Box<dyn SplittingStrategy> = Box::new(NotabenoidChaptersStrategy);
 
   info!("Extracting localizable strings");
-  let mut lang_labels_count = 0;
   let mut ignored_lang_labels_count = 0;
 
   let all_json_files_len = all_json_files.len();
   for (i, found_file) in all_json_files.into_iter().enumerate() {
     trace!("[{}/{}] {}", i + 1, all_json_files_len, found_file.path);
-
-    let mut fragments = IndexMap::<String, db::FragmentData>::new();
+    let mut scan_db_file: Option<Rc<db::ScanDbFile>> = None;
 
     let abs_path = command_opts.assets_dir.join(&found_file.path);
     let json_bytes = fs::read(&abs_path)
@@ -90,59 +86,27 @@ pub fn run(common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) -> 
       //   None => strategy.get_translation_file_for_fragment(&found_file.path, &json_path),
       // };
 
-      tmp_fragment_text.insert(lang_label_extractor::EXTRACTED_LOCALE.to_owned(), text);
-      fragments.insert(
-        json_path,
-        db::FragmentData {
-          // translation_file: fragment_translation_file.into_owned(),
-          lang_uid,
-          description,
-          text: tmp_fragment_text.clone(),
-        },
-      );
-      lang_labels_count += 1;
-    }
+      let scan_db_file = scan_db_file.get_or_insert_with(|| scan_db.new_file(found_file.clone()));
 
-    if !fragments.is_empty() {
-      files.insert(
-        found_file.path,
-        db::FileData { is_lang_file: found_file.is_lang_file, fragments },
-      );
+      tmp_fragment_text.insert(lang_label_extractor::EXTRACTED_LOCALE.to_owned(), text);
+      scan_db_file.new_fragment(db::ScanDbFragmentInitOpts {
+        json_path,
+        lang_uid,
+        description,
+        text: tmp_fragment_text.clone(),
+      });
     }
   }
 
   info!(
     "Found {} localizable strings in {} files, {} were ignored",
-    lang_labels_count,
-    files.len(),
+    scan_db.total_fragments_count(),
+    scan_db.files_count(),
     ignored_lang_labels_count,
   );
 
   info!("Writing the scan database");
-  let database = db::DatabaseData {
-    uuid: utils::new_uuid(),
-    generated_at: timestamp,
-    game_version,
-    extracted_locales: vec![lang_label_extractor::EXTRACTED_LOCALE.to_owned()],
-    files,
-  };
-
-  try_any_result_hint(
-    try {
-      let mut writer: Box<dyn io::Write> = match &command_opts.output {
-        Some(cli::FileOrStdio::File(path)) => Box::new(io::BufWriter::new(
-          fs::File::create(&path)
-            .with_context(|| format!("Failed to open file '{}'", path.display()))?,
-        )),
-        Some(cli::FileOrStdio::Stdio) => Box::new(io::stdout()),
-        None => Box::new(io::sink()),
-      };
-      serde_json::to_writer_pretty(&mut writer, &database)?;
-      writer.write_all(b"\n")?;
-      writer.flush()?;
-    },
-  )
-  .context("Failed to write the scan database")?;
+  scan_db.write().context("Failed to write the scan database")?;
 
   Ok(())
 }
@@ -226,7 +190,7 @@ lazy_static! {
 }
 
 #[allow(clippy::iter_nth_zero)]
-fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &FoundJsonFile) -> bool {
+fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &db::ScanDbFileInitOpts) -> bool {
   if IGNORED_STRINGS.contains(lang_label.text.trim()) {
     return true;
   }
