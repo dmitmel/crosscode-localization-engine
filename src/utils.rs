@@ -45,9 +45,21 @@ impl<T: ?Sized> ShareRc for Rc<T> {
   fn share_rc(&self) -> Self { Rc::clone(self) }
 }
 
-impl<T: ?Sized> ShareRc for RcWeak<T> {
+pub trait ShareRcWeak: private::Sealed {
+  type Weak;
+  fn share_rc_weak(&self) -> Self::Weak;
+}
+
+impl<T: ?Sized> ShareRcWeak for Rc<T> {
+  type Weak = RcWeak<T>;
   #[inline(always)]
-  fn share_rc(&self) -> Self { RcWeak::clone(self) }
+  fn share_rc_weak(&self) -> Self::Weak { Rc::downgrade(self) }
+}
+
+impl<T: ?Sized> ShareRcWeak for RcWeak<T> {
+  type Weak = Self;
+  #[inline(always)]
+  fn share_rc_weak(&self) -> Self::Weak { RcWeak::clone(self) }
 }
 
 mod private {

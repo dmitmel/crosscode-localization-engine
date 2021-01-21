@@ -1,5 +1,5 @@
 use crate::impl_prelude::*;
-use crate::utils::{self, ShareRc, Timestamp};
+use crate::utils::{self, ShareRc, ShareRcWeak, Timestamp};
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::rc::{Rc, Weak as RcWeak};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -164,7 +164,7 @@ impl ScanDb {
   }
 
   pub fn new_file(self: &Rc<Self>, file_init_opts: ScanDbFileInitOpts) -> Rc<ScanDbFile> {
-    let file = ScanDbFile::new(file_init_opts, self.share_rc());
+    let file = ScanDbFile::new(file_init_opts, self.share_rc_weak());
     self.files.borrow_mut().insert(file.path.share_rc(), file.share_rc());
     file
   }
@@ -179,14 +179,14 @@ pub struct ScanDbFileInitOpts {
 
 #[derive(Debug)]
 pub struct ScanDbFile {
-  scan_db: Rc<ScanDb>,
+  scan_db: RcWeak<ScanDb>,
   path: Rc<String>,
   is_lang_file: bool,
   fragments: RefCell<IndexMap<Rc<String>, Rc<ScanDbFragment>>>,
 }
 
 impl ScanDbFile {
-  fn new(file_init_opts: ScanDbFileInitOpts, scan_db: Rc<ScanDb>) -> Rc<Self> {
+  fn new(file_init_opts: ScanDbFileInitOpts, scan_db: RcWeak<ScanDb>) -> Rc<Self> {
     Rc::new(Self {
       scan_db,
       path: Rc::new(file_init_opts.path),
@@ -204,9 +204,9 @@ impl ScanDbFile {
     fragment_init_opts: ScanDbFragmentInitOpts,
   ) -> Rc<ScanDbFragment> {
     let fragment =
-      ScanDbFragment::new(fragment_init_opts, self.scan_db.share_rc(), self.share_rc());
+      ScanDbFragment::new(fragment_init_opts, self.scan_db.share_rc_weak(), self.share_rc_weak());
     self.fragments.borrow_mut().insert(fragment.json_path.share_rc(), fragment.share_rc());
-    self.scan_db.total_fragments_count.update(|c| c + 1);
+    self.scan_db.upgrade().unwrap().total_fragments_count.update(|c| c + 1);
     fragment
   }
 }
@@ -221,8 +221,8 @@ pub struct ScanDbFragmentInitOpts {
 
 #[derive(Debug)]
 pub struct ScanDbFragment {
-  scan_db: Rc<ScanDb>,
-  file: Rc<ScanDbFile>,
+  scan_db: RcWeak<ScanDb>,
+  file: RcWeak<ScanDbFile>,
   json_path: Rc<String>,
   lang_uid: i32,
   description: Vec<String>,
@@ -232,8 +232,8 @@ pub struct ScanDbFragment {
 impl ScanDbFragment {
   fn new(
     fragment_init_opts: ScanDbFragmentInitOpts,
-    scan_db: Rc<ScanDb>,
-    file: Rc<ScanDbFile>,
+    scan_db: RcWeak<ScanDb>,
+    file: RcWeak<ScanDbFile>,
   ) -> Rc<Self> {
     Rc::new(Self {
       scan_db,
