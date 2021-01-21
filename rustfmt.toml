@@ -1,4 +1,8 @@
 tab_spaces = 2
 max_width = 99
-fn_single_line = true
 use_small_heuristics = "max"
+
+# unstable:
+fn_single_line = true
+overflow_delimited_expr = true
+empty_item_single_line = false

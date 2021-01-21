@@ -79,10 +79,11 @@ impl ScanDb {
   pub fn create(db_file_path: PathBuf, opts: ScanDbCreateOpts) -> Rc<Self> {
     let creation_timestamp = utils::get_timestamp();
     let uuid = utils::new_uuid();
-    Self::new(
-      db_file_path,
-      ScanDbMeta { uuid, creation_timestamp, game_version: opts.game_version },
-    )
+    Self::new(db_file_path, ScanDbMeta {
+      uuid,
+      creation_timestamp,
+      game_version: opts.game_version,
+    })
   }
 
   pub fn open(db_file_path: PathBuf) -> AnyResult<Rc<Self>> {
@@ -91,14 +92,11 @@ impl ScanDb {
     let serde_data = serde_json::from_slice::<ScanDbSerde>(&json_bytes)
       .with_context(|| format!("Failed to parse JSON file '{}'", db_file_path.display()))?;
 
-    let myself = Self::new(
-      db_file_path,
-      ScanDbMeta {
-        uuid: serde_data.uuid,
-        creation_timestamp: serde_data.creation_timestamp,
-        game_version: serde_data.game_version,
-      },
-    );
+    let myself = Self::new(db_file_path, ScanDbMeta {
+      uuid: serde_data.uuid,
+      creation_timestamp: serde_data.creation_timestamp,
+      game_version: serde_data.game_version,
+    });
 
     for (file_serde_path, file_serde_data) in serde_data.files {
       let file = myself.new_file(ScanDbFileInitOpts {

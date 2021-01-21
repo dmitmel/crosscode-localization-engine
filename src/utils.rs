@@ -64,7 +64,8 @@ impl<T: ?Sized> ShareRcWeak for RcWeak<T> {
 
 mod private {
   pub trait Sealed {}
-  impl<T: ?Sized> Sealed for T {}
+  impl<T: ?Sized> Sealed for T {
+  }
 }
 
 #[inline]
