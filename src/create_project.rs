@@ -117,11 +117,19 @@ pub fn run(
 
   // TODO: Get rid of unwraps! They are here only for a quick prototype!
   let translation_files_dir = project_dir.join(&meta_data.translations_dir);
-  for (translation_file_path, translation_db) in translation_db_files {
+  let translation_db_files_len = translation_db_files.len();
+  for (i, (translation_file_path, translation_db)) in translation_db_files.into_iter().enumerate()
+  {
     let translation_file_path = translation_files_dir.join(translation_file_path + ".json");
-    info!("Writing translation file '{}'", translation_file_path.display());
+    info!(
+      "[{}/{}] Writing translation file '{}'",
+      i + 1,
+      translation_db_files_len,
+      translation_file_path.display(),
+    );
     create_dir_recursively(translation_file_path.parent().unwrap()).unwrap();
-    let mut file = fs::File::create(translation_file_path).unwrap();
+    let mut file = io::BufWriter::new(fs::File::create(translation_file_path).unwrap());
+
     serde_json::to_writer_pretty(&mut file, &translation_db).unwrap();
     file.write_all(b"\n").unwrap();
     file.flush().unwrap();

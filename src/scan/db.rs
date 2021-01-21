@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::cell::{Cell, Ref, RefCell};
 use std::collections::HashMap;
 use std::fs;
-use std::io::{BufWriter, Write};
+use std::io::{self, Write};
 use std::path::PathBuf;
 use std::rc::{Rc, Weak as RcWeak};
 use uuid::Uuid;
@@ -120,7 +120,7 @@ impl ScanDb {
   }
 
   pub fn write(&self) -> AnyResult<()> {
-    let mut writer = BufWriter::new(
+    let mut writer = io::BufWriter::new(
       fs::File::create(&self.db_file_path)
         .with_context(|| format!("Failed to open file '{}'", self.db_file_path.display()))?,
     );

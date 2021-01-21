@@ -162,7 +162,7 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
                 .copied()
                 .collect::<Vec<&'static str>>(),
             )
-            .default_value(splitting_strategies::SameFileTreeStrategy::ID)
+            .default_value(splitting_strategies::NextGenerationStrategy::ID)
             .help(
               "Strategy used for assigning game files (and individual fragments in them) to \
               translation storage files",
