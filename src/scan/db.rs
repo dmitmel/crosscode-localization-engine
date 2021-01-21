@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::rc::{Rc, Weak as RcWeak};
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct ScanDbSerde {
   pub uuid: Uuid,
   pub creation_timestamp: Timestamp,
@@ -20,13 +20,13 @@ pub struct ScanDbSerde {
   pub files: IndexMap<String, ScanDbFileSerde>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct ScanDbFileSerde {
   pub is_lang_file: bool,
   pub fragments: IndexMap<String, ScanDbFragmentSerde>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct ScanDbFragmentSerde {
   pub lang_uid: i32,
   pub description: Vec<String>,
@@ -40,7 +40,7 @@ pub struct ScanDbCreateOpts {
   pub game_version: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ScanDbMeta {
   pub uuid: Uuid,
   pub creation_timestamp: Timestamp,
@@ -48,11 +48,14 @@ pub struct ScanDbMeta {
   // TODO: extracted_locales
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ScanDb {
+  #[serde(skip)]
   db_file_path: PathBuf,
+  #[serde(flatten)]
   meta: ScanDbMeta,
   files: RefCell<IndexMap<Rc<String>, Rc<ScanDbFile>>>,
+  #[serde(skip)]
   total_fragments_count: Cell<usize>,
 }
 
@@ -115,43 +118,12 @@ impl ScanDb {
   }
 
   pub fn write(&self) -> AnyResult<()> {
-    // TODO: implement Serialize for ScanDb, ScanDbFile and ScanDbFragment
-    // (without copying data into intermediate structs).
-
     let mut writer = BufWriter::new(
       fs::File::create(&self.db_file_path)
         .with_context(|| format!("Failed to open file '{}'", self.db_file_path.display()))?,
     );
 
-    let files = self.files.borrow();
-    let mut serde_data = ScanDbSerde {
-      uuid: self.meta.uuid,
-      creation_timestamp: self.meta.creation_timestamp,
-      game_version: self.meta.game_version.clone(),
-      files: IndexMap::with_capacity(files.len()),
-    };
-
-    for file in files.values() {
-      let fragments = file.fragments.borrow();
-      let mut file_serde_data = ScanDbFileSerde {
-        is_lang_file: file.is_lang_file,
-        fragments: IndexMap::with_capacity(fragments.len()),
-      };
-
-      for fragment in fragments.values() {
-        let fragment_serde_data = ScanDbFragmentSerde {
-          lang_uid: fragment.lang_uid,
-          description: fragment.description.clone(),
-          text: fragment.text.clone(),
-        };
-
-        file_serde_data.fragments.insert((*fragment.json_path).clone(), fragment_serde_data);
-      }
-
-      serde_data.files.insert((*file.path).clone(), file_serde_data);
-    }
-
-    serde_json::to_writer_pretty(&mut writer, &serde_data)?;
+    serde_json::to_writer_pretty(&mut writer, self)?;
     writer.write_all(b"\n")?;
     writer.flush()?;
     Ok(())
@@ -177,9 +149,11 @@ pub struct ScanDbFileInitOpts {
   pub is_lang_file: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ScanDbFile {
+  #[serde(skip)]
   scan_db: RcWeak<ScanDb>,
+  #[serde(skip)]
   path: Rc<String>,
   is_lang_file: bool,
   fragments: RefCell<IndexMap<Rc<String>, Rc<ScanDbFragment>>>,
@@ -219,10 +193,13 @@ pub struct ScanDbFragmentInitOpts {
   pub text: HashMap<String, String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ScanDbFragment {
+  #[serde(skip)]
   scan_db: RcWeak<ScanDb>,
+  #[serde(skip)]
   file: RcWeak<ScanDbFile>,
+  #[serde(skip)]
   json_path: Rc<String>,
   lang_uid: i32,
   description: Vec<String>,
