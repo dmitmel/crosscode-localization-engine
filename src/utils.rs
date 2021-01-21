@@ -2,6 +2,9 @@ pub mod json;
 
 use crate::impl_prelude::*;
 
+use std::fs;
+use std::io;
+use std::path::Path;
 use std::rc::{Rc, Weak as RcWeak};
 use std::time::SystemTime;
 use uuid::Uuid;
@@ -70,3 +73,7 @@ mod private {
 
 #[inline]
 pub fn is_default<T: Default + PartialEq>(t: &T) -> bool { t == &T::default() }
+
+pub fn create_dir_recursively(path: &Path) -> io::Result<()> {
+  fs::DirBuilder::new().recursive(true).create(path)
+}

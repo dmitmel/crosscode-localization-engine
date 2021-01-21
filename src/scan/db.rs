@@ -87,10 +87,10 @@ impl ScanDb {
   }
 
   pub fn open(db_file_path: PathBuf) -> AnyResult<Rc<Self>> {
-    let json_bytes = fs::read(&db_file_path)
-      .with_context(|| format!("Failed to read file '{}'", db_file_path.display()))?;
-    let serde_data = serde_json::from_slice::<ScanDbSerde>(&json_bytes)
-      .with_context(|| format!("Failed to parse JSON file '{}'", db_file_path.display()))?;
+    let serde_data: ScanDbSerde = utils::json::read_file(&db_file_path, &mut Vec::new())
+      .with_context(|| {
+        format!("Failed to deserialize from JSON file '{}'", db_file_path.display())
+      })?;
 
     let myself = Self::new(db_file_path, ScanDbMeta {
       uuid: serde_data.uuid,
@@ -118,16 +118,9 @@ impl ScanDb {
   }
 
   pub fn write(&self) -> AnyResult<()> {
-    let mut writer = io::BufWriter::new(
-      fs::File::create(&self.db_file_path)
-        .with_context(|| format!("Failed to open file '{}'", self.db_file_path.display()))?,
-    );
-    serde_json::to_writer_pretty(&mut writer, self).with_context(|| {
-      format!("Failed to write JSON into file '{}'", self.db_file_path.display())
-    })?;
-    writer.write_all(b"\n")?;
-    writer.flush()?;
-    Ok(())
+    utils::json::write_file(&self.db_file_path, self).with_context(|| {
+      format!("Failed to serialize to JSON file '{}'", self.db_file_path.display())
+    })
   }
 
   pub fn reserve_additional_files(&self, additional_capacity: usize) {

@@ -3,14 +3,11 @@ use crate::impl_prelude::*;
 use crate::project;
 use crate::project::splitting_strategies::{SplittingStrategy, SPLITTING_STRATEGIES_MAP};
 use crate::scan::db::ScanDb;
-use crate::utils::{self, try_any_result_hint};
+use crate::utils;
 
 use indexmap::IndexMap;
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::fs;
-use std::io::{self, Write};
-use std::path::Path;
 
 pub fn run(
   _common_opts: cli::CommonOpts,
@@ -26,7 +23,7 @@ pub fn run(
 
   let scan_db = ScanDb::open(command_opts.scan_db).context("Failed to open the scan database")?;
 
-  create_dir_recursively(&project_dir).context("Failed to create the project dir")?;
+  utils::create_dir_recursively(&project_dir).context("Failed to create the project dir")?;
 
   let meta_file_path = project_dir.join(project::META_FILE_PATH);
   let meta_data = project::MetaFileSerde {
@@ -41,20 +38,9 @@ pub fn run(
   };
 
   info!("Writing the project meta file");
-  try_any_result_hint(
-    try {
-      let mut writer = io::BufWriter::new(
-        fs::File::create(&meta_file_path)
-          .with_context(|| format!("Failed to open file '{}'", meta_file_path.display()))?,
-      );
-      serde_json::to_writer_pretty(&mut writer, &meta_data).with_context(|| {
-        format!("Failed to write JSON into file '{}'", meta_file_path.display())
-      })?;
-      writer.write_all(b"\n")?;
-      writer.flush()?;
-    },
-  )
-  .context("Failed to write the project meta file")?;
+  utils::json::write_file(&meta_file_path, &meta_data)
+    .with_context(|| format!("Failed to serialize to JSON file '{}'", meta_file_path.display()))
+    .context("Failed to write the project meta file")?;
 
   let mut splitting_strategy: Box<dyn SplittingStrategy> = {
     let constructor: &fn() -> Box<dyn SplittingStrategy> =
@@ -83,7 +69,7 @@ pub fn run(
         }
       };
 
-      let translation_db =
+      let tr_db =
         translation_db_files.entry(fragment_translation_file.into_owned()).or_insert_with(|| {
           let creation_timestamp = utils::get_timestamp();
           project::TranslationDbSerde {
@@ -94,13 +80,15 @@ pub fn run(
             files: IndexMap::new(),
           }
         });
-      let file = translation_db.files.entry((**file.path()).clone()).or_insert_with(|| {
+
+      let tr_file = tr_db.files.entry((**file.path()).clone()).or_insert_with(|| {
         project::TranslationDbFileSerde {
           is_lang_file: file.is_lang_file(),
           fragments: IndexMap::new(),
         }
       });
-      file.fragments.insert(
+
+      tr_file.fragments.insert(
         (**fragment.json_path()).clone(),
         project::TranslationDbFragmentSerde {
           lang_uid: fragment.lang_uid(),
@@ -115,7 +103,6 @@ pub fn run(
     }
   }
 
-  // TODO: Get rid of unwraps! They are here only for a quick prototype!
   let translation_files_dir = project_dir.join(&meta_data.translations_dir);
   let translation_db_files_len = translation_db_files.len();
   for (i, (translation_file_path, translation_db)) in translation_db_files.into_iter().enumerate()
@@ -127,20 +114,14 @@ pub fn run(
       translation_db_files_len,
       translation_file_path.display(),
     );
-    create_dir_recursively(translation_file_path.parent().unwrap()).unwrap();
-    let mut file = io::BufWriter::new(fs::File::create(translation_file_path).unwrap());
 
-    serde_json::to_writer_pretty(&mut file, &translation_db).unwrap();
-    file.write_all(b"\n").unwrap();
-    file.flush().unwrap();
+    utils::create_dir_recursively(translation_file_path.parent().unwrap()).with_context(|| {
+      format!("Failed to create the parent directories for '{}'", translation_file_path.display())
+    })?;
+    utils::json::write_file(&translation_file_path, &translation_db).with_context(|| {
+      format!("Failed to serialize to JSON file '{}'", translation_file_path.display())
+    })?;
   }
 
   Ok(())
-}
-
-#[inline(never)]
-fn create_dir_recursively(path: impl AsRef<Path>) -> io::Result<()> {
-  #[inline(never)]
-  fn inner(path: &Path) -> io::Result<()> { fs::DirBuilder::new().recursive(true).create(path) }
-  inner(path.as_ref())
 }

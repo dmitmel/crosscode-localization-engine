@@ -51,10 +51,8 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) ->
     let mut scan_db_file: Option<Rc<db::ScanDbFile>> = None;
 
     let abs_path = command_opts.assets_dir.join(&found_file.path);
-    let json_bytes = fs::read(&abs_path)
-      .with_context(|| format!("Failed to read file '{}'", abs_path.display()))?;
-    let json_data = serde_json::from_slice::<json::Value>(&json_bytes)
-      .with_context(|| format!("Failed to parse JSON file '{}'", found_file.path))?;
+    let json_data: json::Value = utils::json::read_file(&abs_path, &mut Vec::new())
+      .with_context(|| format!("Failed to deserialize from JSON file '{}'", abs_path.display()))?;
 
     let lang_labels_iter = match lang_label_extractor::extract_from_file(&found_file, &json_data) {
       Some(v) => v,
@@ -127,10 +125,13 @@ struct ChangelogEntryRef<'a> {
 
 pub fn read_game_version(assets_dir: &Path) -> AnyResult<String> {
   let abs_changelog_path = assets_dir.join(*CHANGELOG_FILE_PATH);
-  let changelog_bytes = fs::read(&abs_changelog_path)
-    .with_context(|| format!("Failed to read file '{}'", abs_changelog_path.display()))?;
-  let changelog_data = serde_json::from_slice::<ChangelogFileRef>(&changelog_bytes)
-    .with_context(|| format!("Failed to parse JSON file '{}'", CHANGELOG_FILE_PATH.display()))?;
+
+  let mut changelog_bytes = Vec::new();
+  let changelog_data: ChangelogFileRef =
+    utils::json::read_file(&abs_changelog_path, &mut changelog_bytes).with_context(|| {
+      format!("Failed to serialize to JSON file '{}'", abs_changelog_path.display())
+    })?;
+
   let latest_entry = changelog_data
     .changelog
     .get(0)

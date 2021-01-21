@@ -1,4 +1,9 @@
+use crate::impl_prelude::*;
+
 use std::borrow::Cow;
+use std::fs;
+use std::io::{self, Write};
+use std::path::Path;
 
 pub use serde_json::Value;
 
@@ -57,4 +62,21 @@ impl<'a> Iterator for ValueEntriesIter<'a> {
       Self::Object { iter, .. } => iter.count(),
     }
   }
+}
+
+pub fn read_file<'a, T: serde::Deserialize<'a>>(
+  path: &Path,
+  out_bytes: &'a mut Vec<u8>,
+) -> AnyResult<T> {
+  *out_bytes = fs::read(path)?;
+  let value = serde_json::from_slice(out_bytes)?;
+  Ok(value)
+}
+
+pub fn write_file<T: serde::Serialize>(path: &Path, value: &T) -> AnyResult<()> {
+  let mut writer = io::BufWriter::new(fs::File::create(path)?);
+  serde_json::to_writer_pretty(&mut writer, value)?;
+  writer.write_all(b"\n")?;
+  writer.flush()?;
+  Ok(())
 }
