@@ -77,3 +77,38 @@ pub fn is_default<T: Default + PartialEq>(t: &T) -> bool { t == &T::default() }
 pub fn create_dir_recursively(path: &Path) -> io::Result<()> {
   fs::DirBuilder::new().recursive(true).create(path)
 }
+
+pub fn split_filename_extension(filename: &str) -> (&str, Option<&str>) {
+  if let Some(dot_index) = filename.rfind('.') {
+    if dot_index > 0 {
+      // Safe because `rfind` is guaranteed to return valid character indices.
+      let stem = unsafe { filename.get_unchecked(..dot_index) };
+      // Safe because in addition to above, byte length of the string "."
+      // (which we have to skip and not include in the extension) encoded in
+      // UTF-8 is exactly 1.
+      let ext = unsafe { filename.get_unchecked(dot_index + 1..) };
+      return (stem, Some(ext));
+    }
+  }
+  (filename, None)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_split_filename_extension() {
+    assert_eq!(split_filename_extension(""), ("", None));
+    assert_eq!(split_filename_extension("name"), ("name", None));
+    assert_eq!(split_filename_extension(".name"), (".name", None));
+    assert_eq!(split_filename_extension("name."), ("name", Some("")));
+    assert_eq!(split_filename_extension(".name."), (".name", Some("")));
+    assert_eq!(split_filename_extension("name.ext"), ("name", Some("ext")));
+    assert_eq!(split_filename_extension(".name.ext"), (".name", Some("ext")));
+    assert_eq!(split_filename_extension("name.ext."), ("name.ext", Some("")));
+    assert_eq!(split_filename_extension(".name.ext."), (".name.ext", Some("")));
+    assert_eq!(split_filename_extension("name.ext1.ext2"), ("name.ext1", Some("ext2")));
+    assert_eq!(split_filename_extension(".name.ext1.ext2"), (".name.ext1", Some("ext2")));
+  }
+}

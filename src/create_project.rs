@@ -108,7 +108,7 @@ pub fn run(
   for (i, (translation_file_path, translation_db)) in translation_db_files.into_iter().enumerate()
   {
     let translation_file_path = translation_files_dir.join(translation_file_path + ".json");
-    info!(
+    trace!(
       "[{}/{}] Writing translation file '{}'",
       i + 1,
       translation_db_files_len,

@@ -15,7 +15,6 @@ use std::borrow::Cow;
 use std::char;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::fs;
 use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;

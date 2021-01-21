@@ -43,21 +43,6 @@ lazy_static! {
   };
 }
 
-fn split_filename_extension(filename: &str) -> (&str, Option<&str>) {
-  if let Some(dot_index) = filename.rfind('.') {
-    if dot_index > 0 {
-      // Safe because `rfind` is guaranteed to return valid character indices.
-      let stem = unsafe { filename.get_unchecked(..dot_index) };
-      // Safe because in addition to above, byte length of the string "."
-      // (which we have to skip and not include in the extension) encoded in
-      // UTF-8 is exactly 1.
-      let ext = unsafe { filename.get_unchecked(dot_index + 1..) };
-      return (stem, Some(ext));
-    }
-  }
-  (filename, None)
-}
-
 #[derive(Debug)]
 pub struct MonolithicFileStrategy;
 
@@ -88,7 +73,7 @@ impl SplittingStrategy for SameFileTreeStrategy {
     &mut self,
     file_path: &str,
   ) -> Option<Cow<'static, str>> {
-    let (file_path, _) = split_filename_extension(file_path);
+    let (file_path, _) = utils::split_filename_extension(file_path);
     Some(file_path.to_owned().into())
   }
 }
@@ -125,7 +110,8 @@ impl SplittingStrategy for NotabenoidChaptersStrategy {
             _ => {}
           },
 
-          "areas" if components.len() == 3 => match split_filename_extension(components[2]) {
+          "areas" if components.len() == 3 => match utils::split_filename_extension(components[2])
+          {
             (area_name, Some("json")) => match AREAS_WITH_CHAPTERS.get(area_name) {
               Some(&chapter) => return chapter,
               _ => {}
@@ -245,25 +231,5 @@ impl SplittingStrategy for NextGenerationStrategy {
     }
 
     unreachable!()
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn test_split_filename_extension() {
-    assert_eq!(split_filename_extension(""), ("", None));
-    assert_eq!(split_filename_extension("name"), ("name", None));
-    assert_eq!(split_filename_extension(".name"), (".name", None));
-    assert_eq!(split_filename_extension("name."), ("name", Some("")));
-    assert_eq!(split_filename_extension(".name."), (".name", Some("")));
-    assert_eq!(split_filename_extension("name.ext"), ("name", Some("ext")));
-    assert_eq!(split_filename_extension(".name.ext"), (".name", Some("ext")));
-    assert_eq!(split_filename_extension("name.ext."), ("name.ext", Some("")));
-    assert_eq!(split_filename_extension(".name.ext."), (".name.ext", Some("")));
-    assert_eq!(split_filename_extension("name.ext1.ext2"), ("name.ext1", Some("ext2")));
-    assert_eq!(split_filename_extension(".name.ext1.ext2"), (".name.ext1", Some("ext2")));
   }
 }
