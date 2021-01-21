@@ -3,7 +3,7 @@ use crate::utils::{self, ShareRc, ShareRcWeak, Timestamp};
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, Ref, RefCell};
 use std::collections::HashMap;
 use std::fs;
 use std::io::{BufWriter, Write};
@@ -62,6 +62,8 @@ pub struct ScanDb {
 impl ScanDb {
   #[inline(always)]
   pub fn meta(&self) -> &ScanDbMeta { &self.meta }
+  #[inline(always)]
+  pub fn files(&self) -> Ref<IndexMap<Rc<String>, Rc<ScanDbFile>>> { self.files.borrow() }
   #[inline(always)]
   pub fn total_fragments_count(&self) -> usize { self.total_fragments_count.get() }
 
@@ -122,14 +124,13 @@ impl ScanDb {
       fs::File::create(&self.db_file_path)
         .with_context(|| format!("Failed to open file '{}'", self.db_file_path.display()))?,
     );
-
-    serde_json::to_writer_pretty(&mut writer, self)?;
+    serde_json::to_writer_pretty(&mut writer, self).with_context(|| {
+      format!("Failed to write JSON into file '{}'", self.db_file_path.display())
+    })?;
     writer.write_all(b"\n")?;
     writer.flush()?;
     Ok(())
   }
-
-  pub fn files_count(&self) -> usize { self.files.borrow().len() }
 
   pub fn reserve_additional_files(&self, additional_capacity: usize) {
     self.files.borrow_mut().reserve(additional_capacity);
@@ -160,6 +161,15 @@ pub struct ScanDbFile {
 }
 
 impl ScanDbFile {
+  #[inline(always)]
+  pub fn path(&self) -> &Rc<String> { &self.path }
+  #[inline(always)]
+  pub fn is_lang_file(&self) -> bool { self.is_lang_file }
+  #[inline(always)]
+  pub fn fragments(&self) -> Ref<IndexMap<Rc<String>, Rc<ScanDbFragment>>> {
+    self.fragments.borrow()
+  }
+
   fn new(file_init_opts: ScanDbFileInitOpts, scan_db: RcWeak<ScanDb>) -> Rc<Self> {
     Rc::new(Self {
       scan_db,
@@ -207,6 +217,17 @@ pub struct ScanDbFragment {
 }
 
 impl ScanDbFragment {
+  #[inline(always)]
+  pub fn json_path(&self) -> &Rc<String> { &self.json_path }
+  #[inline(always)]
+  pub fn lang_uid(&self) -> i32 { self.lang_uid }
+  #[inline(always)]
+  pub fn has_lang_uid(&self) -> bool { self.lang_uid != 0 }
+  #[inline(always)]
+  pub fn description(&self) -> &[String] { &self.description }
+  #[inline(always)]
+  pub fn text(&self) -> &HashMap<String, String> { &self.text }
+
   fn new(
     fragment_init_opts: ScanDbFragmentInitOpts,
     scan_db: RcWeak<ScanDb>,

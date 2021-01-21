@@ -66,3 +66,6 @@ mod private {
   pub trait Sealed {}
   impl<T: ?Sized> Sealed for T {}
 }
+
+#[inline]
+pub fn is_default<T: Default + PartialEq>(t: &T) -> bool { t == &T::default() }

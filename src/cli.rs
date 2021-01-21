@@ -157,7 +157,10 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
             .value_name("NAME")
             .long("splitting-strategy")
             .possible_values(
-              &splitting_strategies::STRATEGIES_MAP.keys().copied().collect::<Vec<&'static str>>(),
+              &splitting_strategies::SPLITTING_STRATEGIES_MAP
+                .keys()
+                .copied()
+                .collect::<Vec<&'static str>>(),
             )
             .default_value(splitting_strategies::SameFileTreeStrategy::ID)
             .help(

@@ -42,8 +42,6 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) ->
   // anyway, so let's reuse the hashmap and just clone it.
   let mut tmp_fragment_text = HashMap::<String, String>::with_capacity(1);
 
-  // let mut strategy: Box<dyn SplittingStrategy> = Box::new(NotabenoidChaptersStrategy);
-
   info!("Extracting localizable strings");
   let mut ignored_lang_labels_count = 0;
 
@@ -63,9 +61,6 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) ->
       _ => continue,
     };
 
-    // let global_translation_file: Option<Cow<'static, str>> =
-    //   strategy.get_translation_file_for_entire_game_file(&found_file.path);
-
     for lang_label in lang_labels_iter {
       if is_lang_label_ignored(&lang_label, &found_file) {
         ignored_lang_labels_count += 1;
@@ -80,11 +75,6 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) ->
           continue;
         }
       };
-
-      // let fragment_translation_file: Cow<'static, str> = match &global_translation_file {
-      //   Some(v) => v.clone(),
-      //   None => strategy.get_translation_file_for_fragment(&found_file.path, &json_path),
-      // };
 
       let scan_db_file = scan_db_file.get_or_insert_with(|| scan_db.new_file(found_file.clone()));
 
@@ -101,7 +91,7 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) ->
   info!(
     "Found {} localizable strings in {} files, {} were ignored",
     scan_db.total_fragments_count(),
-    scan_db.files_count(),
+    scan_db.files().len(),
     ignored_lang_labels_count,
   );
 

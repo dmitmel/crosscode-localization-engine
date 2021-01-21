@@ -18,7 +18,7 @@ pub trait SplittingStrategy {
 }
 
 lazy_static! {
-  pub static ref STRATEGIES_MAP: HashMap<&'static str, fn() -> Box<dyn SplittingStrategy>> = {
+  pub static ref SPLITTING_STRATEGIES_MAP: HashMap<&'static str, fn() -> Box<dyn SplittingStrategy>> = {
     macro_rules! strategies_map {
       ($($strat:ident,)+) => { strategies_map![$($strat),+] };
       ($($strat:ident),*) => {
