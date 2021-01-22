@@ -176,8 +176,12 @@ impl ScanDbFile {
     self: &Rc<Self>,
     fragment_init_opts: ScanDbFragmentInitOpts,
   ) -> Rc<ScanDbFragment> {
-    let fragment =
-      ScanDbFragment::new(fragment_init_opts, self.scan_db.share_rc_weak(), self.share_rc_weak());
+    let fragment = ScanDbFragment::new(
+      fragment_init_opts,
+      self.scan_db.share_rc_weak(),
+      self.share_rc_weak(),
+      self.path.share_rc(),
+    );
     self.fragments.borrow_mut().insert(fragment.json_path.share_rc(), fragment.share_rc());
     self.scan_db.upgrade().unwrap().total_fragments_count.update(|c| c + 1);
     fragment
@@ -199,6 +203,8 @@ pub struct ScanDbFragment {
   #[serde(skip)]
   file: RcWeak<ScanDbFile>,
   #[serde(skip)]
+  file_path: Rc<String>,
+  #[serde(skip)]
   json_path: Rc<String>,
   lang_uid: i32,
   description: Vec<String>,
@@ -206,6 +212,8 @@ pub struct ScanDbFragment {
 }
 
 impl ScanDbFragment {
+  #[inline(always)]
+  pub fn file_path(&self) -> &Rc<String> { &self.file_path }
   #[inline(always)]
   pub fn json_path(&self) -> &Rc<String> { &self.json_path }
   #[inline(always)]
@@ -221,10 +229,12 @@ impl ScanDbFragment {
     fragment_init_opts: ScanDbFragmentInitOpts,
     scan_db: RcWeak<ScanDb>,
     file: RcWeak<ScanDbFile>,
+    file_path: Rc<String>,
   ) -> Rc<Self> {
     Rc::new(Self {
       scan_db,
       file,
+      file_path,
       json_path: Rc::new(fragment_init_opts.json_path),
       lang_uid: fragment_init_opts.lang_uid,
       description: fragment_init_opts.description,

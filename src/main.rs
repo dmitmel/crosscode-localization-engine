@@ -7,6 +7,7 @@ pub mod macros;
 
 pub mod cli;
 pub mod create_project;
+pub mod gettext_po;
 pub mod impl_prelude;
 pub mod project;
 pub mod scan;
