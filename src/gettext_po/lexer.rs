@@ -1,41 +1,25 @@
-// See <https://github.com/autotools-mirror/gettext/blob/6c9cff1221f2cbf585fbee6f86ff047c8ede5286/gettext-tools/src/po-lex.c>
-// For testing the behavior of GNU gettext the following Python program can be
-// used (launch with the environment variable `USECPO` set to `1`):
-//
-//     from translate.storage.po import pofile
-//     import sys
-//     POFile(sys.stdin.buffer).serialize(sys.stdout.buffer)
-//
-// Needless to say, it requires installation of <https://github.com/translate/translate>
-// (also see <https://github.com/translate/translate/blob/88d13bea244b1894a4bedf67ba5b8b65cc29d3b0/translate/storage/po.py>).
+use super::CharPos;
+use super::ParsingError;
 
 use std::borrow::Cow;
 use std::iter;
 use std::str;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Token<'src> {
   pub start_pos: CharPos,
   pub end_pos: CharPos,
   pub type_: TokenType<'src>,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct CharPos {
-  pub index: usize,
-  pub line: usize,
-  pub column: usize,
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TokenType<'src> {
   PreviousMarker,
   Newline,
-  Domain,
   Msgctxt,
   Msgid,
   Msgstr,
-  Comment(CommentType, &'src str),
+  Comment(CommentType, Cow<'src, str>),
   String(Cow<'src, str>),
 }
 
@@ -47,17 +31,11 @@ pub enum CommentType {
   Flags,
 }
 
-#[derive(Debug)]
-pub struct ParsingError {
-  pub pos: CharPos,
-  pub message: String,
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Lexer<'src> {
   src: &'src str,
   src_iter: iter::Peekable<str::CharIndices<'src>>,
-  has_error: bool,
+  done: bool,
   token_start_pos: CharPos,
   current_pos: CharPos,
   newline_char_reached: bool,
@@ -65,12 +43,12 @@ pub struct Lexer<'src> {
 }
 
 impl<'src> Lexer<'src> {
-  pub fn lex(src: &'src str) -> Self {
+  pub fn new(src: &'src str) -> Self {
     let current_pos = CharPos { index: 0, line: 0, column: 0 };
     Self {
       src,
       src_iter: src.char_indices().peekable(),
-      has_error: false,
+      done: false,
       token_start_pos: current_pos,
       current_pos,
       newline_char_reached: true,
@@ -103,7 +81,7 @@ impl<'src> Lexer<'src> {
   }
 
   fn emit_error(&mut self, message: String) -> ParsingError {
-    self.has_error = true;
+    self.done = true;
     ParsingError { pos: self.current_pos, message }
   }
 }
@@ -112,7 +90,9 @@ impl<'src> Iterator for Lexer<'src> {
   type Item = Result<Token<'src>, ParsingError>;
 
   fn next(&mut self) -> Option<Self::Item> {
-    assert!(!self.has_error);
+    if self.done {
+      return None;
+    }
 
     macro_rules! emit_error {
       ($($arg:tt)*) => {
@@ -123,15 +103,25 @@ impl<'src> Iterator for Lexer<'src> {
     }
 
     while self.peek_char().map_or(false, |c| {
-      // NOTE: is_ascii_whitespace doesn't match \v (which GNU gettext
+      // Note that is_ascii_whitespace doesn't match \v (which GNU gettext
       // considers whitespace) and \n needs to be emitted as a token
       matches!(c, '\t' | /* \v */ '\x0B' | /* \f */ '\x0C' | '\r' | ' ')
     }) {
       self.next_char();
     }
 
-    let c = self.next_char()?;
+    // NOTE: This is the only place where usage of the `?` operator is (was)
+    // permitted, all other calls of `next_char` must handle EOF and emit an
+    // error or something like that.
+    let c = match self.next_char() {
+      Some(c) => c,
+      None => {
+        self.done = true;
+        return None;
+      }
+    };
     self.begin_token();
+
     let token_type = match c {
       '\n' => TokenType::Newline,
 
@@ -157,7 +147,7 @@ impl<'src> Iterator for Lexer<'src> {
             self.next_char();
           }
           let text = &self.src[text_start_index..self.next_char_index];
-          TokenType::Comment(comment_type, text)
+          TokenType::Comment(comment_type, Cow::Borrowed(text))
         }
       },
 
@@ -178,25 +168,36 @@ impl<'src> Iterator for Lexer<'src> {
             '\\' => {
               let literal_text = &self.src[literal_text_start_index..self.current_pos.index];
               let c = match self.peek_char() {
-                None | Some('\n') => emit_error!("expected a character to escape"),
+                None => emit_error!("expected a character to escape"),
                 Some(c) => c,
               };
               self.next_char();
 
-              let text_buf =
-                text_buf.get_or_insert_with(|| String::with_capacity(literal_text.len() + 1));
-              text_buf.push_str(literal_text);
-              text_buf.push(match c {
-                'n' => '\n',
-                't' => '\t',
-                'b' => '\x08',
-                'r' => '\r',
-                'f' => '\x0C',
-                'v' => '\x0B',
-                'a' => '\x07',
-                '\\' | '\"' => c,
-                _ => emit_error!("unknown escaped character {:?}", c),
+              let unescaped_char = match c {
+                '\n' => None,
+                _ => Some(match c {
+                  'n' => '\n',
+                  't' => '\t',
+                  'b' => '\x08',
+                  'r' => '\r',
+                  'f' => '\x0C',
+                  'v' => '\x0B',
+                  'a' => '\x07',
+                  '\\' | '\"' => c,
+                  // TODO: octal (optional), hex and unicode escape sequences
+                  _ => emit_error!("unknown escaped character {:?}", c),
+                }),
+              };
+
+              let text_buf = text_buf.get_or_insert_with(|| {
+                String::with_capacity(
+                  literal_text.len() + unescaped_char.map_or(0, char::len_utf8),
+                )
               });
+              text_buf.push_str(literal_text);
+              if let Some(unescaped_char) = unescaped_char {
+                text_buf.push(unescaped_char);
+              }
               literal_text_start_index = self.next_char_index;
             }
             _ => {}
@@ -219,7 +220,9 @@ impl<'src> Iterator for Lexer<'src> {
         }
         let keyword = &self.src[self.token_start_pos.index..self.next_char_index];
         match keyword {
-          "domain" => TokenType::Domain,
+          "domain" => emit_error!(
+            "the \"domain\" keyword is unsupported due to the lack of documentation about it",
+          ),
           "msgctxt" => TokenType::Msgctxt,
           "msgid" => TokenType::Msgid,
           "msgstr" => TokenType::Msgstr,
