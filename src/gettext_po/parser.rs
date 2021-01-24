@@ -2,6 +2,7 @@ use super::lexer::{CommentType, Lexer, Token, TokenType};
 use super::{CharPos, ParsingError};
 
 use std::borrow::Cow;
+use std::iter;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ParsedMessage<'src> {
@@ -18,54 +19,69 @@ pub struct ParsedMessage<'src> {
 
 #[derive(Debug, Clone)]
 pub struct Parser<'src> {
-  lexer: Lexer<'src>,
+  lexer: iter::Peekable<Lexer<'src>>,
   stored_token: Option<Token<'src>>,
-  state: State,
   done: bool,
-  current_token_pos: CharPos,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum State {
-  CommentBlock,
-  PrevMsgctxtSection,
-  PrevMsgidSection,
-  MsgctxtSection,
-  MsgidSection,
-  MsgstrSection,
+  current_token_start_pos: CharPos,
+  current_token_end_pos: CharPos,
 }
 
 impl<'src> Parser<'src> {
   pub fn new(lexer: Lexer<'src>) -> Self {
     Self {
-      lexer,
+      lexer: lexer.peekable(),
       stored_token: None,
-      state: State::CommentBlock,
       done: false,
-      current_token_pos: CharPos { index: 0, line: 0, column: 0 },
+      current_token_start_pos: CharPos { index: 0, line: 0, column: 0 },
+      current_token_end_pos: CharPos { index: 0, line: 0, column: 0 },
     }
   }
 
-  fn emit_error(&mut self, message: String) -> ParsingError {
-    self.done = true;
-    ParsingError { pos: self.current_token_pos, message }
-  }
-}
-
-impl<'src> Iterator for Parser<'src> {
-  type Item = Result<ParsedMessage<'src>, ParsingError>;
-
-  fn next(&mut self) -> Option<Self::Item> {
-    if self.done {
-      return None;
-    }
-
-    macro_rules! emit_error {
-      ($($arg:tt)*) => {
-        {
-          return Some(Err(self.emit_error(format!($($arg)*))));
-        }
+  fn next_token(&mut self) -> Result<Option<TokenType<'src>>, ParsingError> {
+    match self.lexer.next() {
+      Some(Ok(token)) => {
+        self.current_token_start_pos = token.start_pos;
+        self.current_token_end_pos = token.end_pos;
+        Ok(Some(token.type_))
       }
+      Some(Err(error)) => {
+        self.done = true;
+        Err(error)
+      }
+      None => {
+        self.done = true;
+        Ok(None)
+      }
+    }
+  }
+
+  fn peek_token(&mut self) -> Result<Option<&TokenType<'src>>, ParsingError> {
+    match self.lexer.peek() {
+      Some(Ok(token)) => Ok(Some(&token.type_)),
+      Some(Err(error)) => {
+        self.done = true;
+        Err(error.clone())
+      }
+      None => {
+        self.done = true;
+        Ok(None)
+      }
+    }
+  }
+
+  fn emit_error(&mut self, message: String) -> Result<(), ParsingError> {
+    self.done = true;
+    Err(ParsingError { pos: self.current_token_start_pos, message })
+  }
+
+  fn emit_error_after(&mut self, message: String) -> Result<(), ParsingError> {
+    self.done = true;
+    Err(ParsingError { pos: self.current_token_end_pos, message })
+  }
+
+  fn parse_next_message(&mut self) -> Result<Option<ParsedMessage<'src>>, ParsingError> {
+    if self.done {
+      return Ok(None);
     }
 
     let mut message = ParsedMessage {
@@ -79,96 +95,78 @@ impl<'src> Iterator for Parser<'src> {
       msgid: Vec::new(),
       msgstr: Vec::new(),
     };
-    let mut is_previous = false;
 
-    loop {
-      let token = match self.stored_token.take() {
-        Some(token) => token,
-        None => match self.lexer.next() {
-          Some(Ok(token)) => token,
-          Some(Err(e)) => {
-            self.done = true;
-            return Some(Err(e));
-          }
-          None => {
-            self.done = true;
-            return Some(Ok(message));
-          }
-        },
+    self.parse_comments_block(&mut message)?;
+
+    if let Some(TokenType::Msgctxt) = self.peek_token()? {
+      self.next_token()?;
+      self.parse_string_list(&mut message.msgctxt)?;
+    }
+
+    if let Some(TokenType::Msgid) = self.next_token()? {
+      self.parse_string_list(&mut message.msgid)?;
+    } else {
+      self.emit_error("expected msgctxt or msgid".to_owned())?;
+    }
+
+    if let Some(TokenType::Msgstr) = self.next_token()? {
+      self.parse_string_list(&mut message.msgstr)?;
+    } else {
+      self.emit_error("expected msgstr".to_owned())?;
+    }
+
+    Ok(Some(message))
+  }
+
+  fn parse_string_list(&mut self, out: &mut Vec<Cow<'src, str>>) -> Result<(), ParsingError> {
+    let mut found_any_strings = false;
+    while self.peek_token()?.map_or(false, |t| matches!(t, TokenType::String(..))) {
+      let text = match self.next_token()? {
+        Some(TokenType::String(text)) => text,
+        _ => unreachable!(),
       };
-      self.current_token_pos = token.start_pos;
+      out.push(text);
+      found_any_strings = true;
+    }
+    if !found_any_strings {
+      self.emit_error_after("expected one or more strings".to_owned())?;
+    }
+    Ok(())
+  }
 
-      if matches!(token.type_, TokenType::Comment(..)) && self.state != State::CommentBlock {
-        self.stored_token = Some(token);
-        self.state = State::CommentBlock;
-        return Some(Ok(message));
-      }
+  fn parse_comments_block(&mut self, out: &mut ParsedMessage<'src>) -> Result<(), ParsingError> {
+    while self.peek_token()?.map_or(false, |t| matches!(t, TokenType::Comment(..))) {
+      let (type_, text) = match self.next_token()? {
+        Some(TokenType::Comment(type_, text)) => (type_, text),
+        _ => unreachable!(),
+      };
+      let list = match type_ {
+        CommentType::Translator => &mut out.translator_comments,
+        CommentType::Automatic => &mut out.automatic_comments,
+        CommentType::Reference => &mut out.reference_comments,
+        CommentType::Flags => &mut out.flags_comments,
+      };
+      list.push(text);
+    }
+    Ok(())
+  }
 
-      match token.type_ {
-        TokenType::PreviousMarker => {
-          is_previous = true;
-        }
-        TokenType::Newline => {
-          is_previous = false;
-        }
+  // fn skip_newlines(&mut self) -> Result<(), ParsingError> {
+  //   while self.peek_token()?.map_or(false, |t| matches!(t, TokenType::Newline)) {
+  //     self.next_token()?;
+  //   }
+  //   Ok(())
+  // }
+}
 
-        TokenType::Msgctxt => {
-          if !is_previous {
-            self.state = State::MsgctxtSection;
-            message.msgctxt = Vec::new();
-          } else {
-            self.state = State::PrevMsgctxtSection;
-            message.prev_msgctxt = Vec::new();
-          }
-        }
+impl<'src> Iterator for Parser<'src> {
+  type Item = Result<ParsedMessage<'src>, ParsingError>;
 
-        TokenType::Msgid => {
-          if !is_previous {
-            self.state = State::MsgidSection;
-            message.msgid = Vec::new();
-          } else {
-            self.state = State::PrevMsgidSection;
-            message.prev_msgid = Vec::new();
-          }
-        }
-
-        TokenType::Msgstr => {
-          if !is_previous {
-            self.state = State::MsgstrSection;
-            message.msgstr = Vec::new();
-          } else {
-            emit_error!("\"msgstr\" is not allowed here");
-          }
-        }
-
-        TokenType::String(text) => {
-          let (text_buf, expect_previous) = match self.state {
-            State::CommentBlock => emit_error!("strings must follow a section keyword"),
-            State::PrevMsgctxtSection => (&mut message.prev_msgctxt, true),
-            State::PrevMsgidSection => (&mut message.prev_msgid, true),
-            State::MsgctxtSection => (&mut message.msgctxt, false),
-            State::MsgidSection => (&mut message.msgid, false),
-            State::MsgstrSection => (&mut message.msgstr, false),
-          };
-          if expect_previous == is_previous {
-            text_buf.push(text);
-          }
-        }
-
-        TokenType::Comment(comment_type, text) => {
-          if self.state == State::CommentBlock {
-            let text_buf = match comment_type {
-              CommentType::Translator => &mut message.translator_comments,
-              CommentType::Automatic => &mut message.automatic_comments,
-              CommentType::Reference => &mut message.reference_comments,
-              CommentType::Flags => &mut message.flags_comments,
-            };
-            text_buf.push(text);
-          } else {
-            unreachable!();
-          }
-        }
-      }
+  fn next(&mut self) -> Option<Self::Item> {
+    match self.parse_next_message() {
+      Ok(Some(v)) => Some(Ok(v)),
+      Ok(None) => None,
+      Err(e) => Some(Err(e)),
     }
   }
 }

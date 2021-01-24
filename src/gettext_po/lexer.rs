@@ -13,8 +13,8 @@ pub struct Token<'src> {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TokenType<'src> {
-  PreviousMarker,
-  Newline,
+  // PreviousMarker,
+  // Newline,
   Msgctxt,
   Msgid,
   Msgstr,
@@ -67,7 +67,15 @@ impl<'src> Lexer<'src> {
 
   fn begin_token(&mut self) { self.token_start_pos = self.current_pos; }
   fn end_token(&self, type_: TokenType<'src>) -> Token<'src> {
-    Token { start_pos: self.token_start_pos, end_pos: self.current_pos, type_ }
+    Token {
+      start_pos: self.token_start_pos,
+      end_pos: CharPos {
+        index: self.next_char_index,
+        column: self.current_pos.column + 1,
+        line: self.current_pos.line,
+      },
+      type_,
+    }
   }
 
   fn emit_error(&mut self, message: String) -> ParsingError {
@@ -95,7 +103,7 @@ impl<'src> Iterator for Lexer<'src> {
     while self.peek_char().map_or(false, |c| {
       // Note that is_ascii_whitespace doesn't match \v (which GNU gettext
       // considers whitespace) and \n needs to be emitted as a token
-      matches!(c, '\t' | /* \v */ '\x0B' | /* \f */ '\x0C' | '\r' | ' ')
+      matches!(c, '\t' | '\n' | /* \v */ '\x0B' | /* \f */ '\x0C' | '\r' | ' ')
     }) {
       self.next_char();
     }
@@ -113,13 +121,16 @@ impl<'src> Iterator for Lexer<'src> {
     self.begin_token();
 
     let token_type = match c {
-      '\n' => TokenType::Newline,
-
+      // '\n' => TokenType::Newline,
       '#' => match self.peek_char() {
-        Some('~') => emit_error!("obsolete entries are unsupported"),
+        Some('~') => {
+          self.next_char();
+          emit_error!("obsolete entries are unsupported")
+        }
         Some('|') => {
           self.next_char();
-          TokenType::PreviousMarker
+          // TokenType::PreviousMarker
+          emit_error!("previous entries are unsupported")
         }
 
         marker_char => {
