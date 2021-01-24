@@ -1,5 +1,4 @@
-use super::CharPos;
-use super::ParsingError;
+use super::{CharPos, CharPosIter, ParsingError};
 
 use std::borrow::Cow;
 use std::iter;
@@ -34,11 +33,10 @@ pub enum CommentType {
 #[derive(Debug, Clone)]
 pub struct Lexer<'src> {
   src: &'src str,
-  src_iter: iter::Peekable<str::CharIndices<'src>>,
+  src_iter: iter::Peekable<CharPosIter<'src>>,
   done: bool,
   token_start_pos: CharPos,
   current_pos: CharPos,
-  newline_char_reached: bool,
   next_char_index: usize,
 }
 
@@ -47,26 +45,18 @@ impl<'src> Lexer<'src> {
     let current_pos = CharPos { index: 0, line: 0, column: 0 };
     Self {
       src,
-      src_iter: src.char_indices().peekable(),
+      src_iter: CharPosIter::new(src).peekable(),
       done: false,
       token_start_pos: current_pos,
       current_pos,
-      newline_char_reached: true,
       next_char_index: 0,
     }
   }
 
   fn next_char(&mut self) -> Option<char> {
     let (chr_pos, chr) = self.src_iter.next()?;
-    self.current_pos.index = chr_pos;
-    self.next_char_index = chr_pos + chr.len_utf8();
-    if self.newline_char_reached {
-      self.current_pos.column = 1;
-      self.current_pos.line += 1;
-    } else {
-      self.current_pos.column += 1;
-    }
-    self.newline_char_reached = chr == '\n';
+    self.current_pos = chr_pos;
+    self.next_char_index = chr_pos.index + chr.len_utf8();
     Some(chr)
   }
 
