@@ -98,15 +98,34 @@ impl<'src> Parser<'src> {
 
     self.parse_comments_block(&mut message)?;
 
+    let mut has_prev_msgctxt = false;
+    if let Some(TokenType::PrevMsgctxt) = self.peek_token()? {
+      self.next_token()?;
+      self.parse_prev_string_list(&mut message.prev_msgctxt)?;
+      has_prev_msgctxt = true;
+    }
+
+    if let Some(TokenType::PrevMsgid) = self.peek_token()? {
+      self.next_token()?;
+      self.parse_prev_string_list(&mut message.prev_msgid)?;
+    } else if has_prev_msgctxt {
+      self.next_token()?;
+      self.emit_error("expected prev_msgid".to_owned())?;
+    }
+
+    let mut has_msgctxt = false;
     if let Some(TokenType::Msgctxt) = self.peek_token()? {
       self.next_token()?;
       self.parse_string_list(&mut message.msgctxt)?;
+      has_msgctxt = true;
     }
 
     if let Some(TokenType::Msgid) = self.next_token()? {
       self.parse_string_list(&mut message.msgid)?;
     } else {
-      self.emit_error("expected msgctxt or msgid".to_owned())?;
+      self.emit_error(
+        if has_msgctxt { "expected msgid" } else { "expected msgid or msgctxt" }.to_owned(),
+      )?;
     }
 
     if let Some(TokenType::Msgstr) = self.next_token()? {
@@ -118,15 +137,27 @@ impl<'src> Parser<'src> {
     Ok(Some(message))
   }
 
+  fn parse_prev_string_list(&mut self, out: &mut Vec<Cow<'src, str>>) -> Result<(), ParsingError> {
+    let mut found_any_strings = false;
+    while self.peek_token()?.map_or(false, |t| matches!(t, TokenType::PrevString(..))) {
+      if let Some(TokenType::PrevString(text)) = self.next_token()? {
+        out.push(text);
+        found_any_strings = true;
+      }
+    }
+    if !found_any_strings {
+      self.emit_error_after("expected one or more prev_strings".to_owned())?;
+    }
+    Ok(())
+  }
+
   fn parse_string_list(&mut self, out: &mut Vec<Cow<'src, str>>) -> Result<(), ParsingError> {
     let mut found_any_strings = false;
     while self.peek_token()?.map_or(false, |t| matches!(t, TokenType::String(..))) {
-      let text = match self.next_token()? {
-        Some(TokenType::String(text)) => text,
-        _ => unreachable!(),
-      };
-      out.push(text);
-      found_any_strings = true;
+      if let Some(TokenType::String(text)) = self.next_token()? {
+        out.push(text);
+        found_any_strings = true;
+      }
     }
     if !found_any_strings {
       self.emit_error_after("expected one or more strings".to_owned())?;
@@ -136,27 +167,18 @@ impl<'src> Parser<'src> {
 
   fn parse_comments_block(&mut self, out: &mut ParsedMessage<'src>) -> Result<(), ParsingError> {
     while self.peek_token()?.map_or(false, |t| matches!(t, TokenType::Comment(..))) {
-      let (type_, text) = match self.next_token()? {
-        Some(TokenType::Comment(type_, text)) => (type_, text),
-        _ => unreachable!(),
-      };
-      let list = match type_ {
-        CommentType::Translator => &mut out.translator_comments,
-        CommentType::Automatic => &mut out.automatic_comments,
-        CommentType::Reference => &mut out.reference_comments,
-        CommentType::Flags => &mut out.flags_comments,
-      };
-      list.push(text);
+      if let Some(TokenType::Comment(type_, text)) = self.next_token()? {
+        let list = match type_ {
+          CommentType::Translator => &mut out.translator_comments,
+          CommentType::Automatic => &mut out.automatic_comments,
+          CommentType::Reference => &mut out.reference_comments,
+          CommentType::Flags => &mut out.flags_comments,
+        };
+        list.push(text);
+      }
     }
     Ok(())
   }
-
-  // fn skip_newlines(&mut self) -> Result<(), ParsingError> {
-  //   while self.peek_token()?.map_or(false, |t| matches!(t, TokenType::Newline)) {
-  //     self.next_token()?;
-  //   }
-  //   Ok(())
-  // }
 }
 
 impl<'src> Iterator for Parser<'src> {
