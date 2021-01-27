@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::cell::{Cell, Ref, RefCell};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak as RcWeak};
 use uuid::Uuid;
 
@@ -49,6 +49,8 @@ pub struct ScanDbMeta {
 #[derive(Debug, Serialize)]
 pub struct ScanDb {
   #[serde(skip)]
+  dirty_flag: Rc<Cell<bool>>,
+  #[serde(skip)]
   db_file_path: PathBuf,
   #[serde(flatten)]
   meta: ScanDbMeta,
@@ -59,6 +61,10 @@ pub struct ScanDb {
 
 impl ScanDb {
   #[inline(always)]
+  pub fn dirty_flag(&self) -> bool { self.dirty_flag.get() }
+  #[inline(always)]
+  pub fn db_file_path(&self) -> &Path { &self.db_file_path }
+  #[inline(always)]
   pub fn meta(&self) -> &ScanDbMeta { &self.meta }
   #[inline(always)]
   pub fn files(&self) -> Ref<IndexMap<Rc<String>, Rc<ScanDbFile>>> { self.files.borrow() }
@@ -67,6 +73,7 @@ impl ScanDb {
 
   fn new(db_file_path: PathBuf, meta: ScanDbMeta) -> Rc<Self> {
     Rc::new(Self {
+      dirty_flag: Rc::new(Cell::new(false)),
       db_file_path,
       meta,
       files: RefCell::new(IndexMap::new()),
@@ -77,11 +84,13 @@ impl ScanDb {
   pub fn create(db_file_path: PathBuf, opts: ScanDbCreateOpts) -> Rc<Self> {
     let creation_timestamp = utils::get_timestamp();
     let uuid = utils::new_uuid();
-    Self::new(db_file_path, ScanDbMeta {
+    let myself = Self::new(db_file_path, ScanDbMeta {
       uuid,
       creation_timestamp,
       game_version: opts.game_version,
-    })
+    });
+    myself.dirty_flag.set(true);
+    myself
   }
 
   pub fn open(db_file_path: PathBuf) -> AnyResult<Rc<Self>> {
@@ -116,6 +125,14 @@ impl ScanDb {
   }
 
   pub fn write(&self) -> AnyResult<()> {
+    if self.dirty_flag.get() {
+      self.write_force()?;
+      self.dirty_flag.set(false);
+    }
+    Ok(())
+  }
+
+  pub fn write_force(&self) -> AnyResult<()> {
     utils::json::write_file(&self.db_file_path, self).with_context(|| {
       format!("Failed to serialize to JSON file '{}'", self.db_file_path.display())
     })
@@ -126,7 +143,8 @@ impl ScanDb {
   }
 
   pub fn new_file(self: &Rc<Self>, file_init_opts: ScanDbFileInitOpts) -> Rc<ScanDbFile> {
-    let file = ScanDbFile::new(file_init_opts, self.share_rc_weak());
+    self.dirty_flag.set(true);
+    let file = ScanDbFile::new(file_init_opts, &self);
     self.files.borrow_mut().insert(file.path.share_rc(), file.share_rc());
     file
   }
@@ -142,6 +160,8 @@ pub struct ScanDbFileInitOpts {
 #[derive(Debug, Serialize)]
 pub struct ScanDbFile {
   #[serde(skip)]
+  dirty_flag: Rc<Cell<bool>>,
+  #[serde(skip)]
   scan_db: RcWeak<ScanDb>,
   #[serde(skip)]
   path: Rc<String>,
@@ -151,6 +171,8 @@ pub struct ScanDbFile {
 
 impl ScanDbFile {
   #[inline(always)]
+  pub fn dirty_flag(&self) -> bool { self.dirty_flag.get() }
+  #[inline(always)]
   pub fn path(&self) -> &Rc<String> { &self.path }
   #[inline(always)]
   pub fn is_lang_file(&self) -> bool { self.is_lang_file }
@@ -159,9 +181,10 @@ impl ScanDbFile {
     self.fragments.borrow()
   }
 
-  fn new(file_init_opts: ScanDbFileInitOpts, scan_db: RcWeak<ScanDb>) -> Rc<Self> {
+  fn new(file_init_opts: ScanDbFileInitOpts, scan_db: &Rc<ScanDb>) -> Rc<Self> {
     Rc::new(Self {
-      scan_db,
+      dirty_flag: scan_db.dirty_flag.share_rc(),
+      scan_db: Rc::downgrade(scan_db),
       path: Rc::new(file_init_opts.path),
       is_lang_file: file_init_opts.is_lang_file,
       fragments: RefCell::new(IndexMap::new()),
@@ -176,14 +199,11 @@ impl ScanDbFile {
     self: &Rc<Self>,
     fragment_init_opts: ScanDbFragmentInitOpts,
   ) -> Rc<ScanDbFragment> {
-    let fragment = ScanDbFragment::new(
-      fragment_init_opts,
-      self.scan_db.share_rc_weak(),
-      self.share_rc_weak(),
-      self.path.share_rc(),
-    );
+    self.dirty_flag.set(true);
+    let scan_db = self.scan_db.upgrade().unwrap();
+    let fragment = ScanDbFragment::new(fragment_init_opts, &scan_db, self);
     self.fragments.borrow_mut().insert(fragment.json_path.share_rc(), fragment.share_rc());
-    self.scan_db.upgrade().unwrap().total_fragments_count.update(|c| c + 1);
+    scan_db.total_fragments_count.update(|c| c + 1);
     fragment
   }
 }
@@ -199,6 +219,8 @@ pub struct ScanDbFragmentInitOpts {
 #[derive(Debug, Serialize)]
 pub struct ScanDbFragment {
   #[serde(skip)]
+  dirty_flag: Rc<Cell<bool>>,
+  #[serde(skip)]
   scan_db: RcWeak<ScanDb>,
   #[serde(skip)]
   file: RcWeak<ScanDbFile>,
@@ -212,6 +234,8 @@ pub struct ScanDbFragment {
 }
 
 impl ScanDbFragment {
+  #[inline(always)]
+  pub fn dirty_flag(&self) -> bool { self.dirty_flag.get() }
   #[inline(always)]
   pub fn file_path(&self) -> &Rc<String> { &self.file_path }
   #[inline(always)]
@@ -227,14 +251,14 @@ impl ScanDbFragment {
 
   fn new(
     fragment_init_opts: ScanDbFragmentInitOpts,
-    scan_db: RcWeak<ScanDb>,
-    file: RcWeak<ScanDbFile>,
-    file_path: Rc<String>,
+    scan_db: &Rc<ScanDb>,
+    file: &Rc<ScanDbFile>,
   ) -> Rc<Self> {
     Rc::new(Self {
-      scan_db,
-      file,
-      file_path,
+      dirty_flag: scan_db.dirty_flag.share_rc(),
+      scan_db: Rc::downgrade(scan_db),
+      file: file.share_rc_weak(),
+      file_path: file.path.share_rc(),
       json_path: Rc::new(fragment_init_opts.json_path),
       lang_uid: fragment_init_opts.lang_uid,
       description: fragment_init_opts.description,
