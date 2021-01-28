@@ -9,6 +9,7 @@ pub mod cli;
 pub mod create_project;
 pub mod gettext_po;
 pub mod impl_prelude;
+pub mod parse_po;
 pub mod project;
 pub mod scan;
 pub mod utils;
@@ -57,6 +58,10 @@ pub fn try_main() -> AnyResult<()> {
     }
     cli::CommandOpts::CreateProject(command_opts) => {
       create_project::run(common_opts, *command_opts)
+    }
+    cli::CommandOpts::ParsePo(command_opts) => {
+      //
+      parse_po::run(common_opts, *command_opts)
     }
   }
 }

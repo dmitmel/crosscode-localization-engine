@@ -22,6 +22,7 @@ pub enum CommandOpts {
   // small variants because their sizes vary a lot.
   Scan(Box<ScanCommandOpts>),
   CreateProject(Box<CreateProjectCommandOpts>),
+  ParsePo(Box<ParsePoCommandOpts>),
 }
 
 #[derive(Debug)]
@@ -39,6 +40,12 @@ pub struct CreateProjectCommandOpts {
   pub translation_locale: String,
   pub splitting_strategy: String,
   pub translations_dir: String,
+}
+
+#[derive(Debug)]
+pub struct ParsePoCommandOpts {
+  pub file: Option<PathBuf>,
+  pub json: bool,
 }
 
 pub fn parse_opts() -> AnyResult<Opts> {
@@ -66,6 +73,14 @@ pub fn parse_opts() -> AnyResult<Opts> {
           translation_locale: matches.value_of("translation_locale").unwrap().to_owned(),
           splitting_strategy: matches.value_of("splitting_strategy").unwrap().to_owned(),
           translations_dir: matches.value_of("translations_dir").unwrap().to_owned(),
+        }))
+      }
+
+      ("parse-po", Some(matches)) => {
+        //
+        CommandOpts::ParsePo(Box::new(ParsePoCommandOpts {
+          file: matches.value_of("file").map(PathBuf::from),
+          json: matches.is_present("json"),
         }))
       }
 
@@ -181,5 +196,10 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
             .default_value("tr")
             .help("Path to project's translation storage files, relative to project's directory"),
         ),
+    )
+    .subcommand(
+      App::new("parse-po")
+        .arg(Arg::with_name("file").value_name("FILE"))
+        .arg(Arg::with_name("json").short("J").long("json")),
     )
 }
