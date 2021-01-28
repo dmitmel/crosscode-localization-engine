@@ -47,7 +47,7 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) ->
   let all_json_files_len = all_json_files.len();
   for (i, found_file) in all_json_files.into_iter().enumerate() {
     trace!("[{}/{}] {}", i + 1, all_json_files_len, found_file.path);
-    let mut scan_db_file: Option<Rc<db::ScanDbFile>> = None;
+    let mut scan_db_file: Option<Rc<db::ScanDbGameFile>> = None;
 
     let abs_path = command_opts.assets_dir.join(&found_file.path);
     let json_data: json::Value = utils::json::read_file(&abs_path, &mut Vec::new())
@@ -73,7 +73,8 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) ->
         }
       };
 
-      let scan_db_file = scan_db_file.get_or_insert_with(|| scan_db.new_file(found_file.clone()));
+      let scan_db_file =
+        scan_db_file.get_or_insert_with(|| scan_db.new_game_file(found_file.clone()));
 
       tmp_fragment_text.insert(lang_label_extractor::EXTRACTED_LOCALE.to_owned(), text);
       scan_db_file.new_fragment(db::ScanDbFragmentInitOpts {
@@ -88,7 +89,7 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) ->
   info!(
     "Found {} localizable strings in {} files, {} were ignored",
     scan_db.total_fragments_count(),
-    scan_db.files().len(),
+    scan_db.game_files().len(),
     ignored_lang_labels_count,
   );
 
@@ -180,7 +181,7 @@ lazy_static! {
 }
 
 #[allow(clippy::iter_nth_zero)]
-fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &db::ScanDbFileInitOpts) -> bool {
+fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &db::ScanDbGameFileInitOpts) -> bool {
   if IGNORED_STRINGS.contains(lang_label.text.trim()) {
     return true;
   }

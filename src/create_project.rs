@@ -26,7 +26,7 @@ pub fn run(
   utils::create_dir_recursively(&project_dir).context("Failed to create the project dir")?;
 
   let meta_file_path = project_dir.join(project::META_FILE_PATH);
-  let meta_data = project::MetaFileSerde {
+  let meta_data = project::ProjectMeta {
     uuid: utils::new_uuid(),
     creation_timestamp: utils::get_timestamp(),
     game_version: scan_db.meta().game_version.clone(),
@@ -50,9 +50,9 @@ pub fn run(
     constructor()
   };
 
-  let mut translation_db_files = IndexMap::<String, project::TranslationDbSerde>::new();
+  let mut translation_db_files = IndexMap::<String, project::TranslationFileSerde>::new();
 
-  for file in scan_db.files().values() {
+  for file in scan_db.game_files().values() {
     let global_translation_file: Option<Cow<'static, str>> =
       splitting_strategy.get_translation_file_for_entire_game_file(file.path());
 
@@ -72,34 +72,31 @@ pub fn run(
       let tr_db =
         translation_db_files.entry(fragment_translation_file.into_owned()).or_insert_with(|| {
           let creation_timestamp = utils::get_timestamp();
-          project::TranslationDbSerde {
+          project::TranslationFileSerde {
             uuid: utils::new_uuid(),
             creation_timestamp,
             modification_timestamp: creation_timestamp,
             project_meta_file: "TODO".to_owned(),
-            files: IndexMap::new(),
+            game_files: IndexMap::new(),
           }
         });
 
-      let tr_file = tr_db.files.entry((**file.path()).clone()).or_insert_with(|| {
-        project::TranslationDbFileSerde {
+      let tr_file = tr_db.game_files.entry((**file.path()).clone()).or_insert_with(|| {
+        project::GameFileChunkSerde {
           is_lang_file: file.is_lang_file(),
           fragments: IndexMap::new(),
         }
       });
 
-      tr_file.fragments.insert(
-        (**fragment.json_path()).clone(),
-        project::TranslationDbFragmentSerde {
-          lang_uid: fragment.lang_uid(),
-          description: fragment.description().to_owned(),
-          original_text,
-          reference_texts: Vec::new(),
-          flags: HashMap::new(),
-          translations: Vec::new(),
-          comments: Vec::new(),
-        },
-      );
+      tr_file.fragments.insert((**fragment.json_path()).clone(), project::FragmentSerde {
+        lang_uid: fragment.lang_uid(),
+        description: fragment.description().to_owned(),
+        original_text,
+        reference_texts: HashMap::new(),
+        flags: HashMap::new(),
+        translations: Vec::new(),
+        comments: Vec::new(),
+      });
     }
   }
 

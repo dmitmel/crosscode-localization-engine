@@ -15,11 +15,11 @@ pub struct ScanDbSerde {
   pub creation_timestamp: Timestamp,
   pub game_version: String,
   // pub extracted_locales: Vec<String>,
-  pub files: IndexMap<String, ScanDbFileSerde>,
+  pub game_files: IndexMap<String, ScanDbGameFileSerde>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ScanDbFileSerde {
+pub struct ScanDbGameFileSerde {
   pub is_lang_file: bool,
   pub fragments: IndexMap<String, ScanDbFragmentSerde>,
 }
@@ -54,20 +54,22 @@ pub struct ScanDb {
   db_file_path: PathBuf,
   #[serde(flatten)]
   meta: ScanDbMeta,
-  files: RefCell<IndexMap<Rc<String>, Rc<ScanDbFile>>>,
+  game_files: RefCell<IndexMap<Rc<String>, Rc<ScanDbGameFile>>>,
   #[serde(skip)]
   total_fragments_count: Cell<usize>,
 }
 
 impl ScanDb {
   #[inline(always)]
-  pub fn dirty_flag(&self) -> bool { self.dirty_flag.get() }
+  pub fn is_dirty(&self) -> bool { self.dirty_flag.get() }
   #[inline(always)]
   pub fn db_file_path(&self) -> &Path { &self.db_file_path }
   #[inline(always)]
   pub fn meta(&self) -> &ScanDbMeta { &self.meta }
   #[inline(always)]
-  pub fn files(&self) -> Ref<IndexMap<Rc<String>, Rc<ScanDbFile>>> { self.files.borrow() }
+  pub fn game_files(&self) -> Ref<IndexMap<Rc<String>, Rc<ScanDbGameFile>>> {
+    self.game_files.borrow()
+  }
   #[inline(always)]
   pub fn total_fragments_count(&self) -> usize { self.total_fragments_count.get() }
 
@@ -76,7 +78,7 @@ impl ScanDb {
       dirty_flag: Rc::new(Cell::new(false)),
       db_file_path,
       meta,
-      files: RefCell::new(IndexMap::new()),
+      game_files: RefCell::new(IndexMap::new()),
       total_fragments_count: Cell::new(0),
     })
   }
@@ -105,8 +107,8 @@ impl ScanDb {
       game_version: serde_data.game_version,
     });
 
-    for (file_serde_path, file_serde_data) in serde_data.files {
-      let file = myself.new_file(ScanDbFileInitOpts {
+    for (file_serde_path, file_serde_data) in serde_data.game_files {
+      let file = myself.new_game_file(ScanDbGameFileInitOpts {
         path: file_serde_path,
         is_lang_file: file_serde_data.is_lang_file,
       });
@@ -125,7 +127,7 @@ impl ScanDb {
   }
 
   pub fn write(&self) -> AnyResult<()> {
-    if self.dirty_flag.get() {
+    if self.is_dirty() {
       self.write_force()?;
       self.dirty_flag.set(false);
     }
@@ -138,27 +140,30 @@ impl ScanDb {
     })
   }
 
-  pub fn reserve_additional_files(&self, additional_capacity: usize) {
-    self.files.borrow_mut().reserve(additional_capacity);
+  pub fn reserve_additional_game_files(&self, additional_capacity: usize) {
+    self.game_files.borrow_mut().reserve(additional_capacity);
   }
 
-  pub fn new_file(self: &Rc<Self>, file_init_opts: ScanDbFileInitOpts) -> Rc<ScanDbFile> {
+  pub fn new_game_file(
+    self: &Rc<Self>,
+    file_init_opts: ScanDbGameFileInitOpts,
+  ) -> Rc<ScanDbGameFile> {
     self.dirty_flag.set(true);
-    let file = ScanDbFile::new(file_init_opts, &self);
-    self.files.borrow_mut().insert(file.path.share_rc(), file.share_rc());
+    let file = ScanDbGameFile::new(file_init_opts, &self);
+    self.game_files.borrow_mut().insert(file.path.share_rc(), file.share_rc());
     file
   }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ScanDbFileInitOpts {
+pub struct ScanDbGameFileInitOpts {
   // TODO: split `path` into `asset_root` and `relative_path`
   pub path: String,
   pub is_lang_file: bool,
 }
 
 #[derive(Debug, Serialize)]
-pub struct ScanDbFile {
+pub struct ScanDbGameFile {
   #[serde(skip)]
   dirty_flag: Rc<Cell<bool>>,
   #[serde(skip)]
@@ -169,9 +174,11 @@ pub struct ScanDbFile {
   fragments: RefCell<IndexMap<Rc<String>, Rc<ScanDbFragment>>>,
 }
 
-impl ScanDbFile {
+impl ScanDbGameFile {
   #[inline(always)]
-  pub fn dirty_flag(&self) -> bool { self.dirty_flag.get() }
+  pub fn is_dirty(&self) -> bool { self.dirty_flag.get() }
+  #[inline]
+  pub fn scan_db(&self) -> Rc<ScanDb> { self.scan_db.upgrade().unwrap() }
   #[inline(always)]
   pub fn path(&self) -> &Rc<String> { &self.path }
   #[inline(always)]
@@ -181,7 +188,7 @@ impl ScanDbFile {
     self.fragments.borrow()
   }
 
-  fn new(file_init_opts: ScanDbFileInitOpts, scan_db: &Rc<ScanDb>) -> Rc<Self> {
+  fn new(file_init_opts: ScanDbGameFileInitOpts, scan_db: &Rc<ScanDb>) -> Rc<Self> {
     Rc::new(Self {
       dirty_flag: scan_db.dirty_flag.share_rc(),
       scan_db: Rc::downgrade(scan_db),
@@ -200,7 +207,7 @@ impl ScanDbFile {
     fragment_init_opts: ScanDbFragmentInitOpts,
   ) -> Rc<ScanDbFragment> {
     self.dirty_flag.set(true);
-    let scan_db = self.scan_db.upgrade().unwrap();
+    let scan_db = self.scan_db();
     let fragment = ScanDbFragment::new(fragment_init_opts, &scan_db, self);
     self.fragments.borrow_mut().insert(fragment.json_path.share_rc(), fragment.share_rc());
     scan_db.total_fragments_count.update(|c| c + 1);
@@ -223,7 +230,7 @@ pub struct ScanDbFragment {
   #[serde(skip)]
   scan_db: RcWeak<ScanDb>,
   #[serde(skip)]
-  file: RcWeak<ScanDbFile>,
+  file: RcWeak<ScanDbGameFile>,
   #[serde(skip)]
   file_path: Rc<String>,
   #[serde(skip)]
@@ -235,7 +242,11 @@ pub struct ScanDbFragment {
 
 impl ScanDbFragment {
   #[inline(always)]
-  pub fn dirty_flag(&self) -> bool { self.dirty_flag.get() }
+  pub fn is_dirty(&self) -> bool { self.dirty_flag.get() }
+  #[inline]
+  pub fn scan_db(&self) -> Rc<ScanDb> { self.scan_db.upgrade().unwrap() }
+  #[inline]
+  pub fn file(&self) -> Rc<ScanDbGameFile> { self.file.upgrade().unwrap() }
   #[inline(always)]
   pub fn file_path(&self) -> &Rc<String> { &self.file_path }
   #[inline(always)]
@@ -252,7 +263,7 @@ impl ScanDbFragment {
   fn new(
     fragment_init_opts: ScanDbFragmentInitOpts,
     scan_db: &Rc<ScanDb>,
-    file: &Rc<ScanDbFile>,
+    file: &Rc<ScanDbGameFile>,
   ) -> Rc<Self> {
     Rc::new(Self {
       dirty_flag: scan_db.dirty_flag.share_rc(),
