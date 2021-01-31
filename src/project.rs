@@ -202,6 +202,10 @@ impl Project {
     file
   }
 
+  pub fn reserve_additional_tr_files(&self, additional_capacity: usize) {
+    self.tr_files.borrow_mut().reserve(additional_capacity);
+  }
+
   pub fn get_virtual_game_file(&self, path: &str) -> Option<Rc<VirtualGameFile>> {
     self.virtual_game_files.borrow().get(path).cloned()
   }
@@ -212,6 +216,10 @@ impl Project {
       self.virtual_game_files.borrow_mut().insert(file.path.share_rc(), file.share_rc());
     assert!(prev_file.is_none());
     file
+  }
+
+  pub fn reserve_additional_virtual_game_files(&self, additional_capacity: usize) {
+    self.virtual_game_files.borrow_mut().reserve(additional_capacity);
   }
 }
 
@@ -298,6 +306,10 @@ impl TrFile {
     assert!(prev_chunk.is_none());
     chunk
   }
+
+  pub fn reserve_additional_game_file_chunks(&self, additional_capacity: usize) {
+    self.game_file_chunks.borrow_mut().reserve(additional_capacity);
+  }
 }
 
 #[derive(Debug, Serialize)]
@@ -365,6 +377,10 @@ impl GameFileChunk {
     assert!(prev_virt_fragment.is_none());
 
     fragment
+  }
+
+  pub fn reserve_additional_fragments(&self, additional_capacity: usize) {
+    self.fragments.borrow_mut().reserve(additional_capacity);
   }
 }
 
@@ -460,6 +476,14 @@ impl Fragment {
       translations: RefCell::new(Vec::new()),
       comments: RefCell::new(Vec::new()),
     })
+  }
+
+  pub fn reserve_additional_translations(&self, additional_capacity: usize) {
+    self.translations.borrow_mut().reserve(additional_capacity);
+  }
+
+  pub fn reserve_additional_comments(&self, additional_capacity: usize) {
+    self.translations.borrow_mut().reserve(additional_capacity);
   }
 }
 
