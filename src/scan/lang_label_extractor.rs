@@ -1,6 +1,6 @@
 use super::db::ScanDbGameFileInitOpts;
 use crate::impl_prelude::*;
-use crate::utils::json::{self, ValueExt as _};
+use crate::utils::json;
 
 use std::convert::TryFrom;
 
@@ -105,7 +105,7 @@ impl<'json> LangLabelIter<'json> {
       // value iterator
       22,
     );
-    if let Some(entries_iter) = value.entries_iter() {
+    if let Some(entries_iter) = json::ValueEntriesIter::new(value) {
       stack.push(entries_iter);
     }
     let current_json_path = Vec::with_capacity(stack.capacity());
@@ -126,7 +126,7 @@ impl<'json> Iterator for LangLabelIter<'json> {
           // We've found a lang label! Let's emit it.
           self.current_json_path.pop().unwrap();
           return Some(lang_label);
-        } else if let Some(entries_iter) = value.entries_iter() {
+        } else if let Some(entries_iter) = json::ValueEntriesIter::new(value) {
           // Not exactly a lang label, but an iterable value we can descend into. Enter it.
           self.stack.push(entries_iter);
         } else {

@@ -46,8 +46,9 @@ pub struct GameFileChunkSerde {
 pub struct FragmentSerde {
   pub lang_uid: i32,
   pub description: Vec<String>,
+  #[serde(with = "utils::serde::MultilineStringHelper")]
   pub original_text: String,
-  pub reference_texts: HashMap<String, String>,
+  // pub reference_texts: HashMap<String, Vec<String>>,
   pub flags: HashMap<String, bool>,
   pub translations: Vec<TranslationSerde>,
   pub comments: Vec<CommentSerde>,
@@ -59,6 +60,7 @@ pub struct TranslationSerde {
   pub author: String,
   pub creation_timestamp: Timestamp,
   pub modification_timestamp: Timestamp,
+  #[serde(with = "utils::serde::MultilineStringHelper")]
   pub text: String,
   pub flags: HashMap<String, bool>,
 }
@@ -69,6 +71,7 @@ pub struct CommentSerde {
   pub author: String,
   pub creation_timestamp: Timestamp,
   pub modification_timestamp: Timestamp,
+  #[serde(with = "utils::serde::MultilineStringHelper")]
   pub text: String,
 }
 
@@ -386,7 +389,7 @@ pub struct FragmentInitOpts {
   pub lang_uid: i32,
   pub description: Vec<String>,
   pub original_text: String,
-  pub reference_texts: HashMap<String, String>,
+  // pub reference_texts: HashMap<String, String>,
   pub flags: HashMap<String, bool>,
 }
 
@@ -408,14 +411,15 @@ pub struct Fragment {
   lang_uid: i32,
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   description: Vec<String>,
+  #[serde(with = "utils::serde::MultilineStringHelper")]
   original_text: String,
-  #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-  reference_texts: HashMap<String, String>,
-  #[serde(default, skip_serializing_if = "utils::is_refcell_hashmap_empty")]
+  // #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+  // reference_texts: HashMap<String, String>,
+  #[serde(default, skip_serializing_if = "utils::serde::is_refcell_hashmap_empty")]
   flags: RefCell<HashMap<String, bool>>,
 
   translations: RefCell<Vec<Rc<Translation>>>,
-  #[serde(default, skip_serializing_if = "utils::is_refcell_vec_empty")]
+  #[serde(default, skip_serializing_if = "utils::serde::is_refcell_vec_empty")]
   comments: RefCell<Vec<Rc<Comment>>>,
 }
 
@@ -438,8 +442,8 @@ impl Fragment {
   pub fn description(&self) -> &[String] { &self.description }
   #[inline(always)]
   pub fn original_text(&self) -> &str { &self.original_text }
-  #[inline(always)]
-  pub fn reference_texts(&self) -> &HashMap<String, String> { &self.reference_texts }
+  // #[inline(always)]
+  // pub fn reference_texts(&self) -> &HashMap<String, String> { &self.reference_texts }
   #[inline(always)]
   pub fn flags(&self) -> Ref<HashMap<String, bool>> { self.flags.borrow() }
   #[inline(always)]
@@ -464,7 +468,7 @@ impl Fragment {
       lang_uid: opts.lang_uid,
       description: opts.description,
       original_text: opts.original_text,
-      reference_texts: opts.reference_texts,
+      // reference_texts: opts.reference_texts,
       flags: RefCell::new(opts.flags),
 
       translations: RefCell::new(Vec::new()),
@@ -485,7 +489,7 @@ pub struct Translation {
   creation_timestamp: Timestamp,
   modification_timestamp: Cell<Timestamp>,
   text: RefCell<String>,
-  #[serde(default, skip_serializing_if = "utils::is_refcell_hashmap_empty")]
+  #[serde(default, skip_serializing_if = "utils::serde::is_refcell_hashmap_empty")]
   flags: RefCell<HashMap<String, bool>>,
 }
 

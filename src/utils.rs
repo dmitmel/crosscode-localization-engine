@@ -1,9 +1,8 @@
 pub mod json;
+pub mod serde;
 
 use crate::impl_prelude::*;
 
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -81,8 +80,32 @@ mod private {
 #[inline]
 pub fn is_default<T: Default + PartialEq>(t: &T) -> bool { t == &T::default() }
 
-pub fn is_refcell_vec_empty<T>(v: &RefCell<Vec<T>>) -> bool { v.borrow().is_empty() }
-pub fn is_refcell_hashmap_empty<K, V>(v: &RefCell<HashMap<K, V>>) -> bool { v.borrow().is_empty() }
+/// Taken from <https://stackoverflow.com/a/40457615>.
+#[derive(Debug, Clone)]
+pub struct LinesWithEndings<'a> {
+  text: &'a str,
+}
+
+impl<'a> LinesWithEndings<'a> {
+  #[inline(always)]
+  pub fn new(text: &'a str) -> LinesWithEndings<'a> { LinesWithEndings { text } }
+  #[inline(always)]
+  pub fn as_str(&self) -> &'a str { &self.text }
+}
+
+impl<'a> Iterator for LinesWithEndings<'a> {
+  type Item = &'a str;
+  fn next(&mut self) -> Option<Self::Item> {
+    if self.text.is_empty() {
+      return None;
+    }
+    #[allow(clippy::or_fun_call)]
+    let split = self.text.find('\n').map(|i| i + 1).unwrap_or(self.text.len());
+    let (line, rest) = self.text.split_at(split);
+    self.text = rest;
+    Some(line)
+  }
+}
 
 pub fn create_dir_recursively(path: &Path) -> io::Result<()> {
   fs::DirBuilder::new().recursive(true).create(path)

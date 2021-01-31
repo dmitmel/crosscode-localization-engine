@@ -138,23 +138,5 @@ fn print_messages_po<'src>(iter: impl Iterator<Item = ParsedMessage<'src>>) -> A
 fn resplit_po_string<'a>(strings: &[Cow<str>], out_joined_string: &'a mut String) -> Vec<&'a str> {
   let strings_refs: Vec<&str> = strings.iter().map(|cow| cow.as_ref()).collect();
   *out_joined_string = utils::fast_concat(&strings_refs);
-
-  let mut resplit_strings = Vec::with_capacity(1);
-  let mut line_start_i = 0;
-
-  for (char_i, char) in out_joined_string.char_indices() {
-    if char == '\n' {
-      let line_end_i = char_i + char.len_utf8();
-      let line = &out_joined_string[line_start_i..line_end_i];
-      resplit_strings.push(line);
-      line_start_i = line_end_i;
-    }
-  }
-
-  let last_line = &out_joined_string[line_start_i..];
-  if !last_line.is_empty() {
-    resplit_strings.push(last_line);
-  }
-
-  resplit_strings
+  utils::LinesWithEndings::new(out_joined_string).collect()
 }

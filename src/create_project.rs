@@ -71,7 +71,7 @@ pub fn run(
         lang_uid: scan_fragment.lang_uid(),
         description: scan_fragment.description().to_owned(),
         original_text,
-        reference_texts: HashMap::new(),
+        // reference_texts: HashMap::new(),
         flags: HashMap::new(),
       });
     }

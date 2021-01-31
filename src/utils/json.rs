@@ -7,15 +7,6 @@ use std::path::Path;
 
 pub use serde_json::Value;
 
-pub trait ValueExt {
-  fn entries_iter(&self) -> Option<ValueEntriesIter>;
-}
-
-impl ValueExt for Value {
-  #[inline(always)]
-  fn entries_iter(&self) -> Option<ValueEntriesIter> { ValueEntriesIter::new(self) }
-}
-
 #[allow(missing_debug_implementations)]
 pub enum ValueEntriesIter<'a> {
   Array { iter: std::slice::Iter<'a, Value>, counter: usize },
@@ -23,7 +14,7 @@ pub enum ValueEntriesIter<'a> {
 }
 
 impl<'a> ValueEntriesIter<'a> {
-  fn new(value: &'a Value) -> Option<Self> {
+  pub fn new(value: &'a Value) -> Option<Self> {
     Some(match value {
       Value::Array(vec) => Self::Array { iter: vec.iter(), counter: 0 },
       Value::Object(map) => Self::Object { iter: map.iter() },
