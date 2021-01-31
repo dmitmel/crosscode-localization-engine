@@ -2,6 +2,8 @@ pub mod json;
 
 use crate::impl_prelude::*;
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -39,30 +41,35 @@ pub fn try_any_result_hint<T>(r: AnyResult<T>) -> AnyResult<T> { r }
 #[inline(always)]
 pub fn try_option_hint<T>(r: Option<T>) -> Option<T> { r }
 
-pub trait ShareRc: private::Sealed {
-  fn share_rc(&self) -> Self;
+pub trait RcExt<T: ?Sized>: private::Sealed {
+  fn share_rc(&self) -> Rc<T>;
+  fn share_rc_weak(&self) -> RcWeak<T>;
+  fn rc_clone_inner(&self) -> T
+  where
+    T: Clone;
 }
 
-impl<T: ?Sized> ShareRc for Rc<T> {
+impl<T: ?Sized> RcExt<T> for Rc<T> {
   #[inline(always)]
-  fn share_rc(&self) -> Self { Rc::clone(self) }
-}
-
-pub trait ShareRcWeak: private::Sealed {
-  type Weak;
-  fn share_rc_weak(&self) -> Self::Weak;
-}
-
-impl<T: ?Sized> ShareRcWeak for Rc<T> {
-  type Weak = RcWeak<T>;
+  fn share_rc(&self) -> Rc<T> { Rc::clone(self) }
   #[inline(always)]
-  fn share_rc_weak(&self) -> Self::Weak { Rc::downgrade(self) }
+  fn share_rc_weak(&self) -> RcWeak<T> { Rc::downgrade(self) }
+  #[inline(always)]
+  fn rc_clone_inner(&self) -> T
+  where
+    T: Clone,
+  {
+    (**self).clone()
+  }
 }
 
-impl<T: ?Sized> ShareRcWeak for RcWeak<T> {
-  type Weak = Self;
+pub trait RcWeakExt<T: ?Sized>: private::Sealed {
+  fn share_rc_weak(&self) -> RcWeak<T>;
+}
+
+impl<T: ?Sized> RcWeakExt<T> for RcWeak<T> {
   #[inline(always)]
-  fn share_rc_weak(&self) -> Self::Weak { RcWeak::clone(self) }
+  fn share_rc_weak(&self) -> RcWeak<T> { RcWeak::clone(self) }
 }
 
 mod private {
@@ -73,6 +80,9 @@ mod private {
 
 #[inline]
 pub fn is_default<T: Default + PartialEq>(t: &T) -> bool { t == &T::default() }
+
+pub fn is_refcell_vec_empty<T>(v: &RefCell<Vec<T>>) -> bool { v.borrow().is_empty() }
+pub fn is_refcell_hashmap_empty<K, V>(v: &RefCell<HashMap<K, V>>) -> bool { v.borrow().is_empty() }
 
 pub fn create_dir_recursively(path: &Path) -> io::Result<()> {
   fs::DirBuilder::new().recursive(true).create(path)

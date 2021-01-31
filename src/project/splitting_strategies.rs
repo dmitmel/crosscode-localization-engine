@@ -1,10 +1,11 @@
+use crate::impl_prelude::*;
 use crate::utils;
 
 use lazy_static::lazy_static;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
-pub trait SplittingStrategy {
+pub trait SplittingStrategy: std::fmt::Debug {
   fn id_static() -> &'static str
   where
     Self: Sized;
@@ -15,55 +16,83 @@ pub trait SplittingStrategy {
 
   fn id(&self) -> &'static str;
 
-  fn get_translation_file_for_entire_game_file(
-    &mut self,
-    file_path: &str,
-  ) -> Option<Cow<'static, str>>;
+  fn get_tr_file_for_entire_game_file(&self, file_path: &str) -> Option<Cow<'static, str>>;
 
-  fn get_translation_file_for_fragment(
-    &mut self,
-    file_path: &str,
-    _json_path: &str,
-  ) -> Cow<'static, str> {
-    self.get_translation_file_for_entire_game_file(file_path).unwrap()
+  fn get_tr_file_for_fragment(&self, file_path: &str, _json_path: &str) -> Cow<'static, str> {
+    self.get_tr_file_for_entire_game_file(file_path).unwrap()
   }
 }
 
-lazy_static! {
-  pub static ref SPLITTING_STRATEGIES_MAP: HashMap<&'static str, fn() -> Box<dyn SplittingStrategy>> = {
-    macro_rules! strategies_map {
-      ($($strat:ident,)+) => { strategies_map![$($strat),+] };
-      ($($strat:ident),*) => {
-        {
-          let _cap = count_exprs!($($strat),*);
-          // Don't ask me why the compiler requires the following type
-          // annotation.
-          let mut _map: HashMap<_, fn() -> _> = HashMap::with_capacity(_cap);
-          $(let _ = _map.insert($strat::id_static(), $strat::new_boxed);)*
-          _map
-        }
+impl<'de> serde::Deserialize<'de> for Box<dyn SplittingStrategy> {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: serde::Deserializer<'de>,
+  {
+    let id = <&str as serde::Deserialize<'de>>::deserialize(deserializer)?;
+    create_by_id(id).map_err(|_| serde::de::Error::unknown_variant(id, SPLITTING_STRATEGIES_IDS))
+  }
+}
+
+impl serde::Serialize for Box<dyn SplittingStrategy> {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    serializer.serialize_str(self.id())
+  }
+}
+
+macro_rules! strategies_map {
+  ($($strat:ident,)+) => { strategies_map![$($strat),+]; };
+  ($($strat:ident),*) => {
+    pub const SPLITTING_STRATEGIES_IDS: &'static [&'static str] = &[$($strat::ID),+];
+    lazy_static! {
+      pub static ref SPLITTING_STRATEGIES_MAP: HashMap<
+        &'static str,
+        fn() -> Box<dyn SplittingStrategy>,
+      > = {
+        let _cap = count_exprs!($($strat),*);
+        // Don't ask me why the compiler requires the following type
+        // annotation.
+        let mut _map: HashMap<_, fn() -> _> = HashMap::with_capacity(_cap);
+        $(let _ = _map.insert($strat::ID, $strat::new_boxed);)*
+        _map
       };
     }
-    strategies_map![
-      MonolithicFileStrategy,
-      SameFileTreeStrategy,
-      NotabenoidChaptersStrategy,
-      NextGenerationStrategy,
-    ]
   };
+}
+
+strategies_map![
+  MonolithicFileStrategy,
+  SameFileTreeStrategy,
+  NotabenoidChaptersStrategy,
+  NextGenerationStrategy,
+];
+
+pub fn create_by_id(id: &str) -> AnyResult<Box<dyn SplittingStrategy>> {
+  let constructor: &fn() -> Box<dyn SplittingStrategy> = SPLITTING_STRATEGIES_MAP
+    .get(id)
+    .ok_or_else(|| format_err!("no such splitting strategy '{}'", id))?;
+  Ok(constructor())
 }
 
 #[derive(Debug)]
 pub struct MonolithicFileStrategy;
 
+impl MonolithicFileStrategy {
+  pub const ID: &'static str = "monolithic-file";
+}
+
 impl SplittingStrategy for MonolithicFileStrategy {
+  #[inline(always)]
   fn id_static() -> &'static str
   where
     Self: Sized,
   {
-    "monolithic-file"
+    MonolithicFileStrategy::ID
   }
 
+  #[inline(always)]
   fn new_boxed() -> Box<dyn SplittingStrategy>
   where
     Self: Sized,
@@ -71,12 +100,10 @@ impl SplittingStrategy for MonolithicFileStrategy {
     Box::new(Self)
   }
 
-  fn id(&self) -> &'static str { Self::id_static() }
+  #[inline(always)]
+  fn id(&self) -> &'static str { Self::ID }
 
-  fn get_translation_file_for_entire_game_file(
-    &mut self,
-    _file_path: &str,
-  ) -> Option<Cow<'static, str>> {
+  fn get_tr_file_for_entire_game_file(&self, _file_path: &str) -> Option<Cow<'static, str>> {
     Some("translation".into())
   }
 }
@@ -84,14 +111,20 @@ impl SplittingStrategy for MonolithicFileStrategy {
 #[derive(Debug)]
 pub struct SameFileTreeStrategy;
 
+impl SameFileTreeStrategy {
+  pub const ID: &'static str = "same-file-tree";
+}
+
 impl SplittingStrategy for SameFileTreeStrategy {
+  #[inline(always)]
   fn id_static() -> &'static str
   where
     Self: Sized,
   {
-    "same-file-tree"
+    MonolithicFileStrategy::ID
   }
 
+  #[inline(always)]
   fn new_boxed() -> Box<dyn SplittingStrategy>
   where
     Self: Sized,
@@ -99,12 +132,10 @@ impl SplittingStrategy for SameFileTreeStrategy {
     Box::new(Self)
   }
 
-  fn id(&self) -> &'static str { Self::id_static() }
+  #[inline(always)]
+  fn id(&self) -> &'static str { Self::ID }
 
-  fn get_translation_file_for_entire_game_file(
-    &mut self,
-    file_path: &str,
-  ) -> Option<Cow<'static, str>> {
+  fn get_tr_file_for_entire_game_file(&self, file_path: &str) -> Option<Cow<'static, str>> {
     let (file_path, _) = utils::split_filename_extension(file_path);
     Some(file_path.to_owned().into())
   }
@@ -113,14 +144,20 @@ impl SplittingStrategy for SameFileTreeStrategy {
 #[derive(Debug)]
 pub struct NotabenoidChaptersStrategy;
 
+impl NotabenoidChaptersStrategy {
+  pub const ID: &'static str = "notabenoid-chapters";
+}
+
 impl SplittingStrategy for NotabenoidChaptersStrategy {
+  #[inline(always)]
   fn id_static() -> &'static str
   where
     Self: Sized,
   {
-    "notabenoid-chapters"
+    MonolithicFileStrategy::ID
   }
 
+  #[inline(always)]
   fn new_boxed() -> Box<dyn SplittingStrategy>
   where
     Self: Sized,
@@ -128,14 +165,12 @@ impl SplittingStrategy for NotabenoidChaptersStrategy {
     Box::new(Self)
   }
 
-  fn id(&self) -> &'static str { Self::id_static() }
+  #[inline(always)]
+  fn id(&self) -> &'static str { Self::ID }
 
   // Rewritten from <https://github.com/CCDirectLink/crosscode-ru/blob/93415096b4f01ed4a7f50a20e642e0c9ae07dade/tool/src/Notabenoid.ts#L418-L459>
   #[allow(clippy::single_match)]
-  fn get_translation_file_for_entire_game_file(
-    &mut self,
-    file_path: &str,
-  ) -> Option<Cow<'static, str>> {
+  fn get_tr_file_for_entire_game_file(&self, file_path: &str) -> Option<Cow<'static, str>> {
     return Some(inner(file_path).into());
 
     fn inner(file_path: &str) -> &'static str {
@@ -207,15 +242,21 @@ impl SplittingStrategy for NotabenoidChaptersStrategy {
 #[derive(Debug)]
 pub struct NextGenerationStrategy;
 
+impl NextGenerationStrategy {
+  pub const ID: &'static str = "next-generation";
+}
+
 #[allow(clippy::single_match)]
 impl SplittingStrategy for NextGenerationStrategy {
+  #[inline(always)]
   fn id_static() -> &'static str
   where
     Self: Sized,
   {
-    "next-generation"
+    MonolithicFileStrategy::ID
   }
 
+  #[inline(always)]
   fn new_boxed() -> Box<dyn SplittingStrategy>
   where
     Self: Sized,
@@ -223,12 +264,10 @@ impl SplittingStrategy for NextGenerationStrategy {
     Box::new(Self)
   }
 
-  fn id(&self) -> &'static str { Self::id_static() }
+  #[inline(always)]
+  fn id(&self) -> &'static str { Self::ID }
 
-  fn get_translation_file_for_entire_game_file(
-    &mut self,
-    file_path: &str,
-  ) -> Option<Cow<'static, str>> {
+  fn get_tr_file_for_entire_game_file(&self, file_path: &str) -> Option<Cow<'static, str>> {
     let components: Vec<_> = file_path.split('/').collect();
 
     match components[0] {
@@ -251,14 +290,10 @@ impl SplittingStrategy for NextGenerationStrategy {
       _ => {}
     }
 
-    SameFileTreeStrategy.get_translation_file_for_entire_game_file(file_path)
+    SameFileTreeStrategy.get_tr_file_for_entire_game_file(file_path)
   }
 
-  fn get_translation_file_for_fragment(
-    &mut self,
-    file_path: &str,
-    json_path: &str,
-  ) -> Cow<'static, str> {
+  fn get_tr_file_for_fragment(&self, file_path: &str, json_path: &str) -> Cow<'static, str> {
     let components: Vec<_> = file_path.split('/').collect();
     let json_components: Vec<_> = json_path.split('/').collect();
 

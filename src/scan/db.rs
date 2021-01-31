@@ -1,5 +1,5 @@
 use crate::impl_prelude::*;
-use crate::utils::{self, ShareRc, ShareRcWeak, Timestamp};
+use crate::utils::{self, RcExt, Timestamp};
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -149,8 +149,9 @@ impl ScanDb {
     file_init_opts: ScanDbGameFileInitOpts,
   ) -> Rc<ScanDbGameFile> {
     self.dirty_flag.set(true);
-    let file = ScanDbGameFile::new(file_init_opts, &self);
-    self.game_files.borrow_mut().insert(file.path.share_rc(), file.share_rc());
+    let file = ScanDbGameFile::new(file_init_opts, self);
+    let prev_file = self.game_files.borrow_mut().insert(file.path.share_rc(), file.share_rc());
+    assert!(prev_file.is_none());
     file
   }
 }
@@ -209,7 +210,9 @@ impl ScanDbGameFile {
     self.dirty_flag.set(true);
     let scan_db = self.scan_db();
     let fragment = ScanDbFragment::new(fragment_init_opts, &scan_db, self);
-    self.fragments.borrow_mut().insert(fragment.json_path.share_rc(), fragment.share_rc());
+    let prev_fragment =
+      self.fragments.borrow_mut().insert(fragment.json_path.share_rc(), fragment.share_rc());
+    assert!(prev_fragment.is_none());
     scan_db.total_fragments_count.update(|c| c + 1);
     fragment
   }

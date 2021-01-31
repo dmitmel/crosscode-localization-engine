@@ -1,13 +1,12 @@
 use crate::cli;
 use crate::impl_prelude::*;
 use crate::project;
-use crate::project::splitting_strategies::{SplittingStrategy, SPLITTING_STRATEGIES_MAP};
 use crate::scan::db::ScanDb;
-use crate::utils;
+use crate::utils::{self, RcExt};
 
-use indexmap::IndexMap;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 pub fn run(
   _common_opts: cli::CommonOpts,
@@ -24,108 +23,86 @@ pub fn run(
   let scan_db = ScanDb::open(command_opts.scan_db).context("Failed to open the scan database")?;
 
   utils::create_dir_recursively(&project_dir).context("Failed to create the project dir")?;
-
-  let meta_file_path = project_dir.join(project::META_FILE_PATH);
-  let mut meta_data = project::ProjectMetaSerde {
-    uuid: utils::new_uuid(),
-    creation_timestamp: utils::get_timestamp(),
+  let project = project::Project::create(project_dir, project::ProjectCreateOpts {
     game_version: scan_db.meta().game_version.clone(),
     original_locale: command_opts.original_locale,
     reference_locales: command_opts.reference_locales,
     translation_locale: command_opts.translation_locale,
-    splitting_strategy: command_opts.splitting_strategy,
     translations_dir: command_opts.translations_dir,
-    translation_files: Vec::new(),
-  };
-
-  let mut splitting_strategy: Box<dyn SplittingStrategy> = {
-    let constructor: &fn() -> Box<dyn SplittingStrategy> =
-      SPLITTING_STRATEGIES_MAP.get(meta_data.splitting_strategy.as_str()).ok_or_else(|| {
-        format_err!("No such splitting strategy '{}'", meta_data.splitting_strategy)
-      })?;
-    constructor()
-  };
+    splitting_strategy: command_opts.splitting_strategy,
+  })?;
 
   info!("Generating project translation files");
-  let mut translation_db_files = IndexMap::<String, project::TranslationFileSerde>::new();
 
-  for file in scan_db.game_files().values() {
-    let global_translation_file: Option<Cow<'static, str>> =
-      splitting_strategy.get_translation_file_for_entire_game_file(file.path());
+  for scan_game_file in scan_db.game_files().values() {
+    let global_tr_file_path: Option<Cow<'static, str>> =
+      project.meta().splitting_strategy.get_tr_file_for_entire_game_file(scan_game_file.path());
 
-    for fragment in file.fragments().values() {
-      let original_text = match fragment.text().get(&meta_data.original_locale) {
+    for scan_fragment in scan_game_file.fragments().values() {
+      let original_text = match scan_fragment.text().get(&project.meta().original_locale) {
         Some(v) => v.to_owned(),
         None => continue,
       };
 
-      let fragment_translation_file: Cow<'static, str> = match &global_translation_file {
+      let fragment_tr_file_path: Cow<'static, str> = match &global_tr_file_path {
         Some(v) => v.clone(),
-        None => {
-          splitting_strategy.get_translation_file_for_fragment(file.path(), fragment.json_path())
-        }
+        None => project
+          .meta()
+          .splitting_strategy
+          .get_tr_file_for_fragment(scan_fragment.file_path(), scan_fragment.json_path()),
       };
 
-      let tr_db = translation_db_files
-        .entry(fragment_translation_file.clone().into_owned())
-        .or_insert_with(|| {
-          meta_data.translation_files.push(fragment_translation_file.into_owned());
-          let creation_timestamp = utils::get_timestamp();
-          project::TranslationFileSerde {
-            uuid: utils::new_uuid(),
-            creation_timestamp,
-            modification_timestamp: creation_timestamp,
-            project_meta_file: "TODO".to_owned(),
-            game_files: IndexMap::new(),
-          }
+      let tr_file = {
+        let path: Rc<String> = Rc::new(Cow::into_owned(fragment_tr_file_path.clone()));
+        project.get_tr_file(&path).unwrap_or_else(|| project.new_tr_file(path))
+      };
+
+      let game_file_chunk =
+        tr_file.get_game_file_chunk(scan_game_file.path()).unwrap_or_else(|| {
+          tr_file.new_game_file_chunk(project::GameFileChunkInitOpts {
+            path: scan_game_file.path().share_rc(),
+            is_lang_file: scan_game_file.is_lang_file(),
+          })
         });
 
-      let tr_file = tr_db.game_files.entry((**file.path()).clone()).or_insert_with(|| {
-        project::GameFileChunkSerde {
-          is_lang_file: file.is_lang_file(),
-          fragments: IndexMap::new(),
-        }
-      });
-
-      tr_file.fragments.insert((**fragment.json_path()).clone(), project::FragmentSerde {
-        lang_uid: fragment.lang_uid(),
-        description: fragment.description().to_owned(),
+      game_file_chunk.new_fragment(project::FragmentInitOpts {
+        file_path: scan_fragment.file_path().share_rc(),
+        json_path: scan_fragment.json_path().share_rc(),
+        lang_uid: scan_fragment.lang_uid(),
+        description: scan_fragment.description().to_owned(),
         original_text,
         reference_texts: HashMap::new(),
         flags: HashMap::new(),
-        translations: Vec::new(),
-        comments: Vec::new(),
       });
     }
   }
 
-  info!("Generated {} translation files", translation_db_files.len());
+  info!("Generated {} translation files", project.tr_files().len());
 
   info!("Writing the project meta file");
-  utils::json::write_file(&meta_file_path, &meta_data)
+  let meta_file_path = project.root_dir().join(project::META_FILE_PATH);
+  utils::json::write_file(&meta_file_path, project.meta())
     .with_context(|| format!("Failed to serialize to JSON file '{}'", meta_file_path.display()))
     .context("Failed to write the project meta file")?;
 
   info!("Writing translation files");
 
-  let translation_files_dir = project_dir.join(&meta_data.translations_dir);
-  let translation_db_files_len = translation_db_files.len();
-  for (i, (translation_file_path, translation_db)) in translation_db_files.into_iter().enumerate()
-  {
-    let translation_file_path = translation_files_dir.join(translation_file_path + ".json");
+  let tr_files_dir = project.root_dir().join(&project.meta().translations_dir);
+  let translation_db_files_len = project.tr_files().len();
+  for (i, (tr_file_path, translation_db)) in project.tr_files().iter().enumerate() {
+    let tr_file_path = tr_files_dir.join(tr_file_path.rc_clone_inner() + ".json");
     trace!(
       "[{}/{}] Writing translation file '{}'",
       i + 1,
       translation_db_files_len,
-      translation_file_path.display(),
+      tr_file_path.display(),
     );
 
-    utils::create_dir_recursively(translation_file_path.parent().unwrap()).with_context(|| {
-      format!("Failed to create the parent directories for '{}'", translation_file_path.display())
+    utils::create_dir_recursively(tr_file_path.parent().unwrap()).with_context(|| {
+      format!("Failed to create the parent directories for '{}'", tr_file_path.display())
     })?;
-    utils::json::write_file(&translation_file_path, &translation_db).with_context(|| {
-      format!("Failed to serialize to JSON file '{}'", translation_file_path.display())
-    })?;
+    utils::json::write_file(&tr_file_path, &translation_db)
+      .with_context(|| format!("Failed to serialize to JSON file '{}'", tr_file_path.display()))?;
   }
 
   info!("Done!");
