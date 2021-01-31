@@ -1,4 +1,4 @@
-use super::db::ScanDbGameFileInitOpts;
+use super::json_file_finder::FoundJsonFile;
 use crate::impl_prelude::*;
 use crate::utils::json;
 
@@ -7,7 +7,7 @@ use std::convert::TryFrom;
 pub const EXTRACTED_LOCALE: &str = "en_US";
 
 pub fn extract_from_file<'json>(
-  found_file: &'json ScanDbGameFileInitOpts,
+  found_file: &'json FoundJsonFile,
   json_data: &'json json::Value,
 ) -> Option<LangLabelIter<'json>> {
   let extraction_fn = if found_file.is_lang_file {

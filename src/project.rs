@@ -38,7 +38,6 @@ pub struct TrFileSerde {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct GameFileChunkSerde {
-  pub is_lang_file: bool,
   pub fragments: IndexMap<String, FragmentSerde>,
 }
 
@@ -206,8 +205,8 @@ impl Project {
     self.virtual_game_files.borrow().get(path).cloned()
   }
 
-  fn new_virtual_game_file(self: &Rc<Self>, opts: VirtualGameFileInitOpts) -> Rc<VirtualGameFile> {
-    let file = VirtualGameFile::new(self, opts);
+  fn new_virtual_game_file(self: &Rc<Self>, path: Rc<String>) -> Rc<VirtualGameFile> {
+    let file = VirtualGameFile::new(self, path);
     let prev_file =
       self.virtual_game_files.borrow_mut().insert(file.path.share_rc(), file.share_rc());
     assert!(prev_file.is_none());
@@ -286,27 +285,18 @@ impl TrFile {
     self.game_file_chunks.borrow().get(path).cloned()
   }
 
-  pub fn new_game_file_chunk(self: &Rc<Self>, opts: GameFileChunkInitOpts) -> Rc<GameFileChunk> {
+  pub fn new_game_file_chunk(self: &Rc<Self>, path: Rc<String>) -> Rc<GameFileChunk> {
     self.dirty_flag.set(true);
     let project = self.project();
-    let virt_file = project.get_virtual_game_file(&opts.path).unwrap_or_else(|| {
-      project.new_virtual_game_file(VirtualGameFileInitOpts {
-        path: opts.path.share_rc(),
-        is_lang_file: opts.is_lang_file,
-      })
-    });
-    let chunk = GameFileChunk::new(&self.project(), self, virt_file, opts);
+    let virt_file = project
+      .get_virtual_game_file(&path)
+      .unwrap_or_else(|| project.new_virtual_game_file(path.share_rc()));
+    let chunk = GameFileChunk::new(&self.project(), self, virt_file, path);
     let prev_chunk =
       self.game_file_chunks.borrow_mut().insert(chunk.path.share_rc(), chunk.share_rc());
     assert!(prev_chunk.is_none());
     chunk
   }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GameFileChunkInitOpts {
-  pub path: Rc<String>,
-  pub is_lang_file: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -321,8 +311,6 @@ pub struct GameFileChunk {
   virtual_game_file: Rc<VirtualGameFile>,
 
   path: Rc<String>,
-  #[serde(default, skip_serializing_if = "utils::is_default")]
-  is_lang_file: bool,
 
   fragments: RefCell<IndexMap<Rc<String>, Rc<Fragment>>>,
 }
@@ -339,15 +327,13 @@ impl GameFileChunk {
   #[inline(always)]
   pub fn path(&self) -> &Rc<String> { &self.path }
   #[inline(always)]
-  pub fn is_lang_file(&self) -> bool { self.is_lang_file }
-  #[inline(always)]
   pub fn fragments(&self) -> Ref<IndexMap<Rc<String>, Rc<Fragment>>> { self.fragments.borrow() }
 
   fn new(
     project: &Rc<Project>,
     tr_file: &Rc<TrFile>,
     virtual_game_file: Rc<VirtualGameFile>,
-    opts: GameFileChunkInitOpts,
+    path: Rc<String>,
   ) -> Rc<Self> {
     Rc::new(Self {
       dirty_flag: tr_file.dirty_flag.share_rc(),
@@ -355,8 +341,7 @@ impl GameFileChunk {
       tr_file: tr_file.share_rc_weak(),
       virtual_game_file,
 
-      path: opts.path,
-      is_lang_file: opts.is_lang_file,
+      path,
 
       fragments: RefCell::new(IndexMap::new()),
     })
@@ -541,18 +526,11 @@ impl Comment {
   pub fn text(&self) -> Ref<String> { self.text.borrow() }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VirtualGameFileInitOpts {
-  pub path: Rc<String>,
-  pub is_lang_file: bool,
-}
-
 #[derive(Debug)]
 pub struct VirtualGameFile {
   project: RcWeak<Project>,
 
   path: Rc<String>,
-  is_lang_file: bool,
 
   fragments: RefCell<IndexMap<Rc<String>, Rc<Fragment>>>,
 }
@@ -563,16 +541,13 @@ impl VirtualGameFile {
   #[inline(always)]
   pub fn path(&self) -> &Rc<String> { &self.path }
   #[inline(always)]
-  pub fn is_lang_file(&self) -> bool { self.is_lang_file }
-  #[inline(always)]
   pub fn fragments(&self) -> Ref<IndexMap<Rc<String>, Rc<Fragment>>> { self.fragments.borrow() }
 
-  fn new(project: &Rc<Project>, opts: VirtualGameFileInitOpts) -> Rc<Self> {
+  fn new(project: &Rc<Project>, path: Rc<String>) -> Rc<Self> {
     Rc::new(Self {
       project: project.share_rc_weak(),
 
-      path: opts.path,
-      is_lang_file: opts.is_lang_file,
+      path,
 
       fragments: RefCell::new(IndexMap::new()),
     })

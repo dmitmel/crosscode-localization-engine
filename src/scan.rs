@@ -3,6 +3,7 @@ pub mod fragment_descriptions;
 pub mod json_file_finder;
 pub mod lang_label_extractor;
 
+use self::json_file_finder::FoundJsonFile;
 use self::lang_label_extractor::LangLabel;
 use crate::cli;
 use crate::impl_prelude::*;
@@ -73,8 +74,9 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) ->
         }
       };
 
-      let scan_db_file =
-        scan_db_file.get_or_insert_with(|| scan_db.new_game_file(found_file.clone()));
+      let scan_db_file = scan_db_file.get_or_insert_with(|| {
+        scan_db.new_game_file(db::ScanDbGameFileInitOpts { path: found_file.path.clone() })
+      });
 
       tmp_fragment_text.insert(lang_label_extractor::EXTRACTED_LOCALE.to_owned(), text);
       scan_db_file.new_fragment(db::ScanDbFragmentInitOpts {
@@ -181,7 +183,7 @@ lazy_static! {
 }
 
 #[allow(clippy::iter_nth_zero)]
-fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &db::ScanDbGameFileInitOpts) -> bool {
+fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &FoundJsonFile) -> bool {
   if IGNORED_STRINGS.contains(lang_label.text.trim()) {
     return true;
   }

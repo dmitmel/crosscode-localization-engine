@@ -57,13 +57,9 @@ pub fn run(
         project.get_tr_file(&path).unwrap_or_else(|| project.new_tr_file(path))
       };
 
-      let game_file_chunk =
-        tr_file.get_game_file_chunk(scan_game_file.path()).unwrap_or_else(|| {
-          tr_file.new_game_file_chunk(project::GameFileChunkInitOpts {
-            path: scan_game_file.path().share_rc(),
-            is_lang_file: scan_game_file.is_lang_file(),
-          })
-        });
+      let game_file_chunk = tr_file
+        .get_game_file_chunk(scan_game_file.path())
+        .unwrap_or_else(|| tr_file.new_game_file_chunk(scan_game_file.path().share_rc()));
 
       game_file_chunk.new_fragment(project::FragmentInitOpts {
         file_path: scan_fragment.file_path().share_rc(),

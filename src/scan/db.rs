@@ -20,7 +20,6 @@ pub struct ScanDbSerde {
 
 #[derive(Debug, Deserialize)]
 pub struct ScanDbGameFileSerde {
-  pub is_lang_file: bool,
   pub fragments: IndexMap<String, ScanDbFragmentSerde>,
 }
 
@@ -108,10 +107,7 @@ impl ScanDb {
     });
 
     for (file_serde_path, file_serde_data) in serde_data.game_files {
-      let file = myself.new_game_file(ScanDbGameFileInitOpts {
-        path: file_serde_path,
-        is_lang_file: file_serde_data.is_lang_file,
-      });
+      let file = myself.new_game_file(ScanDbGameFileInitOpts { path: file_serde_path });
 
       for (fragment_serde_json_path, fragment_serde_data) in file_serde_data.fragments {
         file.new_fragment(ScanDbFragmentInitOpts {
@@ -158,9 +154,7 @@ impl ScanDb {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScanDbGameFileInitOpts {
-  // TODO: split `path` into `asset_root` and `relative_path`
   pub path: String,
-  pub is_lang_file: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -171,7 +165,6 @@ pub struct ScanDbGameFile {
   scan_db: RcWeak<ScanDb>,
   #[serde(skip)]
   path: Rc<String>,
-  is_lang_file: bool,
   fragments: RefCell<IndexMap<Rc<String>, Rc<ScanDbFragment>>>,
 }
 
@@ -183,8 +176,6 @@ impl ScanDbGameFile {
   #[inline(always)]
   pub fn path(&self) -> &Rc<String> { &self.path }
   #[inline(always)]
-  pub fn is_lang_file(&self) -> bool { self.is_lang_file }
-  #[inline(always)]
   pub fn fragments(&self) -> Ref<IndexMap<Rc<String>, Rc<ScanDbFragment>>> {
     self.fragments.borrow()
   }
@@ -194,7 +185,6 @@ impl ScanDbGameFile {
       dirty_flag: scan_db.dirty_flag.share_rc(),
       scan_db: Rc::downgrade(scan_db),
       path: Rc::new(file_init_opts.path),
-      is_lang_file: file_init_opts.is_lang_file,
       fragments: RefCell::new(IndexMap::new()),
     })
   }
