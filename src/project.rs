@@ -2,6 +2,7 @@ pub mod splitting_strategies;
 
 use self::splitting_strategies::SplittingStrategy;
 use crate::impl_prelude::*;
+use crate::rc_string::RcString;
 use crate::utils::{self, RcExt, RcWeakExt, Timestamp};
 
 use indexmap::IndexMap;
@@ -110,7 +111,7 @@ impl ProjectMeta {
   {
     let project = value.upgrade().unwrap();
     let tr_files = project.tr_files.borrow();
-    let mut tr_file_paths: Vec<&Rc<String>> = tr_files.keys().collect();
+    let mut tr_file_paths: Vec<&RcString> = tr_files.keys().collect();
     tr_file_paths.sort();
     tr_file_paths.serialize(serializer)
   }
@@ -131,8 +132,8 @@ pub struct Project {
   root_dir: PathBuf,
   meta: ProjectMeta,
 
-  tr_files: RefCell<HashMap<Rc<String>, Rc<TrFile>>>,
-  virtual_game_files: RefCell<HashMap<Rc<String>, Rc<VirtualGameFile>>>,
+  tr_files: RefCell<HashMap<RcString, Rc<TrFile>>>,
+  virtual_game_files: RefCell<HashMap<RcString, Rc<VirtualGameFile>>>,
 }
 
 impl Project {
@@ -142,9 +143,9 @@ impl Project {
   #[inline(always)]
   pub fn meta(&self) -> &ProjectMeta { &self.meta }
   #[inline(always)]
-  pub fn tr_files(&self) -> Ref<HashMap<Rc<String>, Rc<TrFile>>> { self.tr_files.borrow() }
+  pub fn tr_files(&self) -> Ref<HashMap<RcString, Rc<TrFile>>> { self.tr_files.borrow() }
   #[inline(always)]
-  pub fn virtual_game_files(&self) -> Ref<HashMap<Rc<String>, Rc<VirtualGameFile>>> {
+  pub fn virtual_game_files(&self) -> Ref<HashMap<RcString, Rc<VirtualGameFile>>> {
     self.virtual_game_files.borrow()
   }
 
@@ -183,11 +184,11 @@ impl Project {
     Ok(myself)
   }
 
-  pub fn get_tr_file(&self, path: &Rc<String>) -> Option<Rc<TrFile>> {
+  pub fn get_tr_file(&self, path: &str) -> Option<Rc<TrFile>> {
     self.tr_files.borrow().get(path).cloned()
   }
 
-  pub fn new_tr_file(self: &Rc<Self>, path: Rc<String>) -> Rc<TrFile> {
+  pub fn new_tr_file(self: &Rc<Self>, path: RcString) -> Rc<TrFile> {
     let creation_timestamp = utils::get_timestamp();
     let file = TrFile::new(self, TrFileInternalInitOpts {
       uuid: utils::new_uuid(),
@@ -201,11 +202,11 @@ impl Project {
     file
   }
 
-  pub fn get_virtual_game_file(&self, path: &Rc<String>) -> Option<Rc<VirtualGameFile>> {
+  pub fn get_virtual_game_file(&self, path: &str) -> Option<Rc<VirtualGameFile>> {
     self.virtual_game_files.borrow().get(path).cloned()
   }
 
-  fn new_virtual_game_file(self: &Rc<Self>, path: Rc<String>) -> Rc<VirtualGameFile> {
+  fn new_virtual_game_file(self: &Rc<Self>, path: RcString) -> Rc<VirtualGameFile> {
     let file = VirtualGameFile::new(self, path);
     let prev_file =
       self.virtual_game_files.borrow_mut().insert(file.path.share_rc(), file.share_rc());
@@ -219,7 +220,7 @@ struct TrFileInternalInitOpts {
   uuid: Uuid,
   creation_timestamp: Timestamp,
   modification_timestamp: Timestamp,
-  relative_path: Rc<String>,
+  relative_path: RcString,
 }
 
 #[derive(Debug, Serialize)]
@@ -234,11 +235,11 @@ pub struct TrFile {
   modification_timestamp: Timestamp,
   // project_meta_file: String, // TODO
   #[serde(skip)]
-  relative_path: Rc<String>,
+  relative_path: RcString,
   #[serde(skip)]
   fs_path: PathBuf,
 
-  game_file_chunks: RefCell<IndexMap<Rc<String>, Rc<GameFileChunk>>>,
+  game_file_chunks: RefCell<IndexMap<RcString, Rc<GameFileChunk>>>,
 }
 
 impl TrFile {
@@ -253,11 +254,11 @@ impl TrFile {
   #[inline(always)]
   pub fn modification_timestamp(&self) -> Timestamp { self.modification_timestamp }
   #[inline(always)]
-  pub fn relative_path(&self) -> &Rc<String> { &self.relative_path }
+  pub fn relative_path(&self) -> &RcString { &self.relative_path }
   #[inline(always)]
   pub fn fs_path(&self) -> &Path { &self.fs_path }
   #[inline(always)]
-  pub fn game_file_chunks(&self) -> Ref<IndexMap<Rc<String>, Rc<GameFileChunk>>> {
+  pub fn game_file_chunks(&self) -> Ref<IndexMap<RcString, Rc<GameFileChunk>>> {
     self.game_file_chunks.borrow()
   }
 
@@ -281,11 +282,11 @@ impl TrFile {
     })
   }
 
-  pub fn get_game_file_chunk(&self, path: &Rc<String>) -> Option<Rc<GameFileChunk>> {
+  pub fn get_game_file_chunk(&self, path: &str) -> Option<Rc<GameFileChunk>> {
     self.game_file_chunks.borrow().get(path).cloned()
   }
 
-  pub fn new_game_file_chunk(self: &Rc<Self>, path: Rc<String>) -> Rc<GameFileChunk> {
+  pub fn new_game_file_chunk(self: &Rc<Self>, path: RcString) -> Rc<GameFileChunk> {
     self.dirty_flag.set(true);
     let project = self.project();
     let virt_file = project
@@ -310,9 +311,9 @@ pub struct GameFileChunk {
   #[serde(skip)]
   virtual_game_file: Rc<VirtualGameFile>,
 
-  path: Rc<String>,
+  path: RcString,
 
-  fragments: RefCell<IndexMap<Rc<String>, Rc<Fragment>>>,
+  fragments: RefCell<IndexMap<RcString, Rc<Fragment>>>,
 }
 
 impl GameFileChunk {
@@ -325,15 +326,15 @@ impl GameFileChunk {
   #[inline]
   pub fn virtual_game_file(&self) -> &Rc<VirtualGameFile> { &self.virtual_game_file }
   #[inline(always)]
-  pub fn path(&self) -> &Rc<String> { &self.path }
+  pub fn path(&self) -> &RcString { &self.path }
   #[inline(always)]
-  pub fn fragments(&self) -> Ref<IndexMap<Rc<String>, Rc<Fragment>>> { self.fragments.borrow() }
+  pub fn fragments(&self) -> Ref<IndexMap<RcString, Rc<Fragment>>> { self.fragments.borrow() }
 
   fn new(
     project: &Rc<Project>,
     tr_file: &Rc<TrFile>,
     virtual_game_file: Rc<VirtualGameFile>,
-    path: Rc<String>,
+    path: RcString,
   ) -> Rc<Self> {
     Rc::new(Self {
       dirty_flag: tr_file.dirty_flag.share_rc(),
@@ -347,7 +348,7 @@ impl GameFileChunk {
     })
   }
 
-  pub fn get_fragment(&self, json_path: &Rc<String>) -> Option<Rc<Fragment>> {
+  pub fn get_fragment(&self, json_path: &str) -> Option<Rc<Fragment>> {
     self.fragments.borrow().get(json_path).cloned()
   }
 
@@ -369,8 +370,8 @@ impl GameFileChunk {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FragmentInitOpts {
-  pub file_path: Rc<String>,
-  pub json_path: Rc<String>,
+  pub file_path: RcString,
+  pub json_path: RcString,
   pub lang_uid: i32,
   pub description: Vec<String>,
   pub original_text: String,
@@ -390,8 +391,8 @@ pub struct Fragment {
   game_file_chunk: RcWeak<GameFileChunk>,
 
   #[serde(skip)]
-  file_path: Rc<String>,
-  json_path: Rc<String>,
+  file_path: RcString,
+  json_path: RcString,
   #[serde(default, skip_serializing_if = "utils::is_default")]
   lang_uid: i32,
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -418,9 +419,9 @@ impl Fragment {
   #[inline]
   pub fn game_file_chunk(&self) -> Rc<GameFileChunk> { self.game_file_chunk.upgrade().unwrap() }
   #[inline(always)]
-  pub fn file_path(&self) -> &Rc<String> { &self.file_path }
+  pub fn file_path(&self) -> &RcString { &self.file_path }
   #[inline(always)]
-  pub fn json_path(&self) -> &Rc<String> { &self.json_path }
+  pub fn json_path(&self) -> &RcString { &self.json_path }
   #[inline(always)]
   pub fn lang_uid(&self) -> i32 { self.lang_uid }
   #[inline(always)]
@@ -530,20 +531,20 @@ impl Comment {
 pub struct VirtualGameFile {
   project: RcWeak<Project>,
 
-  path: Rc<String>,
+  path: RcString,
 
-  fragments: RefCell<IndexMap<Rc<String>, Rc<Fragment>>>,
+  fragments: RefCell<IndexMap<RcString, Rc<Fragment>>>,
 }
 
 impl VirtualGameFile {
   #[inline]
   pub fn project(&self) -> Rc<Project> { self.project.upgrade().unwrap() }
   #[inline(always)]
-  pub fn path(&self) -> &Rc<String> { &self.path }
+  pub fn path(&self) -> &RcString { &self.path }
   #[inline(always)]
-  pub fn fragments(&self) -> Ref<IndexMap<Rc<String>, Rc<Fragment>>> { self.fragments.borrow() }
+  pub fn fragments(&self) -> Ref<IndexMap<RcString, Rc<Fragment>>> { self.fragments.borrow() }
 
-  fn new(project: &Rc<Project>, path: Rc<String>) -> Rc<Self> {
+  fn new(project: &Rc<Project>, path: RcString) -> Rc<Self> {
     Rc::new(Self {
       project: project.share_rc_weak(),
 

@@ -1,12 +1,12 @@
 use crate::cli;
 use crate::impl_prelude::*;
 use crate::project;
+use crate::rc_string::RcString;
 use crate::scan::db::ScanDb;
-use crate::utils::{self, RcExt};
+use crate::utils;
 
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::rc::Rc;
 
 pub fn run(
   _common_opts: cli::CommonOpts,
@@ -53,7 +53,7 @@ pub fn run(
       };
 
       let tr_file = {
-        let path: Rc<String> = Rc::new(Cow::into_owned(fragment_tr_file_path.clone()));
+        let path = RcString::from(Cow::into_owned(fragment_tr_file_path.clone()));
         project.get_tr_file(&path).unwrap_or_else(|| project.new_tr_file(path))
       };
 

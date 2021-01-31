@@ -11,6 +11,7 @@ pub mod gettext_po;
 pub mod impl_prelude;
 pub mod parse_po;
 pub mod project;
+pub mod rc_string;
 pub mod scan;
 pub mod utils;
 

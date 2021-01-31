@@ -1,4 +1,5 @@
 use crate::impl_prelude::*;
+use crate::rc_string::RcString;
 use crate::utils::{self, RcExt, Timestamp};
 
 use indexmap::IndexMap;
@@ -53,7 +54,7 @@ pub struct ScanDb {
   db_file_path: PathBuf,
   #[serde(flatten)]
   meta: ScanDbMeta,
-  game_files: RefCell<IndexMap<Rc<String>, Rc<ScanDbGameFile>>>,
+  game_files: RefCell<IndexMap<RcString, Rc<ScanDbGameFile>>>,
   #[serde(skip)]
   total_fragments_count: Cell<usize>,
 }
@@ -66,7 +67,7 @@ impl ScanDb {
   #[inline(always)]
   pub fn meta(&self) -> &ScanDbMeta { &self.meta }
   #[inline(always)]
-  pub fn game_files(&self) -> Ref<IndexMap<Rc<String>, Rc<ScanDbGameFile>>> {
+  pub fn game_files(&self) -> Ref<IndexMap<RcString, Rc<ScanDbGameFile>>> {
     self.game_files.borrow()
   }
   #[inline(always)]
@@ -164,8 +165,8 @@ pub struct ScanDbGameFile {
   #[serde(skip)]
   scan_db: RcWeak<ScanDb>,
   #[serde(skip)]
-  path: Rc<String>,
-  fragments: RefCell<IndexMap<Rc<String>, Rc<ScanDbFragment>>>,
+  path: RcString,
+  fragments: RefCell<IndexMap<RcString, Rc<ScanDbFragment>>>,
 }
 
 impl ScanDbGameFile {
@@ -174,9 +175,9 @@ impl ScanDbGameFile {
   #[inline]
   pub fn scan_db(&self) -> Rc<ScanDb> { self.scan_db.upgrade().unwrap() }
   #[inline(always)]
-  pub fn path(&self) -> &Rc<String> { &self.path }
+  pub fn path(&self) -> &RcString { &self.path }
   #[inline(always)]
-  pub fn fragments(&self) -> Ref<IndexMap<Rc<String>, Rc<ScanDbFragment>>> {
+  pub fn fragments(&self) -> Ref<IndexMap<RcString, Rc<ScanDbFragment>>> {
     self.fragments.borrow()
   }
 
@@ -184,7 +185,7 @@ impl ScanDbGameFile {
     Rc::new(Self {
       dirty_flag: scan_db.dirty_flag.share_rc(),
       scan_db: Rc::downgrade(scan_db),
-      path: Rc::new(file_init_opts.path),
+      path: RcString::from(file_init_opts.path),
       fragments: RefCell::new(IndexMap::new()),
     })
   }
@@ -225,9 +226,9 @@ pub struct ScanDbFragment {
   #[serde(skip)]
   file: RcWeak<ScanDbGameFile>,
   #[serde(skip)]
-  file_path: Rc<String>,
+  file_path: RcString,
   #[serde(skip)]
-  json_path: Rc<String>,
+  json_path: RcString,
   lang_uid: i32,
   description: Vec<String>,
   text: HashMap<String, String>,
@@ -241,9 +242,9 @@ impl ScanDbFragment {
   #[inline]
   pub fn file(&self) -> Rc<ScanDbGameFile> { self.file.upgrade().unwrap() }
   #[inline(always)]
-  pub fn file_path(&self) -> &Rc<String> { &self.file_path }
+  pub fn file_path(&self) -> &RcString { &self.file_path }
   #[inline(always)]
-  pub fn json_path(&self) -> &Rc<String> { &self.json_path }
+  pub fn json_path(&self) -> &RcString { &self.json_path }
   #[inline(always)]
   pub fn lang_uid(&self) -> i32 { self.lang_uid }
   #[inline(always)]
@@ -263,7 +264,7 @@ impl ScanDbFragment {
       scan_db: Rc::downgrade(scan_db),
       file: file.share_rc_weak(),
       file_path: file.path.share_rc(),
-      json_path: Rc::new(fragment_init_opts.json_path),
+      json_path: RcString::from(fragment_init_opts.json_path),
       lang_uid: fragment_init_opts.lang_uid,
       description: fragment_init_opts.description,
       text: fragment_init_opts.text,
