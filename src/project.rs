@@ -13,7 +13,7 @@ use uuid::Uuid;
 pub const META_FILE_PATH: &str = "crosslocale-project.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProjectMeta {
+pub struct ProjectMetaSerde {
   pub uuid: Uuid,
   pub creation_timestamp: Timestamp,
   pub game_version: String,
@@ -22,6 +22,7 @@ pub struct ProjectMeta {
   pub translation_locale: String,
   pub splitting_strategy: String,
   pub translations_dir: String,
+  pub translation_files: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,6 +78,18 @@ pub struct CommentSerde {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+
+#[derive(Debug)]
+pub struct ProjectMeta {
+  pub uuid: Uuid,
+  pub creation_timestamp: Timestamp,
+  pub game_version: String,
+  pub original_locale: String,
+  pub reference_locales: Vec<String>,
+  pub translation_locale: String,
+  pub splitting_strategy: String,
+  pub translations_dir: String,
+}
 
 #[derive(Debug)]
 pub struct Project {

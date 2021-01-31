@@ -26,7 +26,7 @@ pub fn run(
   utils::create_dir_recursively(&project_dir).context("Failed to create the project dir")?;
 
   let meta_file_path = project_dir.join(project::META_FILE_PATH);
-  let meta_data = project::ProjectMeta {
+  let mut meta_data = project::ProjectMetaSerde {
     uuid: utils::new_uuid(),
     creation_timestamp: utils::get_timestamp(),
     game_version: scan_db.meta().game_version.clone(),
@@ -35,12 +35,8 @@ pub fn run(
     translation_locale: command_opts.translation_locale,
     splitting_strategy: command_opts.splitting_strategy,
     translations_dir: command_opts.translations_dir,
+    translation_files: Vec::new(),
   };
-
-  info!("Writing the project meta file");
-  utils::json::write_file(&meta_file_path, &meta_data)
-    .with_context(|| format!("Failed to serialize to JSON file '{}'", meta_file_path.display()))
-    .context("Failed to write the project meta file")?;
 
   let mut splitting_strategy: Box<dyn SplittingStrategy> = {
     let constructor: &fn() -> Box<dyn SplittingStrategy> =
@@ -50,6 +46,7 @@ pub fn run(
     constructor()
   };
 
+  info!("Generating project translation files");
   let mut translation_db_files = IndexMap::<String, project::TranslationFileSerde>::new();
 
   for file in scan_db.game_files().values() {
@@ -69,8 +66,10 @@ pub fn run(
         }
       };
 
-      let tr_db =
-        translation_db_files.entry(fragment_translation_file.into_owned()).or_insert_with(|| {
+      let tr_db = translation_db_files
+        .entry(fragment_translation_file.clone().into_owned())
+        .or_insert_with(|| {
+          meta_data.translation_files.push(fragment_translation_file.into_owned());
           let creation_timestamp = utils::get_timestamp();
           project::TranslationFileSerde {
             uuid: utils::new_uuid(),
@@ -100,6 +99,15 @@ pub fn run(
     }
   }
 
+  info!("Generated {} translation files", translation_db_files.len());
+
+  info!("Writing the project meta file");
+  utils::json::write_file(&meta_file_path, &meta_data)
+    .with_context(|| format!("Failed to serialize to JSON file '{}'", meta_file_path.display()))
+    .context("Failed to write the project meta file")?;
+
+  info!("Writing translation files");
+
   let translation_files_dir = project_dir.join(&meta_data.translations_dir);
   let translation_db_files_len = translation_db_files.len();
   for (i, (translation_file_path, translation_db)) in translation_db_files.into_iter().enumerate()
@@ -119,6 +127,8 @@ pub fn run(
       format!("Failed to serialize to JSON file '{}'", translation_file_path.display())
     })?;
   }
+
+  info!("Done!");
 
   Ok(())
 }
