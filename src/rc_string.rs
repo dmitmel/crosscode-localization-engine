@@ -9,6 +9,7 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::str::FromStr;
 
+#[repr(transparent)]
 pub struct RcString(Rc<String>);
 
 impl RcString {
