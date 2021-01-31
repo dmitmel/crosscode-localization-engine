@@ -1,5 +1,5 @@
 use crate::impl_prelude::*;
-use crate::project::splitting_strategies;
+use crate::project::splitting_strategies::{self, SplittingStrategy as _};
 
 use clap::{App, AppSettings, Arg};
 use std::ffi::OsString;
@@ -177,7 +177,7 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
                 .copied()
                 .collect::<Vec<&'static str>>(),
             )
-            .default_value(splitting_strategies::NextGenerationStrategy::ID)
+            .default_value(splitting_strategies::NextGenerationStrategy::id_static())
             .help(
               "Strategy used for assigning game files (and individual fragments in them) to \
               translation storage files",

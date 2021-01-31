@@ -5,6 +5,16 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
 pub trait SplittingStrategy {
+  fn id_static() -> &'static str
+  where
+    Self: Sized;
+
+  fn new_boxed() -> Box<dyn SplittingStrategy>
+  where
+    Self: Sized;
+
+  fn id(&self) -> &'static str;
+
   fn get_translation_file_for_entire_game_file(
     &mut self,
     file_path: &str,
@@ -29,7 +39,7 @@ lazy_static! {
           // Don't ask me why the compiler requires the following type
           // annotation.
           let mut _map: HashMap<_, fn() -> _> = HashMap::with_capacity(_cap);
-          $(let _ = _map.insert($strat::ID, $strat::new_box);)*
+          $(let _ = _map.insert($strat::id_static(), $strat::new_boxed);)*
           _map
         }
       };
@@ -46,12 +56,23 @@ lazy_static! {
 #[derive(Debug)]
 pub struct MonolithicFileStrategy;
 
-impl MonolithicFileStrategy {
-  pub const ID: &'static str = "monolithic-file";
-  fn new_box() -> Box<dyn SplittingStrategy> { Box::new(Self) }
-}
-
 impl SplittingStrategy for MonolithicFileStrategy {
+  fn id_static() -> &'static str
+  where
+    Self: Sized,
+  {
+    "monolithic-file"
+  }
+
+  fn new_boxed() -> Box<dyn SplittingStrategy>
+  where
+    Self: Sized,
+  {
+    Box::new(Self)
+  }
+
+  fn id(&self) -> &'static str { Self::id_static() }
+
   fn get_translation_file_for_entire_game_file(
     &mut self,
     _file_path: &str,
@@ -63,12 +84,23 @@ impl SplittingStrategy for MonolithicFileStrategy {
 #[derive(Debug)]
 pub struct SameFileTreeStrategy;
 
-impl SameFileTreeStrategy {
-  pub const ID: &'static str = "same-file-tree";
-  fn new_box() -> Box<dyn SplittingStrategy> { Box::new(Self) }
-}
-
 impl SplittingStrategy for SameFileTreeStrategy {
+  fn id_static() -> &'static str
+  where
+    Self: Sized,
+  {
+    "same-file-tree"
+  }
+
+  fn new_boxed() -> Box<dyn SplittingStrategy>
+  where
+    Self: Sized,
+  {
+    Box::new(Self)
+  }
+
+  fn id(&self) -> &'static str { Self::id_static() }
+
   fn get_translation_file_for_entire_game_file(
     &mut self,
     file_path: &str,
@@ -81,12 +113,23 @@ impl SplittingStrategy for SameFileTreeStrategy {
 #[derive(Debug)]
 pub struct NotabenoidChaptersStrategy;
 
-impl NotabenoidChaptersStrategy {
-  pub const ID: &'static str = "notabenoid-chapters";
-  fn new_box() -> Box<dyn SplittingStrategy> { Box::new(Self) }
-}
-
 impl SplittingStrategy for NotabenoidChaptersStrategy {
+  fn id_static() -> &'static str
+  where
+    Self: Sized,
+  {
+    "notabenoid-chapters"
+  }
+
+  fn new_boxed() -> Box<dyn SplittingStrategy>
+  where
+    Self: Sized,
+  {
+    Box::new(Self)
+  }
+
+  fn id(&self) -> &'static str { Self::id_static() }
+
   // Rewritten from <https://github.com/CCDirectLink/crosscode-ru/blob/93415096b4f01ed4a7f50a20e642e0c9ae07dade/tool/src/Notabenoid.ts#L418-L459>
   #[allow(clippy::single_match)]
   fn get_translation_file_for_entire_game_file(
@@ -162,19 +205,26 @@ impl SplittingStrategy for NotabenoidChaptersStrategy {
 }
 
 #[derive(Debug)]
-pub struct NextGenerationStrategy {
-  same_file_tree: SameFileTreeStrategy,
-}
-
-impl NextGenerationStrategy {
-  pub const ID: &'static str = "next-generation";
-  fn new_box() -> Box<dyn SplittingStrategy> {
-    Box::new(Self { same_file_tree: SameFileTreeStrategy })
-  }
-}
+pub struct NextGenerationStrategy;
 
 #[allow(clippy::single_match)]
 impl SplittingStrategy for NextGenerationStrategy {
+  fn id_static() -> &'static str
+  where
+    Self: Sized,
+  {
+    "next-generation"
+  }
+
+  fn new_boxed() -> Box<dyn SplittingStrategy>
+  where
+    Self: Sized,
+  {
+    Box::new(Self)
+  }
+
+  fn id(&self) -> &'static str { Self::id_static() }
+
   fn get_translation_file_for_entire_game_file(
     &mut self,
     file_path: &str,
@@ -201,7 +251,7 @@ impl SplittingStrategy for NextGenerationStrategy {
       _ => {}
     }
 
-    self.same_file_tree.get_translation_file_for_entire_game_file(file_path)
+    SameFileTreeStrategy.get_translation_file_for_entire_game_file(file_path)
   }
 
   fn get_translation_file_for_fragment(
