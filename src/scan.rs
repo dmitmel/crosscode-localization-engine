@@ -7,6 +7,7 @@ use self::json_file_finder::FoundJsonFile;
 use self::lang_label_extractor::LangLabel;
 use crate::cli;
 use crate::impl_prelude::*;
+use crate::rc_string::RcString;
 use crate::utils;
 use crate::utils::json;
 
@@ -40,7 +41,8 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) ->
 
   // Currently all fragments are generated with the one and only `en_US` locale
   // anyway, so let's reuse the hashmap and just clone it.
-  let mut tmp_fragment_text = HashMap::<String, String>::with_capacity(1);
+  let mut tmp_fragment_text = HashMap::<RcString, RcString>::with_capacity(1);
+  let tmp_extracted_locale = RcString::from(lang_label_extractor::EXTRACTED_LOCALE);
 
   info!("Extracting localizable strings");
   let mut ignored_lang_labels_count = 0;
@@ -74,11 +76,10 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) ->
         }
       };
 
-      let scan_db_file = scan_db_file.get_or_insert_with(|| {
-        scan_db.new_game_file(db::ScanDbGameFileInitOpts { path: found_file.path.clone() })
-      });
+      let scan_db_file =
+        scan_db_file.get_or_insert_with(|| scan_db.new_game_file(found_file.path.share_rc()));
 
-      tmp_fragment_text.insert(lang_label_extractor::EXTRACTED_LOCALE.to_owned(), text);
+      tmp_fragment_text.insert(tmp_extracted_locale.share_rc(), text);
       scan_db_file.new_fragment(db::ScanDbFragmentInitOpts {
         json_path,
         lang_uid,
@@ -125,7 +126,7 @@ struct ChangelogEntryRef<'a> {
   changes: Vec<Cow<'a, str>>,
 }
 
-pub fn read_game_version(assets_dir: &Path) -> AnyResult<String> {
+pub fn read_game_version(assets_dir: &Path) -> AnyResult<RcString> {
   let abs_changelog_path = assets_dir.join(*CHANGELOG_FILE_PATH);
 
   let mut changelog_bytes = Vec::new();
@@ -165,9 +166,9 @@ pub fn read_game_version(assets_dir: &Path) -> AnyResult<String> {
   }
 
   if max_hotfix > 0 {
-    Ok(utils::fast_concat(&[&latest_entry.version, "-", max_hotfix_str]))
+    Ok(RcString::from(utils::fast_concat(&[&latest_entry.version, "-", max_hotfix_str])))
   } else {
-    Ok(latest_entry.version.clone().into_owned())
+    Ok(RcString::from(latest_entry.version.clone()))
   }
 }
 

@@ -1,5 +1,3 @@
-// TODO: use RcStrings everywhere
-
 pub mod splitting_strategies;
 
 use crate::impl_prelude::*;
@@ -24,13 +22,13 @@ lazy_static! {
 pub struct ProjectMetaSerde {
   pub uuid: Uuid,
   pub creation_timestamp: Timestamp,
-  pub game_version: String,
-  pub original_locale: String,
-  pub reference_locales: Vec<String>,
-  pub translation_locale: String,
-  pub translations_dir: String,
-  // pub splitting_strategy: String,
-  pub tr_files: Vec<String>,
+  pub game_version: RcString,
+  pub original_locale: RcString,
+  pub reference_locales: Vec<RcString>,
+  pub translation_locale: RcString,
+  pub translations_dir: RcString,
+  // pub splitting_strategy: RcString,
+  pub tr_files: Vec<RcString>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -38,23 +36,23 @@ pub struct TrFileSerde {
   pub uuid: Uuid,
   pub creation_timestamp: Timestamp,
   pub modification_timestamp: Timestamp,
-  pub project_meta_file: String,
-  pub game_files: IndexMap<String, GameFileChunkSerde>,
+  pub project_meta_file: RcString,
+  pub game_files: IndexMap<RcString, GameFileChunkSerde>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct GameFileChunkSerde {
-  pub fragments: IndexMap<String, FragmentSerde>,
+  pub fragments: IndexMap<RcString, FragmentSerde>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct FragmentSerde {
   pub lang_uid: i32,
-  pub description: Vec<String>,
+  pub description: Vec<RcString>,
   #[serde(with = "utils::serde::MultilineStringHelper")]
-  pub original_text: String,
-  // pub reference_texts: HashMap<String, Vec<String>>,
-  pub flags: HashMap<String, bool>,
+  pub original_text: RcString,
+  // pub reference_texts: HashMap<RcString, Vec<RcString>>,
+  pub flags: HashMap<RcString, bool>,
   pub translations: Vec<TranslationSerde>,
   pub comments: Vec<CommentSerde>,
 }
@@ -62,22 +60,22 @@ pub struct FragmentSerde {
 #[derive(Debug, Clone, Deserialize)]
 pub struct TranslationSerde {
   pub uuid: Uuid,
-  pub author: String,
+  pub author: RcString,
   pub creation_timestamp: Timestamp,
   pub modification_timestamp: Timestamp,
   #[serde(with = "utils::serde::MultilineStringHelper")]
-  pub text: String,
-  pub flags: HashMap<String, bool>,
+  pub text: RcString,
+  pub flags: HashMap<RcString, bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CommentSerde {
   pub uuid: Uuid,
-  pub author: String,
+  pub author: RcString,
   pub creation_timestamp: Timestamp,
   pub modification_timestamp: Timestamp,
   #[serde(with = "utils::serde::MultilineStringHelper")]
-  pub text: String,
+  pub text: RcString,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -92,11 +90,11 @@ pub struct ProjectMeta {
   uuid: Uuid,
   creation_timestamp: Timestamp,
   modification_timestamp: Cell<Timestamp>, // TODO
-  game_version: String,
-  original_locale: String,
-  reference_locales: Vec<String>,
-  translation_locale: String,
-  translations_dir: String,
+  game_version: RcString,
+  original_locale: RcString,
+  reference_locales: Vec<RcString>,
+  translation_locale: RcString,
+  translations_dir: RcString,
   // splitting_strategy: Box<dyn SplittingStrategy>,
 
   // HACK: Don't ask.
@@ -119,15 +117,15 @@ impl ProjectMeta {
   #[inline(always)]
   pub fn modification_timestamp(&self) -> Timestamp { self.modification_timestamp.get() }
   #[inline(always)]
-  pub fn game_version(&self) -> &str { &self.game_version }
+  pub fn game_version(&self) -> &RcString { &self.game_version }
   #[inline(always)]
-  pub fn original_locale(&self) -> &str { &self.original_locale }
+  pub fn original_locale(&self) -> &RcString { &self.original_locale }
   #[inline(always)]
-  pub fn reference_locales(&self) -> &[String] { &self.reference_locales }
+  pub fn reference_locales(&self) -> &[RcString] { &self.reference_locales }
   #[inline(always)]
-  pub fn translation_locale(&self) -> &str { &self.translation_locale }
+  pub fn translation_locale(&self) -> &RcString { &self.translation_locale }
   #[inline(always)]
-  pub fn translations_dir(&self) -> &str { &self.translations_dir }
+  pub fn translations_dir(&self) -> &RcString { &self.translations_dir }
   // #[allow(clippy::borrowed_box)]
   // #[inline(always)]
   // pub fn splitting_strategy(&self) -> &Box<dyn SplittingStrategy> { &self.splitting_strategy }
@@ -190,12 +188,12 @@ impl ProjectMeta {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectCreateOpts {
-  pub game_version: String,
-  pub original_locale: String,
-  pub reference_locales: Vec<String>,
-  pub translation_locale: String,
-  pub translations_dir: String,
-  // pub splitting_strategy: String,
+  pub game_version: RcString,
+  pub original_locale: RcString,
+  pub reference_locales: Vec<RcString>,
+  pub translation_locale: RcString,
+  pub translations_dir: RcString,
+  // pub splitting_strategy: RcString,
 }
 
 #[derive(Debug)]
@@ -311,7 +309,7 @@ pub struct TrFile {
   uuid: Uuid,
   creation_timestamp: Timestamp,
   modification_timestamp: Timestamp,
-  // project_meta_file: String, // TODO
+  // project_meta_file: RcString, // TODO
   #[serde(skip)]
   relative_path: RcString,
 
@@ -478,10 +476,10 @@ pub struct FragmentInitOpts {
   pub file_path: RcString,
   pub json_path: RcString,
   pub lang_uid: i32,
-  pub description: Vec<String>,
-  pub original_text: String,
-  // pub reference_texts: HashMap<String, String>,
-  pub flags: HashMap<String, bool>,
+  pub description: Vec<RcString>,
+  pub original_text: RcString,
+  // pub reference_texts: HashMap<RcString, RcString>,
+  pub flags: HashMap<RcString, bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -501,13 +499,13 @@ pub struct Fragment {
   #[serde(default, skip_serializing_if = "utils::is_default")]
   lang_uid: i32,
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
-  description: Vec<String>,
+  description: Vec<RcString>,
   #[serde(with = "utils::serde::MultilineStringHelper")]
-  original_text: String,
+  original_text: RcString,
   // #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-  // reference_texts: HashMap<String, String>,
+  // reference_texts: HashMap<RcString, RcString>,
   #[serde(default, skip_serializing_if = "utils::serde::is_refcell_hashmap_empty")]
-  flags: RefCell<HashMap<String, bool>>,
+  flags: RefCell<HashMap<RcString, bool>>,
 
   translations: RefCell<Vec<Rc<Translation>>>,
   #[serde(default, skip_serializing_if = "utils::serde::is_refcell_vec_empty")]
@@ -530,13 +528,13 @@ impl Fragment {
   #[inline(always)]
   pub fn lang_uid(&self) -> i32 { self.lang_uid }
   #[inline(always)]
-  pub fn description(&self) -> &[String] { &self.description }
+  pub fn description(&self) -> &[RcString] { &self.description }
   #[inline(always)]
-  pub fn original_text(&self) -> &str { &self.original_text }
+  pub fn original_text(&self) -> &RcString { &self.original_text }
   // #[inline(always)]
-  // pub fn reference_texts(&self) -> &HashMap<String, String> { &self.reference_texts }
+  // pub fn reference_texts(&self) -> &HashMap<RcString, RcString> { &self.reference_texts }
   #[inline(always)]
-  pub fn flags(&self) -> Ref<HashMap<String, bool>> { self.flags.borrow() }
+  pub fn flags(&self) -> Ref<HashMap<RcString, bool>> { self.flags.borrow() }
   #[inline(always)]
   pub fn translations(&self) -> Ref<Vec<Rc<Translation>>> { self.translations.borrow() }
   #[inline(always)]
@@ -584,12 +582,12 @@ pub struct Translation {
   fragment: RcWeak<Fragment>,
 
   uuid: Uuid,
-  author: String,
+  author: RcString,
   creation_timestamp: Timestamp,
   modification_timestamp: Cell<Timestamp>,
-  text: RefCell<String>,
+  text: RefCell<RcString>,
   #[serde(default, skip_serializing_if = "utils::serde::is_refcell_hashmap_empty")]
-  flags: RefCell<HashMap<String, bool>>,
+  flags: RefCell<HashMap<RcString, bool>>,
 }
 
 impl Translation {
@@ -600,13 +598,13 @@ impl Translation {
   #[inline(always)]
   pub fn uuid(&self) -> Uuid { self.uuid }
   #[inline(always)]
-  pub fn author(&self) -> &str { &self.author }
+  pub fn author(&self) -> &RcString { &self.author }
   #[inline(always)]
   pub fn creation_timestamp(&self) -> Timestamp { self.creation_timestamp }
   #[inline(always)]
   pub fn modification_timestamp(&self) -> Timestamp { self.modification_timestamp.get() }
   #[inline(always)]
-  pub fn text(&self) -> Ref<String> { self.text.borrow() }
+  pub fn text(&self) -> Ref<RcString> { self.text.borrow() }
 }
 
 #[derive(Debug, Serialize)]
@@ -617,10 +615,10 @@ pub struct Comment {
   fragment: RcWeak<Fragment>,
 
   uuid: Uuid,
-  author: String,
+  author: RcString,
   creation_timestamp: Timestamp,
   modification_timestamp: Cell<Timestamp>,
-  text: RefCell<String>,
+  text: RefCell<RcString>,
 }
 
 impl Comment {
@@ -631,13 +629,13 @@ impl Comment {
   #[inline(always)]
   pub fn uuid(&self) -> Uuid { self.uuid }
   #[inline(always)]
-  pub fn author(&self) -> &str { &self.author }
+  pub fn author(&self) -> &RcString { &self.author }
   #[inline(always)]
   pub fn creation_timestamp(&self) -> Timestamp { self.creation_timestamp }
   #[inline(always)]
   pub fn modification_timestamp(&self) -> Timestamp { self.modification_timestamp.get() }
   #[inline(always)]
-  pub fn text(&self) -> Ref<String> { self.text.borrow() }
+  pub fn text(&self) -> Ref<RcString> { self.text.borrow() }
 }
 
 #[derive(Debug)]

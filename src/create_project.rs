@@ -24,7 +24,7 @@ pub fn run(
 
   utils::create_dir_recursively(&project_dir).context("Failed to create the project dir")?;
   let project = project::Project::create(project_dir, project::ProjectCreateOpts {
-    game_version: scan_db.meta().game_version.clone(),
+    game_version: scan_db.meta().game_version.share_rc(),
     original_locale: command_opts.original_locale,
     reference_locales: command_opts.reference_locales,
     translation_locale: command_opts.translation_locale,
@@ -43,7 +43,7 @@ pub fn run(
 
     for scan_fragment in scan_game_file.fragments().values() {
       let original_text = match scan_fragment.text().get(project.meta().original_locale()) {
-        Some(v) => v.to_owned(),
+        Some(v) => v.share_rc(),
         None => continue,
       };
 
@@ -54,7 +54,7 @@ pub fn run(
       };
 
       let tr_file = {
-        let path = RcString::from(Cow::into_owned(fragment_tr_file_path.clone()));
+        let path = RcString::from(Cow::into_owned(fragment_tr_file_path));
         project.get_tr_file(&path).unwrap_or_else(|| project.new_tr_file(path))
       };
 

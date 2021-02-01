@@ -1,4 +1,5 @@
 use crate::impl_prelude::*;
+use crate::rc_string::RcString;
 use crate::utils::json::{self, Value};
 use crate::utils::{self, try_option_hint};
 
@@ -8,7 +9,7 @@ use std::str::FromStr;
 #[derive(Debug)]
 struct GeneratorState<'json> {
   file_data: &'json json::Value,
-  description: Vec<String>,
+  description: Vec<RcString>,
   words: Vec<Cow<'json, str>>,
   current_entity_type: Option<&'json str>,
 }
@@ -16,7 +17,7 @@ struct GeneratorState<'json> {
 // Rewritten from <https://github.com/dmitmel/crosscode-ru/blob/ea8ee6244d0c89e3118f2344440181f594d95783/tool/src/Notabenoid.ts#L499-L667>
 // LMT's tagging algorithm also looks interesting, maybe we can learn something from it as well:
 // <https://github.com/L-Sherry/Localize-Me-Tools/blob/cb8863cef80d1c7361b7142ab9206226e9669bdf/tags.py>
-pub fn generate(file_data: &json::Value, fragment_json_path: &str) -> AnyResult<Vec<String>> {
+pub fn generate(file_data: &json::Value, fragment_json_path: &str) -> AnyResult<Vec<RcString>> {
   let mut state = GeneratorState {
     file_data,
     description: Vec::new(),
@@ -169,7 +170,7 @@ fn generate_for_json_object<'json>(
     let line = state.words.join(" ");
     let line = line.trim();
     if !line.is_empty() {
-      state.description.push(line.to_owned());
+      state.description.push(RcString::from(line));
     }
   }
 

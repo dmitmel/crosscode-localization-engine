@@ -1,4 +1,5 @@
 use super::{CharPos, CharPosIter, ParsingError};
+use crate::rc_string::RcString;
 
 use std::borrow::Cow;
 use std::iter;
@@ -94,7 +95,7 @@ impl<'src> Lexer<'src> {
 
   fn emit_error(&mut self, message: String) -> ParsingError {
     self.done = true;
-    ParsingError { pos: self.current_pos, message }
+    ParsingError { pos: self.current_pos, message: RcString::from(message) }
   }
 
   fn reset_current_line_flags(&mut self) { self.is_previous_entry = false; }

@@ -14,35 +14,35 @@ use uuid::Uuid;
 pub struct ScanDbSerde {
   pub uuid: Uuid,
   pub creation_timestamp: Timestamp,
-  pub game_version: String,
-  // pub extracted_locales: Vec<String>,
-  pub game_files: IndexMap<String, ScanDbGameFileSerde>,
+  pub game_version: RcString,
+  // pub extracted_locales: Vec<RcString>,
+  pub game_files: IndexMap<RcString, ScanDbGameFileSerde>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ScanDbGameFileSerde {
-  pub fragments: IndexMap<String, ScanDbFragmentSerde>,
+  pub fragments: IndexMap<RcString, ScanDbFragmentSerde>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ScanDbFragmentSerde {
   pub lang_uid: i32,
-  pub description: Vec<String>,
-  pub text: HashMap<String, String>,
+  pub description: Vec<RcString>,
+  pub text: HashMap<RcString, RcString>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScanDbCreateOpts {
-  pub game_version: String,
+  pub game_version: RcString,
 }
 
 #[derive(Debug, Serialize)]
 pub struct ScanDbMeta {
   pub uuid: Uuid,
   pub creation_timestamp: Timestamp,
-  pub game_version: String,
+  pub game_version: RcString,
   // TODO: extracted_locales
 }
 
@@ -108,7 +108,7 @@ impl ScanDb {
     });
 
     for (file_serde_path, file_serde_data) in serde_data.game_files {
-      let file = myself.new_game_file(ScanDbGameFileInitOpts { path: file_serde_path });
+      let file = myself.new_game_file(file_serde_path);
 
       for (fragment_serde_json_path, fragment_serde_data) in file_serde_data.fragments {
         file.new_fragment(ScanDbFragmentInitOpts {
@@ -142,21 +142,13 @@ impl ScanDb {
     self.game_files.borrow_mut().reserve(additional_capacity);
   }
 
-  pub fn new_game_file(
-    self: &Rc<Self>,
-    file_init_opts: ScanDbGameFileInitOpts,
-  ) -> Rc<ScanDbGameFile> {
+  pub fn new_game_file(self: &Rc<Self>, path: RcString) -> Rc<ScanDbGameFile> {
     self.dirty_flag.set(true);
-    let file = ScanDbGameFile::new(file_init_opts, self);
+    let file = ScanDbGameFile::new(path, self);
     let prev_file = self.game_files.borrow_mut().insert(file.path.share_rc(), file.share_rc());
     assert!(prev_file.is_none());
     file
   }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ScanDbGameFileInitOpts {
-  pub path: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -182,11 +174,11 @@ impl ScanDbGameFile {
     self.fragments.borrow()
   }
 
-  fn new(file_init_opts: ScanDbGameFileInitOpts, scan_db: &Rc<ScanDb>) -> Rc<Self> {
+  fn new(path: RcString, scan_db: &Rc<ScanDb>) -> Rc<Self> {
     Rc::new(Self {
       dirty_flag: scan_db.dirty_flag.share_rc(),
       scan_db: Rc::downgrade(scan_db),
-      path: RcString::from(file_init_opts.path),
+      path: RcString::from(path),
       fragments: RefCell::new(IndexMap::new()),
     })
   }
@@ -212,10 +204,10 @@ impl ScanDbGameFile {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScanDbFragmentInitOpts {
-  pub json_path: String,
+  pub json_path: RcString,
   pub lang_uid: i32,
-  pub description: Vec<String>,
-  pub text: HashMap<String, String>,
+  pub description: Vec<RcString>,
+  pub text: HashMap<RcString, RcString>,
 }
 
 #[derive(Debug, Serialize)]
@@ -231,8 +223,8 @@ pub struct ScanDbFragment {
   #[serde(skip)]
   json_path: RcString,
   lang_uid: i32,
-  description: Vec<String>,
-  text: HashMap<String, String>,
+  description: Vec<RcString>,
+  text: HashMap<RcString, RcString>,
 }
 
 impl ScanDbFragment {
@@ -251,9 +243,9 @@ impl ScanDbFragment {
   #[inline(always)]
   pub fn has_lang_uid(&self) -> bool { self.lang_uid != 0 }
   #[inline(always)]
-  pub fn description(&self) -> &[String] { &self.description }
+  pub fn description(&self) -> &[RcString] { &self.description }
   #[inline(always)]
-  pub fn text(&self) -> &HashMap<String, String> { &self.text }
+  pub fn text(&self) -> &HashMap<RcString, RcString> { &self.text }
 
   fn new(
     fragment_init_opts: ScanDbFragmentInitOpts,

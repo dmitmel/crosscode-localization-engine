@@ -1,5 +1,6 @@
 use crate::impl_prelude::*;
 use crate::project::splitting_strategies;
+use crate::rc_string::RcString;
 
 use clap::{App, AppSettings, Arg};
 use std::ffi::OsString;
@@ -35,11 +36,11 @@ pub struct ScanCommandOpts {
 pub struct CreateProjectCommandOpts {
   pub project_dir: PathBuf,
   pub scan_db: PathBuf,
-  pub original_locale: String,
-  pub reference_locales: Vec<String>,
-  pub translation_locale: String,
-  pub splitting_strategy: String,
-  pub translations_dir: String,
+  pub original_locale: RcString,
+  pub reference_locales: Vec<RcString>,
+  pub translation_locale: RcString,
+  pub splitting_strategy: RcString,
+  pub translations_dir: RcString,
 }
 
 #[derive(Debug)]
@@ -65,14 +66,14 @@ pub fn parse_opts() -> AnyResult<Opts> {
         CommandOpts::CreateProject(Box::new(CreateProjectCommandOpts {
           project_dir: PathBuf::from(matches.value_of_os("project_dir").unwrap()),
           scan_db: PathBuf::from(matches.value_of_os("scan_db").unwrap()),
-          original_locale: matches.value_of("original_locale").unwrap().to_owned(),
+          original_locale: RcString::from(matches.value_of("original_locale").unwrap()),
           reference_locales: matches
             .values_of("reference_locales")
-            .map(|values| values.map(ToOwned::to_owned).collect())
+            .map(|values| values.map(RcString::from).collect())
             .unwrap_or_else(Vec::new),
-          translation_locale: matches.value_of("translation_locale").unwrap().to_owned(),
-          splitting_strategy: matches.value_of("splitting_strategy").unwrap().to_owned(),
-          translations_dir: matches.value_of("translations_dir").unwrap().to_owned(),
+          translation_locale: RcString::from(matches.value_of("translation_locale").unwrap()),
+          splitting_strategy: RcString::from(matches.value_of("splitting_strategy").unwrap()),
+          translations_dir: RcString::from(matches.value_of("translations_dir").unwrap()),
         }))
       }
 

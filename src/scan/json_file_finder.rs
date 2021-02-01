@@ -1,4 +1,5 @@
 use crate::impl_prelude::*;
+use crate::rc_string::RcString;
 
 use lazy_static::lazy_static;
 use std::ffi::OsStr;
@@ -15,7 +16,7 @@ lazy_static! {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct FoundJsonFile {
   // TODO: split `path` into `asset_root` and `relative_path`
-  pub path: String,
+  pub path: RcString,
   pub is_lang_file: bool,
 }
 
@@ -79,7 +80,7 @@ pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>
       }
 
       file_count += 1;
-      found_files.push(FoundJsonFile { path: path_str.to_owned(), is_lang_file });
+      found_files.push(FoundJsonFile { path: RcString::from(path_str), is_lang_file });
     }
     trace!("Found {} JSON files", file_count);
   }
@@ -131,7 +132,7 @@ fn read_extensions_dir(
         metadata_file.display(),
       );
       found_files.push(FoundJsonFile {
-        path: path_to_str_with_error(&metadata_file)?.to_owned(),
+        path: RcString::from(path_to_str_with_error(&metadata_file)?),
         is_lang_file: false,
       });
       asset_roots.push(extension_dir);

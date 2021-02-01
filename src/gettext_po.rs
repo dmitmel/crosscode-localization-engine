@@ -22,6 +22,7 @@
 pub mod lexer;
 pub mod parser;
 
+use crate::rc_string::RcString;
 pub use lexer::Lexer;
 pub use parser::{ParsedMessage, Parser};
 
@@ -41,7 +42,7 @@ pub struct CharPos {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ParsingError {
   pub pos: CharPos,
-  pub message: String,
+  pub message: RcString,
 }
 
 impl ParsingError {

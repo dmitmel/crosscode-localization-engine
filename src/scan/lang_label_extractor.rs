@@ -1,5 +1,6 @@
 use super::json_file_finder::FoundJsonFile;
 use crate::impl_prelude::*;
+use crate::rc_string::RcString;
 use crate::utils::json;
 
 use std::convert::TryFrom;
@@ -24,9 +25,9 @@ pub fn extract_from_file<'json>(
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct LangLabel {
-  pub json_path: String,
+  pub json_path: RcString,
   pub lang_uid: i32, // 0 represents the lack of a lang UID
-  pub text: String,
+  pub text: RcString,
 }
 
 fn try_extract_lang_label<'json>(
@@ -67,7 +68,11 @@ fn try_extract_lang_label<'json>(
     }
   };
 
-  Some(LangLabel { json_path: json_path.join("/"), lang_uid, text: text.to_owned() })
+  Some(LangLabel {
+    json_path: RcString::from(json_path.join("/")),
+    lang_uid,
+    text: RcString::from(text),
+  })
 }
 
 fn try_extract_lang_label_from_lang_file<'json>(
@@ -79,7 +84,11 @@ fn try_extract_lang_label_from_lang_file<'json>(
     return None;
   }
   let text = value.as_str()?;
-  Some(LangLabel { json_path: json_path.join("/"), lang_uid: 0, text: text.to_owned() })
+  Some(LangLabel {
+    json_path: RcString::from(json_path.join("/")),
+    lang_uid: 0,
+    text: RcString::from(text),
+  })
 }
 
 type TryExtractLangLabelFn<'json> =
