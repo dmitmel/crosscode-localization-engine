@@ -29,14 +29,17 @@ pub fn run(
     reference_locales: command_opts.reference_locales,
     translation_locale: command_opts.translation_locale,
     translations_dir: command_opts.translations_dir,
-    splitting_strategy: command_opts.splitting_strategy,
-  })?;
+  });
+
+  let splitting_strategy =
+    project::splitting_strategies::create_by_id(&command_opts.splitting_strategy)
+      .context("Failed to create the splitting strategy")?;
 
   info!("Generating project translation files");
 
   for scan_game_file in scan_db.game_files().values() {
     let global_tr_file_path: Option<Cow<'static, str>> =
-      project.meta().splitting_strategy().get_tr_file_for_entire_game_file(scan_game_file.path());
+      splitting_strategy.get_tr_file_for_entire_game_file(scan_game_file.path());
 
     for scan_fragment in scan_game_file.fragments().values() {
       let original_text = match scan_fragment.text().get(project.meta().original_locale()) {
@@ -46,9 +49,7 @@ pub fn run(
 
       let fragment_tr_file_path: Cow<'static, str> = match &global_tr_file_path {
         Some(v) => v.clone(),
-        None => project
-          .meta()
-          .splitting_strategy()
+        None => splitting_strategy
           .get_tr_file_for_fragment(scan_fragment.file_path(), scan_fragment.json_path()),
       };
 

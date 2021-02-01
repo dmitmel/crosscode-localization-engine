@@ -2,7 +2,6 @@
 
 pub mod splitting_strategies;
 
-use self::splitting_strategies::SplittingStrategy;
 use crate::impl_prelude::*;
 use crate::rc_string::RcString;
 use crate::utils::{self, RcExt, Timestamp};
@@ -30,7 +29,7 @@ pub struct ProjectMetaSerde {
   pub reference_locales: Vec<String>,
   pub translation_locale: String,
   pub translations_dir: String,
-  pub splitting_strategy: String,
+  // pub splitting_strategy: String,
   pub tr_files: Vec<String>,
 }
 
@@ -98,7 +97,7 @@ pub struct ProjectMeta {
   reference_locales: Vec<String>,
   translation_locale: String,
   translations_dir: String,
-  splitting_strategy: Box<dyn SplittingStrategy>,
+  // splitting_strategy: Box<dyn SplittingStrategy>,
 
   // HACK: Don't ask.
   #[serde(
@@ -129,11 +128,11 @@ impl ProjectMeta {
   pub fn translation_locale(&self) -> &str { &self.translation_locale }
   #[inline(always)]
   pub fn translations_dir(&self) -> &str { &self.translations_dir }
-  #[allow(clippy::borrowed_box)]
-  #[inline(always)]
-  pub fn splitting_strategy(&self) -> &Box<dyn SplittingStrategy> { &self.splitting_strategy }
+  // #[allow(clippy::borrowed_box)]
+  // #[inline(always)]
+  // pub fn splitting_strategy(&self) -> &Box<dyn SplittingStrategy> { &self.splitting_strategy }
 
-  fn create(project: &Rc<Project>, opts: ProjectCreateOpts) -> AnyResult<Self> {
+  fn create(project: &Rc<Project>, opts: ProjectCreateOpts) -> Self {
     let creation_timestamp = utils::get_timestamp();
     let uuid = utils::new_uuid();
 
@@ -149,12 +148,12 @@ impl ProjectMeta {
       reference_locales: opts.reference_locales,
       translation_locale: opts.translation_locale,
       translations_dir: opts.translations_dir,
-      splitting_strategy: splitting_strategies::create_by_id(&opts.splitting_strategy)?,
 
+      // splitting_strategy: splitting_strategies::create_by_id(&opts.splitting_strategy)?,
       translation_files_link: project.share_rc_weak(),
     };
     myself.dirty_flag.set(true);
-    Ok(myself)
+    myself
   }
 
   pub fn fs_path(&self) -> PathBuf { self.project().root_dir.join(*META_FILE_NAME) }
@@ -196,7 +195,7 @@ pub struct ProjectCreateOpts {
   pub reference_locales: Vec<String>,
   pub translation_locale: String,
   pub translations_dir: String,
-  pub splitting_strategy: String,
+  // pub splitting_strategy: String,
 }
 
 #[derive(Debug)]
@@ -220,7 +219,7 @@ impl Project {
     self.virtual_game_files.borrow()
   }
 
-  pub fn create(root_dir: PathBuf, opts: ProjectCreateOpts) -> AnyResult<Rc<Self>> {
+  pub fn create(root_dir: PathBuf, opts: ProjectCreateOpts) -> Rc<Self> {
     let myself = Rc::new(Self {
       root_dir,
       meta: OnceCell::new(),
@@ -229,9 +228,9 @@ impl Project {
       virtual_game_files: RefCell::new(HashMap::new()),
     });
 
-    myself.meta.set(ProjectMeta::create(&myself, opts)?).unwrap();
+    myself.meta.set(ProjectMeta::create(&myself, opts)).unwrap();
 
-    Ok(myself)
+    myself
   }
 
   pub fn get_tr_file(&self, path: &str) -> Option<Rc<TrFile>> {
