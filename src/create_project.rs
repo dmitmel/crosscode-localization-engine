@@ -36,10 +36,10 @@ pub fn run(
 
   for scan_game_file in scan_db.game_files().values() {
     let global_tr_file_path: Option<Cow<'static, str>> =
-      project.meta().splitting_strategy.get_tr_file_for_entire_game_file(scan_game_file.path());
+      project.meta().splitting_strategy().get_tr_file_for_entire_game_file(scan_game_file.path());
 
     for scan_fragment in scan_game_file.fragments().values() {
-      let original_text = match scan_fragment.text().get(&project.meta().original_locale) {
+      let original_text = match scan_fragment.text().get(project.meta().original_locale()) {
         Some(v) => v.to_owned(),
         None => continue,
       };
@@ -48,7 +48,7 @@ pub fn run(
         Some(v) => v.clone(),
         None => project
           .meta()
-          .splitting_strategy
+          .splitting_strategy()
           .get_tr_file_for_fragment(scan_fragment.file_path(), scan_fragment.json_path()),
       };
 
@@ -83,7 +83,7 @@ pub fn run(
 
   info!("Writing translation files");
 
-  let tr_files_dir = project.root_dir().join(&project.meta().translations_dir);
+  let tr_files_dir = project.root_dir().join(project.meta().translations_dir());
   let translation_db_files_len = project.tr_files().len();
   for (i, (tr_file_path, translation_db)) in project.tr_files().iter().enumerate() {
     let tr_file_path = tr_files_dir.join(tr_file_path.rc_clone_inner() + ".json");

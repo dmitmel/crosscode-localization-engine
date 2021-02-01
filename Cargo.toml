@@ -24,3 +24,4 @@ walkdir = { version = "2.3.1" }
 lazy_static = { version = "1.4.0" }
 indexmap = { version = "1.6.1", features = ["serde-1"] }
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
+once_cell = { version = "1.5.2" }

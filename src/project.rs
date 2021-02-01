@@ -1,11 +1,14 @@
+// TODO: use RcStrings everywhere
+
 pub mod splitting_strategies;
 
 use self::splitting_strategies::SplittingStrategy;
 use crate::impl_prelude::*;
 use crate::rc_string::RcString;
-use crate::utils::{self, RcExt, RcWeakExt, Timestamp};
+use crate::utils::{self, RcExt, Timestamp};
 
 use indexmap::IndexMap;
+use once_cell::unsync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::cell::{Cell, Ref, RefCell};
 use std::collections::HashMap;
@@ -84,14 +87,15 @@ pub struct ProjectMeta {
   #[serde(skip)]
   project: RcWeak<Project>,
 
-  pub uuid: Uuid,
-  pub creation_timestamp: Timestamp,
-  pub game_version: String,
-  pub original_locale: String,
-  pub reference_locales: Vec<String>,
-  pub translation_locale: String,
-  pub translations_dir: String,
-  pub splitting_strategy: Box<dyn SplittingStrategy>,
+  uuid: Uuid,
+  creation_timestamp: Timestamp,
+  modification_timestamp: Timestamp, // TODO
+  game_version: String,
+  original_locale: String,
+  reference_locales: Vec<String>,
+  translation_locale: String,
+  translations_dir: String,
+  splitting_strategy: Box<dyn SplittingStrategy>,
 
   // HACK: Don't ask.
   #[serde(
@@ -102,6 +106,52 @@ pub struct ProjectMeta {
 }
 
 impl ProjectMeta {
+  #[inline(always)]
+  pub fn is_dirty(&self) -> bool { self.dirty_flag.get() }
+  #[inline]
+  pub fn project(&self) -> Rc<Project> { self.project.upgrade().unwrap() }
+  #[inline(always)]
+  pub fn uuid(&self) -> Uuid { self.uuid }
+  #[inline(always)]
+  pub fn creation_timestamp(&self) -> Timestamp { self.creation_timestamp }
+  #[inline(always)]
+  pub fn modification_timestamp(&self) -> Timestamp { self.modification_timestamp }
+  #[inline(always)]
+  pub fn game_version(&self) -> &str { &self.game_version }
+  #[inline(always)]
+  pub fn original_locale(&self) -> &str { &self.original_locale }
+  #[inline(always)]
+  pub fn reference_locales(&self) -> &[String] { &self.reference_locales }
+  #[inline(always)]
+  pub fn translation_locale(&self) -> &str { &self.translation_locale }
+  #[inline(always)]
+  pub fn translations_dir(&self) -> &str { &self.translations_dir }
+  #[allow(clippy::borrowed_box)]
+  #[inline(always)]
+  pub fn splitting_strategy(&self) -> &Box<dyn SplittingStrategy> { &self.splitting_strategy }
+
+  fn create(project: &Rc<Project>, opts: ProjectCreateOpts) -> AnyResult<Self> {
+    let creation_timestamp = utils::get_timestamp();
+    let uuid = utils::new_uuid();
+
+    Ok(Self {
+      dirty_flag: Rc::new(Cell::new(false)),
+      project: project.share_rc_weak(),
+
+      uuid,
+      creation_timestamp,
+      modification_timestamp: creation_timestamp,
+      game_version: opts.game_version,
+      original_locale: opts.original_locale,
+      reference_locales: opts.reference_locales,
+      translation_locale: opts.translation_locale,
+      translations_dir: opts.translations_dir,
+      splitting_strategy: splitting_strategies::create_by_id(&opts.splitting_strategy)?,
+
+      translation_files_link: project.share_rc_weak(),
+    })
+  }
+
   fn serialize_translation_files_link<S>(
     value: &RcWeak<Project>,
     serializer: S,
@@ -130,7 +180,7 @@ pub struct ProjectCreateOpts {
 #[derive(Debug)]
 pub struct Project {
   root_dir: PathBuf,
-  meta: ProjectMeta,
+  meta: OnceCell<ProjectMeta>,
 
   tr_files: RefCell<HashMap<RcString, Rc<TrFile>>>,
   virtual_game_files: RefCell<HashMap<RcString, Rc<VirtualGameFile>>>,
@@ -141,7 +191,7 @@ impl Project {
   #[inline(always)]
   pub fn root_dir(&self) -> &Path { &self.root_dir }
   #[inline(always)]
-  pub fn meta(&self) -> &ProjectMeta { &self.meta }
+  pub fn meta(&self) -> &ProjectMeta { self.meta.get().unwrap() }
   #[inline(always)]
   pub fn tr_files(&self) -> Ref<HashMap<RcString, Rc<TrFile>>> { self.tr_files.borrow() }
   #[inline(always)]
@@ -150,36 +200,15 @@ impl Project {
   }
 
   pub fn create(root_dir: PathBuf, opts: ProjectCreateOpts) -> AnyResult<Rc<Self>> {
-    let creation_timestamp = utils::get_timestamp();
-    let uuid = utils::new_uuid();
-    let mut myself = Rc::new(Self {
+    let myself = Rc::new(Self {
       root_dir,
-      meta: ProjectMeta {
-        dirty_flag: Rc::new(Cell::new(false)),
-        project: RcWeak::new(),
-
-        uuid,
-        creation_timestamp,
-        game_version: opts.game_version,
-        original_locale: opts.original_locale,
-        reference_locales: opts.reference_locales,
-        translation_locale: opts.translation_locale,
-        translations_dir: opts.translations_dir,
-        splitting_strategy: splitting_strategies::create_by_id(&opts.splitting_strategy)?,
-        translation_files_link: RcWeak::new(),
-      },
+      meta: OnceCell::new(),
 
       tr_files: RefCell::new(HashMap::new()),
       virtual_game_files: RefCell::new(HashMap::new()),
     });
 
-    unsafe {
-      // Please be careful around here.
-      let myself_weak = myself.share_rc_weak();
-      let meta_mut = &mut Rc::get_mut_unchecked(&mut myself).meta;
-      meta_mut.project = myself_weak.share_rc_weak();
-      meta_mut.translation_files_link = myself_weak.share_rc_weak();
-    }
+    myself.meta.set(ProjectMeta::create(&myself, opts)?).unwrap();
 
     Ok(myself)
   }
