@@ -180,8 +180,7 @@ impl ProjectMeta {
   {
     let project = value.upgrade().unwrap();
     let tr_files = project.tr_files.borrow();
-    let mut tr_file_paths: Vec<&RcString> = tr_files.keys().collect();
-    tr_file_paths.sort();
+    let tr_file_paths: Vec<&RcString> = tr_files.keys().collect();
     tr_file_paths.serialize(serializer)
   }
 }
@@ -201,8 +200,8 @@ pub struct Project {
   root_dir: PathBuf,
   meta: OnceCell<ProjectMeta>,
 
-  tr_files: RefCell<HashMap<RcString, Rc<TrFile>>>,
-  virtual_game_files: RefCell<HashMap<RcString, Rc<VirtualGameFile>>>,
+  tr_files: RefCell<IndexMap<RcString, Rc<TrFile>>>,
+  virtual_game_files: RefCell<IndexMap<RcString, Rc<VirtualGameFile>>>,
 }
 
 impl Project {
@@ -211,9 +210,9 @@ impl Project {
   #[inline(always)]
   pub fn meta(&self) -> &ProjectMeta { self.meta.get().unwrap() }
   #[inline(always)]
-  pub fn tr_files(&self) -> Ref<HashMap<RcString, Rc<TrFile>>> { self.tr_files.borrow() }
+  pub fn tr_files(&self) -> Ref<IndexMap<RcString, Rc<TrFile>>> { self.tr_files.borrow() }
   #[inline(always)]
-  pub fn virtual_game_files(&self) -> Ref<HashMap<RcString, Rc<VirtualGameFile>>> {
+  pub fn virtual_game_files(&self) -> Ref<IndexMap<RcString, Rc<VirtualGameFile>>> {
     self.virtual_game_files.borrow()
   }
 
@@ -222,8 +221,8 @@ impl Project {
       root_dir,
       meta: OnceCell::new(),
 
-      tr_files: RefCell::new(HashMap::new()),
-      virtual_game_files: RefCell::new(HashMap::new()),
+      tr_files: RefCell::new(IndexMap::new()),
+      virtual_game_files: RefCell::new(IndexMap::new()),
     });
 
     myself.meta.set(ProjectMeta::create(&myself, opts)).unwrap();
