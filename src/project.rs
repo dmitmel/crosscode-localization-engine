@@ -8,6 +8,7 @@ use crate::rc_string::RcString;
 use crate::utils::{self, RcExt, Timestamp};
 
 use indexmap::IndexMap;
+use lazy_static::lazy_static;
 use once_cell::unsync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::cell::{Cell, Ref, RefCell};
@@ -16,7 +17,9 @@ use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak as RcWeak};
 use uuid::Uuid;
 
-pub const META_FILE_PATH: &str = "crosslocale-project.json";
+lazy_static! {
+  pub static ref META_FILE_NAME: &'static Path = Path::new("crosslocale-project.json");
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectMetaSerde {
@@ -89,7 +92,7 @@ pub struct ProjectMeta {
 
   uuid: Uuid,
   creation_timestamp: Timestamp,
-  modification_timestamp: Timestamp, // TODO
+  modification_timestamp: Cell<Timestamp>, // TODO
   game_version: String,
   original_locale: String,
   reference_locales: Vec<String>,
@@ -115,7 +118,7 @@ impl ProjectMeta {
   #[inline(always)]
   pub fn creation_timestamp(&self) -> Timestamp { self.creation_timestamp }
   #[inline(always)]
-  pub fn modification_timestamp(&self) -> Timestamp { self.modification_timestamp }
+  pub fn modification_timestamp(&self) -> Timestamp { self.modification_timestamp.get() }
   #[inline(always)]
   pub fn game_version(&self) -> &str { &self.game_version }
   #[inline(always)]
@@ -134,13 +137,13 @@ impl ProjectMeta {
     let creation_timestamp = utils::get_timestamp();
     let uuid = utils::new_uuid();
 
-    Ok(Self {
+    let myself = Self {
       dirty_flag: Rc::new(Cell::new(false)),
       project: project.share_rc_weak(),
 
       uuid,
       creation_timestamp,
-      modification_timestamp: creation_timestamp,
+      modification_timestamp: Cell::new(creation_timestamp),
       game_version: opts.game_version,
       original_locale: opts.original_locale,
       reference_locales: opts.reference_locales,
@@ -149,7 +152,26 @@ impl ProjectMeta {
       splitting_strategy: splitting_strategies::create_by_id(&opts.splitting_strategy)?,
 
       translation_files_link: project.share_rc_weak(),
-    })
+    };
+    myself.dirty_flag.set(true);
+    Ok(myself)
+  }
+
+  pub fn fs_path(&self) -> PathBuf { self.project().root_dir.join(*META_FILE_NAME) }
+
+  pub fn write(&self) -> AnyResult<()> {
+    if self.is_dirty() {
+      self.write_force()?;
+    }
+    Ok(())
+  }
+
+  pub fn write_force(&self) -> AnyResult<()> {
+    let fs_path = self.fs_path();
+    utils::json::write_file(&fs_path, self)
+      .with_context(|| format!("Failed to serialize to JSON file '{}'", fs_path.display()))?;
+    self.dirty_flag.set(false);
+    Ok(())
   }
 
   fn serialize_translation_files_link<S>(
@@ -187,7 +209,6 @@ pub struct Project {
 }
 
 impl Project {
-  pub fn is_dirty(&self) -> bool { self.tr_files.borrow().values().any(|f| f.is_dirty()) }
   #[inline(always)]
   pub fn root_dir(&self) -> &Path { &self.root_dir }
   #[inline(always)]
@@ -250,6 +271,27 @@ impl Project {
   pub fn reserve_additional_virtual_game_files(&self, additional_capacity: usize) {
     self.virtual_game_files.borrow_mut().reserve(additional_capacity);
   }
+
+  pub fn is_dirty(&self) -> bool {
+    self.meta().is_dirty() || self.tr_files.borrow().values().any(|f| f.is_dirty())
+  }
+
+  pub fn write(&self) -> AnyResult<()> {
+    let tr_files = self.tr_files.borrow();
+    let total_files_count = 1 + tr_files.len();
+    let mut file_index = 1;
+
+    trace!("[{}/{}] Writing the meta file", file_index, total_files_count);
+    self.meta().write().context("Failed to write Meta")?;
+
+    for (path, tr_file) in tr_files.iter() {
+      file_index += 1;
+      trace!("[{}/{}] Writing translation file '{}'", file_index, total_files_count, path);
+      tr_file.write().with_context(|| format!("Failed to write TrFile '{}'", path))?;
+    }
+
+    Ok(())
+  }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -273,8 +315,6 @@ pub struct TrFile {
   // project_meta_file: String, // TODO
   #[serde(skip)]
   relative_path: RcString,
-  #[serde(skip)]
-  fs_path: PathBuf,
 
   game_file_chunks: RefCell<IndexMap<RcString, Rc<GameFileChunk>>>,
 }
@@ -293,8 +333,6 @@ impl TrFile {
   #[inline(always)]
   pub fn relative_path(&self) -> &RcString { &self.relative_path }
   #[inline(always)]
-  pub fn fs_path(&self) -> &Path { &self.fs_path }
-  #[inline(always)]
   pub fn game_file_chunks(&self) -> Ref<IndexMap<RcString, Rc<GameFileChunk>>> {
     self.game_file_chunks.borrow()
   }
@@ -303,8 +341,6 @@ impl TrFile {
   pub fn mark_dirty(&self) { self.dirty_flag.set(true); }
 
   fn new(project: &Rc<Project>, opts: TrFileInternalInitOpts) -> Rc<Self> {
-    let fs_path = project.root_dir.join(&*opts.relative_path);
-
     Rc::new(Self {
       dirty_flag: Rc::new(Cell::new(false)),
       project: project.share_rc_weak(),
@@ -313,7 +349,6 @@ impl TrFile {
       creation_timestamp: opts.creation_timestamp,
       modification_timestamp: opts.modification_timestamp,
       relative_path: opts.relative_path,
-      fs_path,
 
       game_file_chunks: RefCell::new(IndexMap::new()),
     })
@@ -338,6 +373,32 @@ impl TrFile {
 
   pub fn reserve_additional_game_file_chunks(&self, additional_capacity: usize) {
     self.game_file_chunks.borrow_mut().reserve(additional_capacity);
+  }
+
+  pub fn fs_path(&self) -> PathBuf {
+    let project = self.project();
+    let path = project.root_dir.join(&project.meta().translations_dir).join(&self.relative_path);
+    let mut path = path.into_os_string();
+    path.push(".json");
+    PathBuf::from(path)
+  }
+
+  pub fn write(&self) -> AnyResult<()> {
+    if self.is_dirty() {
+      self.write_force()?;
+    }
+    Ok(())
+  }
+
+  pub fn write_force(&self) -> AnyResult<()> {
+    let fs_path = self.fs_path();
+    utils::create_dir_recursively(fs_path.parent().unwrap()).with_context(|| {
+      format!("Failed to create the parent directories for '{}'", fs_path.display())
+    })?;
+    utils::json::write_file(&fs_path, self)
+      .with_context(|| format!("Failed to serialize to JSON file '{}'", fs_path.display()))?;
+    self.dirty_flag.set(false);
+    Ok(())
   }
 }
 

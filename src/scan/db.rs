@@ -126,7 +126,6 @@ impl ScanDb {
   pub fn write(&self) -> AnyResult<()> {
     if self.is_dirty() {
       self.write_force()?;
-      self.dirty_flag.set(false);
     }
     Ok(())
   }
@@ -134,7 +133,9 @@ impl ScanDb {
   pub fn write_force(&self) -> AnyResult<()> {
     utils::json::write_file(&self.db_file_path, self).with_context(|| {
       format!("Failed to serialize to JSON file '{}'", self.db_file_path.display())
-    })
+    })?;
+    self.dirty_flag.set(false);
+    Ok(())
   }
 
   pub fn reserve_additional_game_files(&self, additional_capacity: usize) {

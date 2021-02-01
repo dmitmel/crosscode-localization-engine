@@ -75,31 +75,7 @@ pub fn run(
 
   info!("Generated {} translation files", project.tr_files().len());
 
-  info!("Writing the project meta file");
-  let meta_file_path = project.root_dir().join(project::META_FILE_PATH);
-  utils::json::write_file(&meta_file_path, project.meta())
-    .with_context(|| format!("Failed to serialize to JSON file '{}'", meta_file_path.display()))
-    .context("Failed to write the project meta file")?;
-
-  info!("Writing translation files");
-
-  let tr_files_dir = project.root_dir().join(project.meta().translations_dir());
-  let translation_db_files_len = project.tr_files().len();
-  for (i, (tr_file_path, translation_db)) in project.tr_files().iter().enumerate() {
-    let tr_file_path = tr_files_dir.join(tr_file_path.rc_clone_inner() + ".json");
-    trace!(
-      "[{}/{}] Writing translation file '{}'",
-      i + 1,
-      translation_db_files_len,
-      tr_file_path.display(),
-    );
-
-    utils::create_dir_recursively(tr_file_path.parent().unwrap()).with_context(|| {
-      format!("Failed to create the parent directories for '{}'", tr_file_path.display())
-    })?;
-    utils::json::write_file(&tr_file_path, &translation_db)
-      .with_context(|| format!("Failed to serialize to JSON file '{}'", tr_file_path.display()))?;
-  }
+  project.write().context("Failed to write the project")?;
 
   info!("Done!");
 

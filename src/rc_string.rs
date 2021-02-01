@@ -3,9 +3,11 @@
 use std::borrow::{Borrow, Cow};
 use std::cmp::Ordering;
 use std::convert::Infallible;
+use std::ffi::OsStr;
 use std::fmt;
 use std::hash::Hash;
 use std::ops::Deref;
+use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
 
@@ -251,6 +253,16 @@ impl AsRef<Rc<String>> for RcString {
 impl AsRef<[u8]> for RcString {
   #[inline(always)]
   fn as_ref(&self) -> &[u8] { (*self.0).as_ref() }
+}
+
+impl AsRef<OsStr> for RcString {
+  #[inline(always)]
+  fn as_ref(&self) -> &OsStr { (*self.0).as_ref() }
+}
+
+impl AsRef<Path> for RcString {
+  #[inline(always)]
+  fn as_ref(&self) -> &Path { (*self.0).as_ref() }
 }
 
 impl Unpin for RcString {
