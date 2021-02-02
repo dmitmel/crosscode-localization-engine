@@ -1,12 +1,15 @@
-use super::Fragment;
+use super::{Fragment, ProjectMeta};
+use crate::gettext_po;
 use crate::impl_prelude::*;
 use crate::rc_string::RcString;
 use crate::utils::json;
+use crate::utils::Timestamp;
 
 use lazy_static::lazy_static;
 use serde_json::ser::Formatter;
 use std::collections::HashMap;
-use std::io::Write;
+use std::fmt;
+use std::io::{self, Write};
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
@@ -14,7 +17,7 @@ pub struct ExporterConfig {
   pub compact: bool,
 }
 
-pub trait Exporter: std::fmt::Debug {
+pub trait Exporter: fmt::Debug {
   fn id_static() -> &'static str
   where
     Self: Sized;
@@ -25,7 +28,12 @@ pub trait Exporter: std::fmt::Debug {
 
   fn id(&self) -> &'static str;
 
-  fn export(&mut self, fragments: &[Rc<Fragment>], output: &mut dyn Write) -> AnyResult<()>;
+  fn export(
+    &mut self,
+    project_meta: &ProjectMeta,
+    fragments: &[Rc<Fragment>],
+    writer: &mut dyn Write,
+  ) -> AnyResult<()>;
 }
 
 macro_rules! exporters_map {
@@ -90,7 +98,12 @@ impl Exporter for LocalizeMeTrPack {
   #[inline(always)]
   fn id(&self) -> &'static str { Self::ID }
 
-  fn export(&mut self, fragments: &[Rc<Fragment>], writer: &mut dyn Write) -> AnyResult<()> {
+  fn export(
+    &mut self,
+    _project_meta: &ProjectMeta,
+    fragments: &[Rc<Fragment>],
+    writer: &mut dyn Write,
+  ) -> AnyResult<()> {
     let fmt = &mut self.json_fmt;
 
     fmt.begin_object(writer)?;
@@ -158,7 +171,9 @@ impl Exporter for LocalizeMeTrPack {
 }
 
 #[derive(Debug)]
-pub struct GettextPo;
+pub struct GettextPo {
+  global_index: u64,
+}
 
 impl GettextPo {
   pub const ID: &'static str = "po";
@@ -178,14 +193,101 @@ impl Exporter for GettextPo {
   where
     Self: Sized,
   {
-    Box::new(Self)
+    Box::new(Self { global_index: 1 })
   }
 
   #[inline(always)]
   fn id(&self) -> &'static str { Self::ID }
 
-  fn export(&mut self, _fragments: &[Rc<Fragment>], _output: &mut dyn Write) -> AnyResult<()> {
-    //
-    todo!()
+  #[allow(clippy::write_with_newline)]
+  fn export(
+    &mut self,
+    project_meta: &ProjectMeta,
+    fragments: &[Rc<Fragment>],
+    writer: &mut dyn Write,
+  ) -> AnyResult<()> {
+    fn write_po_string(writer: &mut dyn io::Write, text: &str) -> io::Result<()> {
+      writer.write_all(b"\"")?;
+      let mut buf = String::new();
+      gettext_po::escape_str(text, &mut buf);
+      writer.write_all(buf.as_bytes())?;
+      writer.write_all(b"\"\n")?;
+      Ok(())
+    }
+
+    fn format_po_timestamp(timestamp: Timestamp) -> impl fmt::Display {
+      time::OffsetDateTime::from_unix_timestamp(timestamp).lazy_format("%Y-%m-%d %H:%M")
+    }
+
+    writer.write_all(b"msgid \"\"")?;
+    writer.write_all(b"msgstr \"\"")?;
+    write_po_string(
+      writer,
+      &format!("Project-Id-Version: crosscode {}\n", project_meta.game_version),
+    )?;
+    write_po_string(writer, "Report-Msgid-Bugs-To: \n")?;
+    write_po_string(
+      writer,
+      &format!(
+        "POT-Creation-Date: {}+0000\n",
+        format_po_timestamp(project_meta.creation_timestamp)
+      ),
+    )?;
+    write_po_string(
+      writer,
+      &format!(
+        "PO-Revision-Date: {}+0000\n",
+        format_po_timestamp(project_meta.modification_timestamp.get())
+      ),
+    )?;
+    write_po_string(writer, "Last-Translator: \n")?;
+    write_po_string(writer, "Language-Team: \n")?;
+    write_po_string(writer, &format!("Language: {}\n", project_meta.translation_locale))?;
+    write_po_string(writer, "MIME-Version: 1.0\n")?;
+    write_po_string(writer, "Content-Type: text/plain; charset=UTF-8\n")?;
+    write_po_string(writer, "Content-Transfer-Encoding: 8bit\n")?;
+    write_po_string(writer, "Plural-Forms: \n")?;
+    write_po_string(
+      writer,
+      &format!("X-Generator: {} {}\n", crate::CRATE_NAME, crate::CRATE_VERSION),
+    )?;
+
+    for fragment in fragments {
+      // The empty msgid is reserved only for the very first entry in a po file
+      // containing metadata.
+      if fragment.original_text.is_empty() {
+        continue;
+      }
+
+      let translation_text = match fragment.get_best_translation() {
+        Some(tr) => tr.text().share_rc(),
+        None => RcString::from(""),
+      };
+
+      let location_line =
+        format!("{} {} #{}", fragment.file_path, fragment.json_path, fragment.lang_uid);
+
+      writer.write_all(b"\n")?;
+      write!(writer, "#. [{}] {}\n", self.global_index, location_line)?;
+      for line in &fragment.description {
+        write!(writer, "#. {}\n", line)?;
+      }
+      write!(writer, "#: {}\n", {
+        let mut buf = String::new();
+        gettext_po::encode_reference_comment_as_uri_for_weblate(&location_line, &mut buf);
+        buf
+      })?;
+
+      writer.write_all(b"msgctxt ")?;
+      write_po_string(writer, &format!("{} {}", fragment.file_path, fragment.json_path))?;
+      writer.write_all(b"msgid ")?;
+      write_po_string(writer, &fragment.original_text)?;
+      writer.write_all(b"msgstr ")?;
+      write_po_string(writer, &translation_text)?;
+
+      self.global_index += 1;
+    }
+
+    Ok(())
   }
 }

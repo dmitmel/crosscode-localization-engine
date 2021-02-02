@@ -142,7 +142,7 @@ where
   const __: u8 = 0;
 
   /// See <https://github.com/serde-rs/json/blob/9b64e0b17ca73e7fbecace37758ff19bc35dea05/src/ser.rs#L2123-L2125>.
-  static ESCAPE: [u8; 256] = [
+  static ESCAPE: [u8; 1 << 8] = [
     //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
     UU, UU, UU, UU, UU, UU, UU, UU, BB, TT, NN, UU, FF, RR, UU, UU, // 0
     UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, // 1

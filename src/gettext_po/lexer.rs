@@ -213,6 +213,7 @@ impl<'src> Iterator for Lexer<'src> {
                 }
                 literal_text_start_index = self.next_char_index;
               }
+
               _ => {}
             }
           }

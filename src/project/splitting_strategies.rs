@@ -4,8 +4,9 @@ use crate::utils;
 use lazy_static::lazy_static;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 
-pub trait SplittingStrategy: std::fmt::Debug {
+pub trait SplittingStrategy: fmt::Debug {
   fn id_static() -> &'static str
   where
     Self: Sized;

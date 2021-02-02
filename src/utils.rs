@@ -3,6 +3,7 @@ pub mod serde;
 
 use crate::impl_prelude::*;
 
+use std::convert::TryFrom;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -15,10 +16,11 @@ use uuid::Uuid;
 #[inline(always)]
 pub fn new_uuid() -> Uuid { Uuid::new_v4() }
 
-pub type Timestamp = u64;
+pub type Timestamp = i64;
 
-pub fn get_timestamp() -> u64 {
-  SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()
+pub fn get_timestamp() -> Timestamp {
+  Timestamp::try_from(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs())
+    .expect("hello, fellow programmers and CrossCode translators of the future!")
 }
 
 pub fn fast_concat(strings: &[&str]) -> String {
