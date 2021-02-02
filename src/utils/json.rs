@@ -162,3 +162,162 @@ where
     __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
   ];
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UltimateFormatterConfig<'a> {
+  pub indent: Option<&'a [u8]>,
+  pub trailing_commas: bool,
+}
+
+impl<'a> Default for UltimateFormatterConfig<'a> {
+  fn default() -> Self { Self { indent: Some(b"  "), trailing_commas: false } }
+}
+
+/// Based on [`serde_json::ser::PrettyFormatter`].
+#[derive(Clone, Debug)]
+pub struct UltimateFormatter<'a> {
+  current_indent: usize,
+  has_value: bool,
+  config: UltimateFormatterConfig<'a>,
+}
+
+impl<'a> UltimateFormatter<'a> {
+  #[inline]
+  pub fn new(config: UltimateFormatterConfig<'a>) -> Self {
+    UltimateFormatter { current_indent: 0, has_value: false, config }
+  }
+
+  fn indent<W>(wr: &mut W, n: usize, s: &[u8]) -> io::Result<()>
+  where
+    W: ?Sized + io::Write,
+  {
+    for _ in 0..n {
+      wr.write_all(s)?;
+    }
+    Ok(())
+  }
+}
+
+impl<'a> Formatter for UltimateFormatter<'a> {
+  #[inline]
+  fn begin_array<W>(&mut self, writer: &mut W) -> io::Result<()>
+  where
+    W: ?Sized + io::Write,
+  {
+    self.current_indent += 1;
+    self.has_value = false;
+    writer.write_all(b"[")
+  }
+
+  #[inline]
+  fn end_array<W>(&mut self, writer: &mut W) -> io::Result<()>
+  where
+    W: ?Sized + io::Write,
+  {
+    self.current_indent -= 1;
+
+    if self.config.trailing_commas {
+      writer.write_all(b",")?;
+    }
+
+    if let Some(indent) = self.config.indent {
+      if self.has_value {
+        writer.write_all(b"\n")?;
+        Self::indent(writer, self.current_indent, indent)?;
+      }
+    }
+
+    writer.write_all(b"]")
+  }
+
+  #[inline]
+  fn begin_array_value<W>(&mut self, writer: &mut W, first: bool) -> io::Result<()>
+  where
+    W: ?Sized + io::Write,
+  {
+    if !first {
+      writer.write_all(b",")?;
+    }
+
+    if let Some(indent) = self.config.indent {
+      writer.write_all(b"\n")?;
+      Self::indent(writer, self.current_indent, indent)?;
+    }
+
+    Ok(())
+  }
+
+  #[inline]
+  fn end_array_value<W>(&mut self, _writer: &mut W) -> io::Result<()>
+  where
+    W: ?Sized + io::Write,
+  {
+    self.has_value = true;
+    Ok(())
+  }
+
+  #[inline]
+  fn begin_object<W>(&mut self, writer: &mut W) -> io::Result<()>
+  where
+    W: ?Sized + io::Write,
+  {
+    self.current_indent += 1;
+    self.has_value = false;
+    writer.write_all(b"{")
+  }
+
+  #[inline]
+  fn end_object<W>(&mut self, writer: &mut W) -> io::Result<()>
+  where
+    W: ?Sized + io::Write,
+  {
+    self.current_indent -= 1;
+
+    if self.config.trailing_commas {
+      writer.write_all(b",")?;
+    }
+
+    if let Some(indent) = self.config.indent {
+      if self.has_value {
+        writer.write_all(b"\n")?;
+        Self::indent(writer, self.current_indent, indent)?;
+      }
+    }
+
+    writer.write_all(b"}")
+  }
+
+  #[inline]
+  fn begin_object_key<W>(&mut self, writer: &mut W, first: bool) -> io::Result<()>
+  where
+    W: ?Sized + io::Write,
+  {
+    if !first {
+      writer.write_all(b",")?;
+    }
+
+    if let Some(indent) = self.config.indent {
+      writer.write_all(b"\n")?;
+      Self::indent(writer, self.current_indent, indent)?;
+    }
+
+    Ok(())
+  }
+
+  #[inline]
+  fn begin_object_value<W>(&mut self, writer: &mut W) -> io::Result<()>
+  where
+    W: ?Sized + io::Write,
+  {
+    writer.write_all(b": ")
+  }
+
+  #[inline]
+  fn end_object_value<W>(&mut self, _writer: &mut W) -> io::Result<()>
+  where
+    W: ?Sized + io::Write,
+  {
+    self.has_value = true;
+    Ok(())
+  }
+}

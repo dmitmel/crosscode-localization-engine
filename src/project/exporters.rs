@@ -9,37 +9,23 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::rc::Rc;
 
+#[derive(Debug, Clone)]
+pub struct ExporterConfig {
+  pub compact: bool,
+}
+
 pub trait Exporter: std::fmt::Debug {
   fn id_static() -> &'static str
   where
     Self: Sized;
 
-  fn new_boxed() -> Box<dyn Exporter>
+  fn new_boxed(config: ExporterConfig) -> Box<dyn Exporter>
   where
     Self: Sized;
 
   fn id(&self) -> &'static str;
 
   fn export(&mut self, fragments: &[Rc<Fragment>], output: &mut dyn Write) -> AnyResult<()>;
-}
-
-impl<'de> serde::Deserialize<'de> for Box<dyn Exporter> {
-  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-  where
-    D: serde::Deserializer<'de>,
-  {
-    let id = <&str>::deserialize(deserializer)?;
-    create_by_id(id).map_err(|_| serde::de::Error::unknown_variant(id, EXPORTERS_IDS))
-  }
-}
-
-impl serde::Serialize for Box<dyn Exporter> {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: serde::Serializer,
-  {
-    serializer.serialize_str(self.id())
-  }
 }
 
 macro_rules! exporters_map {
@@ -49,12 +35,12 @@ macro_rules! exporters_map {
     lazy_static! {
       pub static ref EXPORTERS_MAP: HashMap<
         &'static str,
-        fn() -> Box<dyn Exporter>,
+        fn(config: ExporterConfig) -> Box<dyn Exporter>,
       > = {
         let _cap = count_exprs!($($strat),*);
         // Don't ask me why the compiler requires the following type
         // annotation.
-        let mut _map: HashMap<_, fn() -> _> = HashMap::with_capacity(_cap);
+        let mut _map: HashMap<_, fn(config: ExporterConfig) -> _> = HashMap::with_capacity(_cap);
         $(let _ = _map.insert($strat::ID, $strat::new_boxed);)*
         _map
       };
@@ -64,14 +50,16 @@ macro_rules! exporters_map {
 
 exporters_map![LocalizeMeTrPack, GettextPo];
 
-pub fn create_by_id(id: &str) -> AnyResult<Box<dyn Exporter>> {
-  let constructor: &fn() -> Box<dyn Exporter> =
+pub fn create(id: &str, config: ExporterConfig) -> AnyResult<Box<dyn Exporter>> {
+  let constructor: &fn(config: ExporterConfig) -> Box<dyn Exporter> =
     EXPORTERS_MAP.get(id).ok_or_else(|| format_err!("no such exporter '{}'", id))?;
-  Ok(constructor())
+  Ok(constructor(config))
 }
 
 #[derive(Debug)]
-pub struct LocalizeMeTrPack;
+pub struct LocalizeMeTrPack {
+  json_fmt: json::UltimateFormatter<'static>,
+}
 
 impl LocalizeMeTrPack {
   pub const ID: &'static str = "lm-tr-pack";
@@ -87,20 +75,25 @@ impl Exporter for LocalizeMeTrPack {
   }
 
   #[inline(always)]
-  fn new_boxed() -> Box<dyn Exporter>
+  fn new_boxed(config: ExporterConfig) -> Box<dyn Exporter>
   where
     Self: Sized,
   {
-    Box::new(Self)
+    Box::new(Self {
+      json_fmt: json::UltimateFormatter::new(json::UltimateFormatterConfig {
+        indent: if config.compact { None } else { Some(b"  ") },
+        ..Default::default()
+      }),
+    })
   }
 
   #[inline(always)]
   fn id(&self) -> &'static str { Self::ID }
 
   fn export(&mut self, fragments: &[Rc<Fragment>], writer: &mut dyn Write) -> AnyResult<()> {
-    let mut serializer = serde_json::ser::PrettyFormatter::new();
+    let fmt = &mut self.json_fmt;
 
-    serializer.begin_object(writer)?;
+    fmt.begin_object(writer)?;
     let mut is_first_entry = true;
     for fragment in fragments {
       let translation_text = match fragment.get_best_translation() {
@@ -111,54 +104,54 @@ impl Exporter for LocalizeMeTrPack {
       let localize_me_file_path =
         fragment.file_path.strip_prefix("data/").unwrap_or(&fragment.file_path);
 
-      serializer.begin_object_key(writer, is_first_entry)?;
+      fmt.begin_object_key(writer, is_first_entry)?;
       is_first_entry = false;
       {
-        serializer.begin_string(writer)?;
-        json::format_escaped_str_contents(writer, &mut serializer, &localize_me_file_path)?;
-        serializer.write_string_fragment(writer, "/")?;
-        json::format_escaped_str_contents(writer, &mut serializer, &fragment.file_path)?;
-        serializer.end_string(writer)?;
+        fmt.begin_string(writer)?;
+        json::format_escaped_str_contents(writer, fmt, &localize_me_file_path)?;
+        fmt.write_string_fragment(writer, "/")?;
+        json::format_escaped_str_contents(writer, fmt, &fragment.file_path)?;
+        fmt.end_string(writer)?;
       }
-      serializer.end_object_key(writer)?;
+      fmt.end_object_key(writer)?;
 
-      serializer.begin_object_value(writer)?;
+      fmt.begin_object_value(writer)?;
       {
-        serializer.begin_object(writer)?;
+        fmt.begin_object(writer)?;
 
         {
-          serializer.begin_object_key(writer, true)?;
+          fmt.begin_object_key(writer, true)?;
           {
-            serializer.begin_string(writer)?;
-            serializer.write_string_fragment(writer, "orig")?;
-            serializer.end_string(writer)?;
+            fmt.begin_string(writer)?;
+            fmt.write_string_fragment(writer, "orig")?;
+            fmt.end_string(writer)?;
           }
-          serializer.end_object_key(writer)?;
-          serializer.begin_object_value(writer)?;
+          fmt.end_object_key(writer)?;
+          fmt.begin_object_value(writer)?;
           {
-            json::format_escaped_str(writer, &mut serializer, &fragment.original_text)?;
+            json::format_escaped_str(writer, fmt, &fragment.original_text)?;
           }
-          serializer.end_object_value(writer)?;
+          fmt.end_object_value(writer)?;
 
-          serializer.begin_object_key(writer, false)?;
+          fmt.begin_object_key(writer, false)?;
           {
-            serializer.begin_string(writer)?;
-            serializer.write_string_fragment(writer, "text")?;
-            serializer.end_string(writer)?;
+            fmt.begin_string(writer)?;
+            fmt.write_string_fragment(writer, "text")?;
+            fmt.end_string(writer)?;
           }
-          serializer.end_object_key(writer)?;
-          serializer.begin_object_value(writer)?;
+          fmt.end_object_key(writer)?;
+          fmt.begin_object_value(writer)?;
           {
-            json::format_escaped_str(writer, &mut serializer, &translation_text)?;
+            json::format_escaped_str(writer, fmt, &translation_text)?;
           }
-          serializer.end_object_value(writer)?;
+          fmt.end_object_value(writer)?;
         }
 
-        serializer.end_object(writer)?;
+        fmt.end_object(writer)?;
       }
-      serializer.end_object_value(writer)?;
+      fmt.end_object_value(writer)?;
     }
-    serializer.end_object(writer)?;
+    fmt.end_object(writer)?;
 
     Ok(())
   }
@@ -181,7 +174,7 @@ impl Exporter for GettextPo {
   }
 
   #[inline(always)]
-  fn new_boxed() -> Box<dyn Exporter>
+  fn new_boxed(_config: ExporterConfig) -> Box<dyn Exporter>
   where
     Self: Sized,
   {
