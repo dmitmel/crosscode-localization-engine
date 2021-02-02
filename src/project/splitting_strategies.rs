@@ -16,9 +16,9 @@ pub trait SplittingStrategy: std::fmt::Debug {
 
   fn id(&self) -> &'static str;
 
-  fn get_tr_file_for_entire_game_file(&self, file_path: &str) -> Option<Cow<'static, str>>;
+  fn get_tr_file_for_entire_game_file(&mut self, file_path: &str) -> Option<Cow<'static, str>>;
 
-  fn get_tr_file_for_fragment(&self, file_path: &str, _json_path: &str) -> Cow<'static, str> {
+  fn get_tr_file_for_fragment(&mut self, file_path: &str, _json_path: &str) -> Cow<'static, str> {
     self.get_tr_file_for_entire_game_file(file_path).unwrap()
   }
 }
@@ -28,7 +28,7 @@ impl<'de> serde::Deserialize<'de> for Box<dyn SplittingStrategy> {
   where
     D: serde::Deserializer<'de>,
   {
-    let id = <&str as serde::Deserialize<'de>>::deserialize(deserializer)?;
+    let id = <&str>::deserialize(deserializer)?;
     create_by_id(id).map_err(|_| serde::de::Error::unknown_variant(id, SPLITTING_STRATEGIES_IDS))
   }
 }
@@ -103,7 +103,7 @@ impl SplittingStrategy for MonolithicFileStrategy {
   #[inline(always)]
   fn id(&self) -> &'static str { Self::ID }
 
-  fn get_tr_file_for_entire_game_file(&self, _file_path: &str) -> Option<Cow<'static, str>> {
+  fn get_tr_file_for_entire_game_file(&mut self, _file_path: &str) -> Option<Cow<'static, str>> {
     Some("translation".into())
   }
 }
@@ -121,7 +121,7 @@ impl SplittingStrategy for SameFileTreeStrategy {
   where
     Self: Sized,
   {
-    MonolithicFileStrategy::ID
+    Self::ID
   }
 
   #[inline(always)]
@@ -135,7 +135,7 @@ impl SplittingStrategy for SameFileTreeStrategy {
   #[inline(always)]
   fn id(&self) -> &'static str { Self::ID }
 
-  fn get_tr_file_for_entire_game_file(&self, file_path: &str) -> Option<Cow<'static, str>> {
+  fn get_tr_file_for_entire_game_file(&mut self, file_path: &str) -> Option<Cow<'static, str>> {
     let (file_path, _) = utils::split_filename_extension(file_path);
     Some(file_path.to_owned().into())
   }
@@ -154,7 +154,7 @@ impl SplittingStrategy for NotabenoidChaptersStrategy {
   where
     Self: Sized,
   {
-    MonolithicFileStrategy::ID
+    Self::ID
   }
 
   #[inline(always)]
@@ -170,7 +170,7 @@ impl SplittingStrategy for NotabenoidChaptersStrategy {
 
   // Rewritten from <https://github.com/CCDirectLink/crosscode-ru/blob/93415096b4f01ed4a7f50a20e642e0c9ae07dade/tool/src/Notabenoid.ts#L418-L459>
   #[allow(clippy::single_match)]
-  fn get_tr_file_for_entire_game_file(&self, file_path: &str) -> Option<Cow<'static, str>> {
+  fn get_tr_file_for_entire_game_file(&mut self, file_path: &str) -> Option<Cow<'static, str>> {
     return Some(inner(file_path).into());
 
     fn inner(file_path: &str) -> &'static str {
@@ -253,7 +253,7 @@ impl SplittingStrategy for NextGenerationStrategy {
   where
     Self: Sized,
   {
-    MonolithicFileStrategy::ID
+    Self::ID
   }
 
   #[inline(always)]
@@ -267,7 +267,7 @@ impl SplittingStrategy for NextGenerationStrategy {
   #[inline(always)]
   fn id(&self) -> &'static str { Self::ID }
 
-  fn get_tr_file_for_entire_game_file(&self, file_path: &str) -> Option<Cow<'static, str>> {
+  fn get_tr_file_for_entire_game_file(&mut self, file_path: &str) -> Option<Cow<'static, str>> {
     let components: Vec<_> = file_path.split('/').collect();
 
     match components[0] {
@@ -293,7 +293,7 @@ impl SplittingStrategy for NextGenerationStrategy {
     Some(SameFileTreeStrategy.get_tr_file_for_entire_game_file(file_path).unwrap())
   }
 
-  fn get_tr_file_for_fragment(&self, file_path: &str, json_path: &str) -> Cow<'static, str> {
+  fn get_tr_file_for_fragment(&mut self, file_path: &str, json_path: &str) -> Cow<'static, str> {
     let components: Vec<_> = file_path.split('/').collect();
     let json_components: Vec<_> = json_path.split('/').collect();
     let tr_file_path = SameFileTreeStrategy.get_tr_file_for_entire_game_file(file_path).unwrap();

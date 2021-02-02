@@ -1,4 +1,5 @@
 use crate::impl_prelude::*;
+use crate::project::exporters;
 use crate::project::splitting_strategies;
 use crate::rc_string::RcString;
 
@@ -134,7 +135,7 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
         )
         .arg(
           Arg::with_name("assets_dir")
-            .value_name("PATH")
+            .value_name("ASSETS")
             .required(true)
             .help("Path to the assets directory."),
         )
@@ -154,7 +155,7 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
         )
         .arg(
           Arg::with_name("project_dir")
-            .value_name("PATH")
+            .value_name("PROJECT")
             .required(true)
             .help("Path to the project directory."),
         )
@@ -225,7 +226,7 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
         )
         .arg(
           Arg::with_name("project_dir")
-            .value_name("PATH")
+            .value_name("PROJECT")
             .required(true)
             .help("Path to the project directory."),
         )
@@ -245,7 +246,7 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
             .value_name("NAME")
             .short("f")
             .long("format")
-            .possible_values(&["po", "localize-me-tr-pack"])
+            .possible_values(exporters::EXPORTERS_IDS)
             .required(true)
             .help("Format to export to."),
         )

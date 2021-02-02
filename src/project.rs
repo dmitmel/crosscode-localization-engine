@@ -564,6 +564,15 @@ impl Fragment {
     })
   }
 
+  pub fn get_best_translation(&self) -> Option<Rc<Translation>> {
+    self
+      .translations
+      .borrow()
+      .iter()
+      .max_by_key(|f| f.creation_timestamp.max(f.modification_timestamp.get()))
+      .map(|f| f.share_rc())
+  }
+
   pub fn reserve_additional_translations(&self, additional_capacity: usize) {
     self.translations.borrow_mut().reserve(additional_capacity);
   }

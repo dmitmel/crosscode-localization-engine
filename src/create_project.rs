@@ -31,7 +31,7 @@ pub fn run(
     translations_dir: command_opts.translations_dir,
   });
 
-  let splitting_strategy =
+  let mut splitting_strategy =
     project::splitting_strategies::create_by_id(&command_opts.splitting_strategy)
       .context("Failed to create the splitting strategy")?;
 

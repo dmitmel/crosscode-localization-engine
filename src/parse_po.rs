@@ -2,6 +2,7 @@ use crate::cli;
 use crate::gettext_po::{self, ParsedMessage, ParsingError};
 use crate::impl_prelude::*;
 use crate::utils;
+use crate::utils::json;
 
 use std::borrow::Cow;
 use std::fs;
@@ -37,14 +38,14 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ParsePoCommandOpts)
 
 fn print_messages_json<'src>(iter: impl Iterator<Item = ParsedMessage<'src>>) -> AnyResult<()> {
   for message in iter {
-    let mut message_obj = serde_json::Map::new();
+    let mut message_obj = json::Map::new();
 
     let mut add_comments = |name: &'static str, comments: &[Cow<str>]| {
       if !comments.is_empty() {
         message_obj.insert(
           name.to_owned(),
-          serde_json::Value::Array(
-            comments.iter().map(|s| serde_json::Value::String(s.clone().into_owned())).collect(),
+          json::Value::Array(
+            comments.iter().map(|s| json::Value::String(s.clone().into_owned())).collect(),
           ),
         );
       }
@@ -59,7 +60,7 @@ fn print_messages_json<'src>(iter: impl Iterator<Item = ParsedMessage<'src>>) ->
       let strings_refs: Vec<&str> = strings.iter().map(|cow| cow.as_ref()).collect();
       let joined_string = utils::fast_concat(&strings_refs);
       if !joined_string.is_empty() {
-        message_obj.insert(name.to_owned(), serde_json::Value::String(joined_string));
+        message_obj.insert(name.to_owned(), json::Value::String(joined_string));
       }
     };
 
@@ -69,7 +70,7 @@ fn print_messages_json<'src>(iter: impl Iterator<Item = ParsedMessage<'src>>) ->
     add_section("msgid", &message.msgid);
     add_section("msgstr", &message.msgstr);
 
-    let message_obj = serde_json::Value::Object(message_obj);
+    let message_obj = json::Value::Object(message_obj);
 
     let mut stdout = io::stdout();
     serde_json::to_writer_pretty(&mut stdout, &message_obj)?;
