@@ -18,11 +18,19 @@ pub mod utils;
 
 use crate::impl_prelude::*;
 
+use std::env;
+use std::ffi::OsStr;
+
 pub const CRATE_TITLE: &str = "CrossLocalE";
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub fn main() {
+  let backtrace_var_name = OsStr::new("RUST_BACKTRACE");
+  if env::var_os(backtrace_var_name).is_none() {
+    env::set_var(backtrace_var_name, OsStr::new("1"));
+  }
+
   if let Err(err) = try_main().context("CRITICAL ERROR") {
     if log::log_enabled!(log::Level::Error) {
       error!("{:?}", err);
