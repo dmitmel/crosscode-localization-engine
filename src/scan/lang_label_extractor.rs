@@ -47,7 +47,7 @@ fn try_extract_lang_label<'json>(
     None
   })?;
 
-  let lang_uid = match object.get("langUid")? {
+  let lang_uid = match object.get("langUid").unwrap_or(&json::Value::Null) {
     json::Value::Null => 0,
     json::Value::Number(n) => n.as_i64().and_then(|n| i32::try_from(n).ok()).or_else(|| {
       warn!(

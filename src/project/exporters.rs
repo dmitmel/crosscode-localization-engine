@@ -224,6 +224,19 @@ impl Exporter for GettextPo {
       Ok(())
     }
 
+    fn write_po_comment(
+      writer: &mut dyn Write,
+      prefix: &'static str,
+      text: &str,
+    ) -> io::Result<()> {
+      for line in text.lines() {
+        writer.write_all(prefix.as_bytes())?;
+        writer.write_all(line.as_bytes())?;
+        writer.write_all(b"\n")?;
+      }
+      Ok(())
+    }
+
     fn format_po_timestamp(timestamp: Timestamp) -> impl fmt::Display {
       time::OffsetDateTime::from_unix_timestamp(timestamp).lazy_format("%Y-%m-%d %H:%M")
     }
@@ -277,11 +290,12 @@ impl Exporter for GettextPo {
         format!("{} {} #{}", fragment.file_path, fragment.json_path, fragment.lang_uid);
 
       writer.write_all(b"\n")?;
-      write!(writer, "#. [{}] {}\n", self.global_index, location_line)?;
+
+      write_po_comment(writer, "#. ", &format!("[{}] {}", self.global_index, location_line))?;
       for line in &fragment.description {
-        write!(writer, "#. {}\n", line)?;
+        write_po_comment(writer, "#. ", line)?;
       }
-      write!(writer, "#: {}\n", {
+      write_po_comment(writer, "#: ", &{
         let mut buf = String::new();
         gettext_po::encode_reference_comment_as_uri_for_weblate(&location_line, &mut buf);
         buf

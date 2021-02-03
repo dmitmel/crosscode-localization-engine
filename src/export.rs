@@ -10,7 +10,8 @@ use crate::utils::{self, RcExt};
 use indexmap::IndexMap;
 use std::borrow::Cow;
 use std::fs;
-use std::io;
+use std::io::{self, Write};
+use std::path::Path;
 use std::rc::Rc;
 
 pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ExportCommandOpts) -> AnyResult<()> {
@@ -94,18 +95,24 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ExportCommandOpts) 
     }
   }
 
+  let mut export_fragments_to_file = |path: &Path, fragments: &[Rc<Fragment>]| -> AnyResult<()> {
+    let mut writer = io::BufWriter::new(
+      fs::File::create(&path)
+        .with_context(|| format!("Failed to open file '{}' for writing", path.display()))?,
+    );
+    exporter.export(project.meta(), &fragments, &mut writer)?;
+    writer.flush()?;
+    Ok(())
+  };
+
   if splitting_strategy.is_some() {
     for (export_file_path, fragments) in &fragments_by_export_path {
       let export_file_path = output_path.join(export_file_path);
       utils::create_dir_recursively(export_file_path.parent().unwrap()).with_context(|| {
         format!("Failed to create the parent directories for '{}'", export_file_path.display())
       })?;
-      let mut writer =
-        io::BufWriter::new(fs::File::create(&export_file_path).with_context(|| {
-          format!("Failed to open file '{}' for writing", export_file_path.display())
-        })?);
-      exporter.export(project.meta(), &fragments, &mut writer).with_context(|| {
-        format!("Failed to export all fragments to file '{}'", export_file_path.display())
+      export_fragments_to_file(&export_file_path, fragments).with_context(|| {
+        format!("Failed to export all fragments to file '{}'", output_path.display())
       })?;
     }
 
@@ -115,11 +122,7 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ExportCommandOpts) 
       fragments_by_export_path.len(),
     );
   } else {
-    let mut writer =
-      io::BufWriter::new(fs::File::create(&output_path).with_context(|| {
-        format!("Failed to open file '{}' for writing", output_path.display())
-      })?);
-    exporter.export(project.meta(), &all_exported_fragments, &mut writer).with_context(|| {
+    export_fragments_to_file(&output_path, &all_exported_fragments).with_context(|| {
       format!("Failed to export all fragments to file '{}'", output_path.display())
     })?;
     info!("Exported {} fragments", all_exported_fragments.len());

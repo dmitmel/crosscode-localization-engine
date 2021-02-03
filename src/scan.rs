@@ -68,12 +68,16 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) ->
       }
       let LangLabel { json_path, lang_uid, text } = lang_label;
 
-      let description = match fragment_descriptions::generate(&json_data, &json_path) {
-        Ok(v) => v,
-        Err(e) => {
-          warn!("file '{}': fragment '{}': {:?}", found_file.path, json_path, e);
-          continue;
+      let description = if !found_file.is_lang_file {
+        match fragment_descriptions::generate(&json_data, &json_path) {
+          Ok(v) => v,
+          Err(e) => {
+            warn!("file '{}': fragment '{}': {:?}", found_file.path, json_path, e);
+            continue;
+          }
         }
+      } else {
+        Vec::new()
       };
 
       let scan_db_file =
