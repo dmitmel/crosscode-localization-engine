@@ -135,11 +135,15 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ExportCommandOpts) 
       json::write_file(
         &mapping_file_path,
         &exported_files_mapping,
-        json::UltimateFormatterConfig::default(),
+        json::UltimateFormatterConfig {
+          indent: if command_opts.compact { None } else { Some(json::DEFAULT_INDENT) },
+          ..Default::default()
+        },
       )
       .with_context(|| {
         format!("Failed to write the mapping file to '{}'", mapping_file_path.display())
       })?;
+
       info!("Written the mapping file with {} entries", exported_files_mapping.len());
     } else {
       warn!(

@@ -91,7 +91,7 @@ impl Exporter for LocalizeMeTrPack {
   {
     Box::new(Self {
       json_fmt: json::UltimateFormatter::new(json::UltimateFormatterConfig {
-        indent: if config.compact { None } else { Some(b"  ") },
+        indent: if config.compact { None } else { Some(json::DEFAULT_INDENT) },
         ..Default::default()
       }),
     })

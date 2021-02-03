@@ -169,14 +169,16 @@ where
   ];
 }
 
+pub const DEFAULT_INDENT: &str = "  ";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UltimateFormatterConfig<'a> {
-  pub indent: Option<&'a [u8]>,
+  pub indent: Option<&'a str>,
   pub trailing_commas: bool,
 }
 
 impl<'a> Default for UltimateFormatterConfig<'a> {
-  fn default() -> Self { Self { indent: Some(b"  "), trailing_commas: false } }
+  fn default() -> Self { Self { indent: Some(DEFAULT_INDENT), trailing_commas: false } }
 }
 
 /// Based on [`serde_json::ser::PrettyFormatter`].
@@ -193,12 +195,12 @@ impl<'a> UltimateFormatter<'a> {
     UltimateFormatter { current_indent: 0, has_value: false, config }
   }
 
-  fn indent<W>(wr: &mut W, n: usize, s: &[u8]) -> io::Result<()>
+  fn indent<W>(wr: &mut W, n: usize, s: &str) -> io::Result<()>
   where
     W: ?Sized + io::Write,
   {
     for _ in 0..n {
-      wr.write_all(s)?;
+      wr.write_all(s.as_bytes())?;
     }
     Ok(())
   }
