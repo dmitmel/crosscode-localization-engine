@@ -43,15 +43,13 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ExportCommandOpts) 
 
   let export_file_extension = exporter.file_extension();
 
-  for tr_file in project.tr_files().values() {
-    for game_file_chunk in tr_file.game_file_chunks().values() {
-      let game_file_path = game_file_chunk.path();
-      let mut fragments_in_export_file: Option<&mut Vec<_>> = if let Some(splitting_strategy) =
-        &mut splitting_strategy
-      {
-        let export_file_path: Cow<'static, str> = if let Some(path) =
-          splitting_strategy.get_tr_file_for_entire_game_file(game_file_path)
-        {
+  for game_file in project.virtual_game_files().values() {
+    let game_file_path = game_file.path();
+    let mut fragments_in_export_file: Option<&mut Vec<_>> = if let Some(splitting_strategy) =
+      &mut splitting_strategy
+    {
+      let export_file_path: Cow<'static, str> =
+        if let Some(path) = splitting_strategy.get_tr_file_for_entire_game_file(game_file_path) {
           path
         } else {
           bail!(
@@ -62,38 +60,36 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ExportCommandOpts) 
           )
         };
 
-        let export_file_path =
-          RcString::from(utils::fast_concat(&[&export_file_path, ".", export_file_extension]));
+      let export_file_path =
+        RcString::from(utils::fast_concat(&[&export_file_path, ".", export_file_extension]));
 
-        if let Some(prev_assigned_export_file_path) =
-          exported_files_mapping.insert(game_file_path.share_rc(), export_file_path.share_rc())
-        {
-          ensure!(
-            prev_assigned_export_file_path == export_file_path,
-            "The splitting strategy has assigned inconsistent export paths to the game file \
-            '{}': the previous value was '{}', the new one is '{}'. This is a bug in the \
-            splitting strategy.",
-            game_file_path,
-            prev_assigned_export_file_path,
-            export_file_path,
-          );
-        }
+      if let Some(prev_assigned_export_file_path) =
+        exported_files_mapping.insert(game_file_path.share_rc(), export_file_path.share_rc())
+      {
+        ensure!(
+          prev_assigned_export_file_path == export_file_path,
+          "The splitting strategy has assigned inconsistent export paths to the game file \
+          '{}': the previous value was '{}', the new one is '{}'. This is a bug in the \
+          splitting strategy.",
+          game_file_path,
+          prev_assigned_export_file_path,
+          export_file_path,
+        );
+      }
 
-        Some(fragments_by_export_path.entry(export_file_path.share_rc()).or_insert_with(Vec::new))
-      } else {
-        None
-      };
+      Some(fragments_by_export_path.entry(export_file_path.share_rc()).or_insert_with(Vec::new))
+    } else {
+      None
+    };
 
-      for fragment in game_file_chunk.fragments().values() {
-        if command_opts.remove_untranslated && fragment.translations().is_empty() {
-          continue;
-        }
+    for fragment in game_file.fragments().values() {
+      if command_opts.remove_untranslated && fragment.translations().is_empty() {
+        continue;
+      }
 
-        all_exported_fragments.push(fragment.share_rc());
-
-        if let Some(fragments_in_export_file) = &mut fragments_in_export_file {
-          fragments_in_export_file.push(fragment.share_rc());
-        }
+      all_exported_fragments.push(fragment.share_rc());
+      if let Some(fragments_in_export_file) = &mut fragments_in_export_file {
+        fragments_in_export_file.push(fragment.share_rc());
       }
     }
   }
@@ -112,13 +108,12 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ExportCommandOpts) 
         format!("Failed to export all fragments to file '{}'", export_file_path.display())
       })?;
     }
+
     info!(
       "Exported {} fragments to {} files",
       all_exported_fragments.len(),
       fragments_by_export_path.len(),
     );
-
-    //
   } else {
     let mut writer =
       io::BufWriter::new(fs::File::create(&output_path).with_context(|| {

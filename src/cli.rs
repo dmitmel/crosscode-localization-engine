@@ -231,7 +231,7 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
         .arg(
           Arg::with_name("output")
             .value_name("PATH")
-            .short("f")
+            .short("o")
             .long("output")
             .required(true)
             .help(
