@@ -5,7 +5,6 @@ use crate::rc_string::RcString;
 use crate::scan::db::ScanDb;
 use crate::utils;
 
-use std::borrow::Cow;
 use std::collections::HashMap;
 
 pub fn run(
@@ -42,8 +41,9 @@ pub fn run(
   info!("Generating project translation files");
 
   for scan_game_file in scan_db.game_files().values() {
-    let global_tr_file_path: Option<Cow<'static, str>> =
-      splitting_strategy.get_tr_file_for_entire_game_file(scan_game_file.path());
+    let global_tr_file_path: Option<RcString> = splitting_strategy
+      .get_tr_file_for_entire_game_file(scan_game_file.path())
+      .map(RcString::from);
 
     for scan_fragment in scan_game_file.fragments().values() {
       let original_text = match scan_fragment.text().get(project.meta().original_locale()) {
@@ -51,21 +51,22 @@ pub fn run(
         None => continue,
       };
 
-      let fragment_tr_file_path: Cow<'static, str> = match &global_tr_file_path {
-        Some(v) => v.clone(),
-        None => splitting_strategy
-          .get_tr_file_for_fragment(scan_fragment.file_path(), scan_fragment.json_path()),
+      let fragment_tr_file_path: RcString = match &global_tr_file_path {
+        Some(v) => v.share_rc(),
+        None => RcString::from(
+          splitting_strategy
+            .get_tr_file_for_fragment(scan_fragment.file_path(), scan_fragment.json_path()),
+        ),
       };
 
       let tr_file = {
-        let path = RcString::from(Cow::into_owned(fragment_tr_file_path));
-        project.get_tr_file(&path).unwrap_or_else(|| {
+        project.get_tr_file(&fragment_tr_file_path).unwrap_or_else(|| {
           let timestamp = utils::get_timestamp();
           project.new_tr_file(project::TrFileInitOpts {
             uuid: utils::new_uuid(),
             creation_timestamp: timestamp,
             modification_timestamp: timestamp,
-            relative_path: path,
+            relative_path: fragment_tr_file_path.share_rc(),
           })
         })
       };

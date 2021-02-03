@@ -3,7 +3,7 @@ use crate::gettext_po;
 use crate::impl_prelude::*;
 use crate::rc_string::RcString;
 use crate::utils::json;
-use crate::utils::Timestamp;
+use crate::utils::{self, Timestamp};
 
 use lazy_static::lazy_static;
 use serde_json::ser::Formatter;
@@ -27,6 +27,8 @@ pub trait Exporter: fmt::Debug {
     Self: Sized;
 
   fn id(&self) -> &'static str;
+
+  fn file_extension(&self) -> &'static str;
 
   fn export(
     &mut self,
@@ -98,6 +100,9 @@ impl Exporter for LocalizeMeTrPack {
   #[inline(always)]
   fn id(&self) -> &'static str { Self::ID }
 
+  #[inline(always)]
+  fn file_extension(&self) -> &'static str { "json" }
+
   fn export(
     &mut self,
     _project_meta: &ProjectMeta,
@@ -166,6 +171,7 @@ impl Exporter for LocalizeMeTrPack {
     }
     fmt.end_object(writer)?;
 
+    writer.write_all(b"\n")?;
     Ok(())
   }
 }
@@ -199,6 +205,9 @@ impl Exporter for GettextPo {
   #[inline(always)]
   fn id(&self) -> &'static str { Self::ID }
 
+  #[inline(always)]
+  fn file_extension(&self) -> &'static str { "po" }
+
   #[allow(clippy::write_with_newline)]
   fn export(
     &mut self,
@@ -219,8 +228,8 @@ impl Exporter for GettextPo {
       time::OffsetDateTime::from_unix_timestamp(timestamp).lazy_format("%Y-%m-%d %H:%M")
     }
 
-    writer.write_all(b"msgid \"\"")?;
-    writer.write_all(b"msgstr \"\"")?;
+    writer.write_all(b"msgid \"\"\n")?;
+    writer.write_all(b"msgstr \"\"\n")?;
     write_po_string(
       writer,
       &format!("Project-Id-Version: crosscode {}\n", project_meta.game_version),
@@ -279,7 +288,10 @@ impl Exporter for GettextPo {
       })?;
 
       writer.write_all(b"msgctxt ")?;
-      write_po_string(writer, &format!("{} {}", fragment.file_path, fragment.json_path))?;
+      write_po_string(
+        writer,
+        &utils::fast_concat(&[&fragment.file_path, " ", &fragment.json_path]),
+      )?;
       writer.write_all(b"msgid ")?;
       write_po_string(writer, &fragment.original_text)?;
       writer.write_all(b"msgstr ")?;

@@ -1,6 +1,7 @@
 #![deny(missing_debug_implementations)]
 #![allow(clippy::new_without_default)]
 #![feature(try_blocks, cell_update, get_mut_unchecked)]
+// TODO: consider using feature(hash_raw_entry)
 
 #[macro_use]
 pub mod macros;

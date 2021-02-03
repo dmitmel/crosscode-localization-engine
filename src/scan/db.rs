@@ -1,5 +1,6 @@
 use crate::impl_prelude::*;
 use crate::rc_string::RcString;
+use crate::utils::json;
 use crate::utils::{self, RcExt, Timestamp};
 
 use indexmap::IndexMap;
@@ -96,8 +97,8 @@ impl ScanDb {
   }
 
   pub fn open(db_file_path: PathBuf) -> AnyResult<Rc<Self>> {
-    let raw_data: ScanDbSerde = utils::json::read_file(&db_file_path, &mut Vec::new())
-      .with_context(|| {
+    let raw_data: ScanDbSerde =
+      json::read_file(&db_file_path, &mut Vec::new()).with_context(|| {
         format!("Failed to deserialize from JSON file '{}'", db_file_path.display())
       })?;
 
@@ -131,9 +132,10 @@ impl ScanDb {
   }
 
   pub fn write_force(&self) -> AnyResult<()> {
-    utils::json::write_file(&self.db_file_path, self).with_context(|| {
-      format!("Failed to serialize to JSON file '{}'", self.db_file_path.display())
-    })?;
+    json::write_file(&self.db_file_path, self, json::UltimateFormatterConfig::default())
+      .with_context(|| {
+        format!("Failed to serialize to JSON file '{}'", self.db_file_path.display())
+      })?;
     self.dirty_flag.set(false);
     Ok(())
   }

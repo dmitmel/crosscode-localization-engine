@@ -3,6 +3,7 @@ pub mod splitting_strategies;
 
 use crate::impl_prelude::*;
 use crate::rc_string::RcString;
+use crate::utils::json;
 use crate::utils::{self, RcExt, Timestamp};
 
 use indexmap::IndexMap;
@@ -181,7 +182,7 @@ impl ProjectMeta {
 
   pub fn write_force(&self) -> AnyResult<()> {
     let fs_path = self.fs_path();
-    utils::json::write_file(&fs_path, self)
+    json::write_file(&fs_path, self, json::UltimateFormatterConfig::default())
       .with_context(|| format!("Failed to serialize to JSON file '{}'", fs_path.display()))?;
     self.dirty_flag.set(false);
     Ok(())
@@ -237,7 +238,7 @@ impl Project {
 
   pub fn open(root_dir: PathBuf) -> AnyResult<Rc<Self>> {
     let meta_file_path = root_dir.join(*META_FILE_NAME);
-    let meta_raw: ProjectMetaSerde = utils::json::read_file(&meta_file_path, &mut Vec::new())
+    let meta_raw: ProjectMetaSerde = json::read_file(&meta_file_path, &mut Vec::new())
       .with_context(|| {
         format!("Failed to deserialize from JSON file '{}'", meta_file_path.display())
       })?;
@@ -263,7 +264,7 @@ impl Project {
         PathBuf::from(path)
       };
 
-      let tr_file_raw: TrFileSerde = utils::json::read_file(&tr_file_fs_path, &mut Vec::new())
+      let tr_file_raw: TrFileSerde = json::read_file(&tr_file_fs_path, &mut Vec::new())
         .with_context(|| {
           format!("Failed to deserialize from JSON file '{}'", tr_file_fs_path.display())
         })?;
@@ -459,7 +460,7 @@ impl TrFile {
     utils::create_dir_recursively(fs_path.parent().unwrap()).with_context(|| {
       format!("Failed to create the parent directories for '{}'", fs_path.display())
     })?;
-    utils::json::write_file(&fs_path, self)
+    json::write_file(&fs_path, self, json::UltimateFormatterConfig::default())
       .with_context(|| format!("Failed to serialize to JSON file '{}'", fs_path.display()))?;
     self.dirty_flag.set(false);
     Ok(())

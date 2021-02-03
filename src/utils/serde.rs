@@ -27,6 +27,14 @@ impl MultilineStringHelper {
     T: From<String>,
   {
     let lines = Vec::<Cow<'de, str>>::deserialize(deserializer)?;
-    Ok(super::fast_concat(&lines).into())
+    let mut capacity = 0;
+    for s in &lines {
+      capacity += s.as_ref().len();
+    }
+    let mut result = String::with_capacity(capacity);
+    for s in &lines {
+      result.push_str(s.as_ref());
+    }
+    Ok(result.into())
   }
 }

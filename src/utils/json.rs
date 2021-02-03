@@ -65,9 +65,15 @@ pub fn read_file<'a, T: serde::Deserialize<'a>>(
   Ok(value)
 }
 
-pub fn write_file<T: serde::Serialize>(path: &Path, value: &T) -> AnyResult<()> {
+pub fn write_file<T: serde::Serialize>(
+  path: &Path,
+  value: &T,
+  config: UltimateFormatterConfig,
+) -> AnyResult<()> {
   let mut writer = io::BufWriter::new(fs::File::create(path)?);
-  serde_json::to_writer_pretty(&mut writer, value)?;
+  let mut serializer =
+    serde_json::Serializer::with_formatter(&mut writer, UltimateFormatter::new(config));
+  value.serialize(&mut serializer)?;
   writer.write_all(b"\n")?;
   writer.flush()?;
   Ok(())

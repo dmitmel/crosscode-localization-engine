@@ -58,7 +58,6 @@ pub struct ExportCommandOpts {
   pub format: RcString,
   pub splitting_strategy: Option<RcString>,
   pub remove_untranslated: bool,
-  pub remove_empty_translations: bool,
   pub mapping_file_output: Option<PathBuf>,
   pub compact: bool,
 }
@@ -100,7 +99,6 @@ pub fn parse_opts() -> AnyResult<Opts> {
         format: RcString::from(matches.value_of("format").unwrap()),
         splitting_strategy: matches.value_of("splitting_strategy").map(RcString::from),
         remove_untranslated: matches.is_present("remove_untranslated"),
-        remove_empty_translations: matches.is_present("remove_empty_translations"),
         mapping_file_output: matches.value_of_os("mapping_file_output").map(PathBuf::from),
         compact: matches.is_present("compact"),
       })),
@@ -263,15 +261,6 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
             //
             .help(
               "Whether to remove untranslated strings from the exported files. Note that some \
-              formats and/or tasks may still need the empty translations.",
-            ),
-        )
-        .arg(
-          Arg::with_name("remove_empty_translations")
-            .long("remove-empty-translations")
-            //
-            .help(
-              "Whether to remove empty translations from the exported files. Note that some \
               formats and/or tasks may still need the empty translations.",
             ),
         )
