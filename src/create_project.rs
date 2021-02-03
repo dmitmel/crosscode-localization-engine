@@ -23,7 +23,11 @@ pub fn run(
   let scan_db = ScanDb::open(command_opts.scan_db).context("Failed to open the scan database")?;
 
   utils::create_dir_recursively(&project_dir).context("Failed to create the project dir")?;
-  let project = project::Project::create(project_dir, project::ProjectCreateOpts {
+  let timestamp = utils::get_timestamp();
+  let project = project::Project::create(project_dir, project::ProjectMetaInitOpts {
+    uuid: utils::new_uuid(),
+    creation_timestamp: timestamp,
+    modification_timestamp: timestamp,
     game_version: scan_db.meta().game_version.share_rc(),
     original_locale: command_opts.original_locale,
     reference_locales: command_opts.reference_locales,
@@ -55,14 +59,22 @@ pub fn run(
 
       let tr_file = {
         let path = RcString::from(Cow::into_owned(fragment_tr_file_path));
-        project.get_tr_file(&path).unwrap_or_else(|| project.new_tr_file(path))
+        project.get_tr_file(&path).unwrap_or_else(|| {
+          let timestamp = utils::get_timestamp();
+          project.new_tr_file(project::TrFileInitOpts {
+            uuid: utils::new_uuid(),
+            creation_timestamp: timestamp,
+            modification_timestamp: timestamp,
+            relative_path: path,
+          })
+        })
       };
 
       let game_file_chunk = {
         let path = scan_game_file.path();
-        tr_file
-          .get_game_file_chunk(path)
-          .unwrap_or_else(|| tr_file.new_game_file_chunk(path.share_rc()))
+        tr_file.get_game_file_chunk(path).unwrap_or_else(|| {
+          tr_file.new_game_file_chunk(project::GameFileChunkInitOpts { path: path.share_rc() })
+        })
       };
 
       game_file_chunk.new_fragment(project::FragmentInitOpts {

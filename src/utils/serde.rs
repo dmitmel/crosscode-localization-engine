@@ -1,4 +1,5 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -25,7 +26,7 @@ impl MultilineStringHelper {
     D: Deserializer<'de>,
     T: From<String>,
   {
-    let lines = Vec::<&str>::deserialize(deserializer)?;
+    let lines = Vec::<Cow<'de, str>>::deserialize(deserializer)?;
     Ok(super::fast_concat(&lines).into())
   }
 }

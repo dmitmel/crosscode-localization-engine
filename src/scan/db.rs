@@ -96,26 +96,26 @@ impl ScanDb {
   }
 
   pub fn open(db_file_path: PathBuf) -> AnyResult<Rc<Self>> {
-    let serde_data: ScanDbSerde = utils::json::read_file(&db_file_path, &mut Vec::new())
+    let raw_data: ScanDbSerde = utils::json::read_file(&db_file_path, &mut Vec::new())
       .with_context(|| {
         format!("Failed to deserialize from JSON file '{}'", db_file_path.display())
       })?;
 
     let myself = Self::new(db_file_path, ScanDbMeta {
-      uuid: serde_data.uuid,
-      creation_timestamp: serde_data.creation_timestamp,
-      game_version: serde_data.game_version,
+      uuid: raw_data.uuid,
+      creation_timestamp: raw_data.creation_timestamp,
+      game_version: raw_data.game_version,
     });
 
-    for (file_serde_path, file_serde_data) in serde_data.game_files {
-      let file = myself.new_game_file(file_serde_path);
+    for (game_file_path, game_file_raw) in raw_data.game_files {
+      let file = myself.new_game_file(game_file_path);
 
-      for (fragment_serde_json_path, fragment_serde_data) in file_serde_data.fragments {
+      for (fragment_json_path, fragment_raw) in game_file_raw.fragments {
         file.new_fragment(ScanDbFragmentInitOpts {
-          json_path: fragment_serde_json_path,
-          lang_uid: fragment_serde_data.lang_uid,
-          description: fragment_serde_data.description,
-          text: fragment_serde_data.text,
+          json_path: fragment_json_path,
+          lang_uid: fragment_raw.lang_uid,
+          description: fragment_raw.description,
+          text: fragment_raw.text,
         });
       }
     }

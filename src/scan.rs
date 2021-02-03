@@ -166,7 +166,7 @@ pub fn read_game_version(assets_dir: &Path) -> AnyResult<RcString> {
   }
 
   if max_hotfix > 0 {
-    Ok(RcString::from(utils::fast_concat(&[&latest_entry.version, "-", max_hotfix_str])))
+    Ok(RcString::from(utils::fast_concat(&[&*latest_entry.version, "-", max_hotfix_str])))
   } else {
     Ok(RcString::from(latest_entry.version.clone()))
   }

@@ -23,14 +23,14 @@ pub fn get_timestamp() -> Timestamp {
     .expect("hello, fellow programmers and CrossCode translators of the future!")
 }
 
-pub fn fast_concat(strings: &[&str]) -> String {
+pub fn fast_concat<S: AsRef<str>>(strings: &[S]) -> String {
   let mut capacity = 0;
   for s in strings {
-    capacity += s.len();
+    capacity += s.as_ref().len();
   }
   let mut result = String::with_capacity(capacity);
   for s in strings {
-    result.push_str(s);
+    result.push_str(s.as_ref());
   }
   result
 }

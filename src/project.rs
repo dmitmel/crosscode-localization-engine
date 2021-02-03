@@ -23,13 +23,14 @@ lazy_static! {
 pub struct ProjectMetaSerde {
   pub uuid: Uuid,
   pub creation_timestamp: Timestamp,
+  pub modification_timestamp: Timestamp,
   pub game_version: RcString,
   pub original_locale: RcString,
   pub reference_locales: Vec<RcString>,
   pub translation_locale: RcString,
   pub translations_dir: RcString,
   // pub splitting_strategy: RcString,
-  pub tr_files: Vec<RcString>,
+  pub translation_files: Vec<RcString>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -37,8 +38,8 @@ pub struct TrFileSerde {
   pub uuid: Uuid,
   pub creation_timestamp: Timestamp,
   pub modification_timestamp: Timestamp,
-  pub project_meta_file: RcString,
-  pub game_files: IndexMap<RcString, GameFileChunkSerde>,
+  // pub project_meta_file: RcString,
+  pub game_file_chunks: IndexMap<RcString, GameFileChunkSerde>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -48,13 +49,18 @@ pub struct GameFileChunkSerde {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct FragmentSerde {
+  #[serde(default)]
   pub lang_uid: i32,
+  #[serde(default)]
   pub description: Vec<RcString>,
   #[serde(with = "utils::serde::MultilineStringHelper")]
   pub original_text: RcString,
+  // #[serde(default)]
   // pub reference_texts: HashMap<RcString, Vec<RcString>>,
+  #[serde(default)]
   pub flags: HashMap<RcString, bool>,
   pub translations: Vec<TranslationSerde>,
+  #[serde(default)]
   pub comments: Vec<CommentSerde>,
 }
 
@@ -66,6 +72,7 @@ pub struct TranslationSerde {
   pub modification_timestamp: Timestamp,
   #[serde(with = "utils::serde::MultilineStringHelper")]
   pub text: RcString,
+  #[serde(default)]
   pub flags: HashMap<RcString, bool>,
 }
 
@@ -106,6 +113,19 @@ pub struct ProjectMeta {
   translation_files_link: RcWeak<Project>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectMetaInitOpts {
+  pub uuid: Uuid,
+  pub creation_timestamp: Timestamp,
+  pub modification_timestamp: Timestamp,
+  pub game_version: RcString,
+  pub original_locale: RcString,
+  pub reference_locales: Vec<RcString>,
+  pub translation_locale: RcString,
+  pub translations_dir: RcString,
+  // pub splitting_strategy: RcString,
+}
+
 impl ProjectMeta {
   #[inline(always)]
   pub fn is_dirty(&self) -> bool { self.dirty_flag.get() }
@@ -131,17 +151,14 @@ impl ProjectMeta {
   // #[inline(always)]
   // pub fn splitting_strategy(&self) -> &Box<dyn SplittingStrategy> { &self.splitting_strategy }
 
-  fn create(project: &Rc<Project>, opts: ProjectCreateOpts) -> Self {
-    let creation_timestamp = utils::get_timestamp();
-    let uuid = utils::new_uuid();
-
-    let myself = Self {
-      dirty_flag: Rc::new(Cell::new(false)),
+  fn new(project: &Rc<Project>, opts: ProjectMetaInitOpts) -> Self {
+    Self {
+      dirty_flag: Rc::new(Cell::new(true)),
       project: project.share_rc_weak(),
 
-      uuid,
-      creation_timestamp,
-      modification_timestamp: Cell::new(creation_timestamp),
+      uuid: opts.uuid,
+      creation_timestamp: opts.creation_timestamp,
+      modification_timestamp: Cell::new(opts.modification_timestamp),
       game_version: opts.game_version,
       original_locale: opts.original_locale,
       reference_locales: opts.reference_locales,
@@ -150,9 +167,7 @@ impl ProjectMeta {
 
       // splitting_strategy: splitting_strategies::create_by_id(&opts.splitting_strategy)?,
       translation_files_link: project.share_rc_weak(),
-    };
-    myself.dirty_flag.set(true);
-    myself
+    }
   }
 
   pub fn fs_path(&self) -> PathBuf { self.project().root_dir.join(*META_FILE_NAME) }
@@ -186,16 +201,6 @@ impl ProjectMeta {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProjectCreateOpts {
-  pub game_version: RcString,
-  pub original_locale: RcString,
-  pub reference_locales: Vec<RcString>,
-  pub translation_locale: RcString,
-  pub translations_dir: RcString,
-  // pub splitting_strategy: RcString,
-}
-
 #[derive(Debug)]
 pub struct Project {
   root_dir: PathBuf,
@@ -217,7 +222,7 @@ impl Project {
     self.virtual_game_files.borrow()
   }
 
-  pub fn create(root_dir: PathBuf, opts: ProjectCreateOpts) -> Rc<Self> {
+  pub fn create(root_dir: PathBuf, opts: ProjectMetaInitOpts) -> Rc<Self> {
     let myself = Rc::new(Self {
       root_dir,
       meta: OnceCell::new(),
@@ -226,23 +231,85 @@ impl Project {
       virtual_game_files: RefCell::new(IndexMap::new()),
     });
 
-    myself.meta.set(ProjectMeta::create(&myself, opts)).unwrap();
-
+    myself.meta.set(ProjectMeta::new(&myself, opts)).unwrap();
     myself
+  }
+
+  pub fn open(root_dir: PathBuf) -> AnyResult<Rc<Self>> {
+    let meta_file_path = root_dir.join(*META_FILE_NAME);
+    let meta_raw: ProjectMetaSerde = utils::json::read_file(&meta_file_path, &mut Vec::new())
+      .with_context(|| {
+        format!("Failed to deserialize from JSON file '{}'", meta_file_path.display())
+      })?;
+
+    let myself = Self::create(root_dir, ProjectMetaInitOpts {
+      uuid: meta_raw.uuid,
+      creation_timestamp: meta_raw.creation_timestamp,
+      modification_timestamp: meta_raw.modification_timestamp,
+      game_version: meta_raw.game_version,
+      original_locale: meta_raw.original_locale,
+      reference_locales: meta_raw.reference_locales,
+      translation_locale: meta_raw.translation_locale,
+      translations_dir: meta_raw.translations_dir,
+    });
+    myself.meta().dirty_flag.set(false);
+
+    for tr_file_relative_path in meta_raw.translation_files {
+      let tr_file_fs_path = {
+        let path =
+          myself.root_dir.join(&myself.meta().translations_dir).join(&tr_file_relative_path);
+        let mut path = path.into_os_string();
+        path.push(".json");
+        PathBuf::from(path)
+      };
+
+      let tr_file_raw: TrFileSerde = utils::json::read_file(&tr_file_fs_path, &mut Vec::new())
+        .with_context(|| {
+          format!("Failed to deserialize from JSON file '{}'", tr_file_fs_path.display())
+        })?;
+      let tr_file = myself.new_tr_file(TrFileInitOpts {
+        uuid: tr_file_raw.uuid,
+        creation_timestamp: tr_file_raw.creation_timestamp,
+        modification_timestamp: tr_file_raw.modification_timestamp,
+        relative_path: tr_file_relative_path,
+      });
+
+      for (game_file_path, game_file_chunk_raw) in tr_file_raw.game_file_chunks {
+        let game_file_chunk =
+          tr_file.new_game_file_chunk(GameFileChunkInitOpts { path: game_file_path.share_rc() });
+
+        for (fragment_json_path, fragment_raw) in game_file_chunk_raw.fragments {
+          let _fragment = game_file_chunk.new_fragment(FragmentInitOpts {
+            file_path: game_file_path.share_rc(),
+            json_path: fragment_json_path,
+            lang_uid: fragment_raw.lang_uid,
+            description: fragment_raw.description,
+            original_text: fragment_raw.original_text,
+            flags: fragment_raw.flags,
+          });
+
+          for _translation_raw in fragment_raw.translations {
+            // TODO
+          }
+
+          for _comment_raw in fragment_raw.comments {
+            // TODO
+          }
+        }
+      }
+
+      tr_file.dirty_flag.set(false);
+    }
+
+    Ok(myself)
   }
 
   pub fn get_tr_file(&self, path: &str) -> Option<Rc<TrFile>> {
     self.tr_files.borrow().get(path).cloned()
   }
 
-  pub fn new_tr_file(self: &Rc<Self>, path: RcString) -> Rc<TrFile> {
-    let creation_timestamp = utils::get_timestamp();
-    let file = TrFile::new(self, TrFileInternalInitOpts {
-      uuid: utils::new_uuid(),
-      creation_timestamp,
-      modification_timestamp: creation_timestamp,
-      relative_path: path,
-    });
+  pub fn new_tr_file(self: &Rc<Self>, opts: TrFileInitOpts) -> Rc<TrFile> {
+    let file = TrFile::new(self, opts);
     let prev_file =
       self.tr_files.borrow_mut().insert(file.relative_path.share_rc(), file.share_rc());
     assert!(prev_file.is_none());
@@ -292,11 +359,11 @@ impl Project {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct TrFileInternalInitOpts {
-  uuid: Uuid,
-  creation_timestamp: Timestamp,
-  modification_timestamp: Timestamp,
-  relative_path: RcString,
+pub struct TrFileInitOpts {
+  pub uuid: Uuid,
+  pub creation_timestamp: Timestamp,
+  pub modification_timestamp: Timestamp,
+  pub relative_path: RcString,
 }
 
 #[derive(Debug, Serialize)]
@@ -337,7 +404,7 @@ impl TrFile {
   #[inline(always)]
   pub fn mark_dirty(&self) { self.dirty_flag.set(true); }
 
-  fn new(project: &Rc<Project>, opts: TrFileInternalInitOpts) -> Rc<Self> {
+  fn new(project: &Rc<Project>, opts: TrFileInitOpts) -> Rc<Self> {
     Rc::new(Self {
       dirty_flag: Rc::new(Cell::new(false)),
       project: project.share_rc_weak(),
@@ -355,13 +422,13 @@ impl TrFile {
     self.game_file_chunks.borrow().get(path).cloned()
   }
 
-  pub fn new_game_file_chunk(self: &Rc<Self>, path: RcString) -> Rc<GameFileChunk> {
+  pub fn new_game_file_chunk(self: &Rc<Self>, opts: GameFileChunkInitOpts) -> Rc<GameFileChunk> {
     self.dirty_flag.set(true);
     let project = self.project();
     let virt_file = project
-      .get_virtual_game_file(&path)
-      .unwrap_or_else(|| project.new_virtual_game_file(path.share_rc()));
-    let chunk = GameFileChunk::new(&self.project(), self, virt_file, path);
+      .get_virtual_game_file(&opts.path)
+      .unwrap_or_else(|| project.new_virtual_game_file(opts.path.share_rc()));
+    let chunk = GameFileChunk::new(&self.project(), self, virt_file, opts);
     let prev_chunk =
       self.game_file_chunks.borrow_mut().insert(chunk.path.share_rc(), chunk.share_rc());
     assert!(prev_chunk.is_none());
@@ -399,6 +466,11 @@ impl TrFile {
   }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GameFileChunkInitOpts {
+  pub path: RcString,
+}
+
 #[derive(Debug, Serialize)]
 pub struct GameFileChunk {
   #[serde(skip)]
@@ -433,7 +505,7 @@ impl GameFileChunk {
     project: &Rc<Project>,
     tr_file: &Rc<TrFile>,
     virtual_game_file: Rc<VirtualGameFile>,
-    path: RcString,
+    opts: GameFileChunkInitOpts,
   ) -> Rc<Self> {
     Rc::new(Self {
       dirty_flag: tr_file.dirty_flag.share_rc(),
@@ -441,7 +513,7 @@ impl GameFileChunk {
       tr_file: tr_file.share_rc_weak(),
       virtual_game_file,
 
-      path,
+      path: opts.path,
 
       fragments: RefCell::new(IndexMap::new()),
     })

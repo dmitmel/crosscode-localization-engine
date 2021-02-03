@@ -302,7 +302,7 @@ impl SplittingStrategy for NextGenerationStrategy {
     match components[0] {
       "data" if components.len() > 1 => match components[1] {
         "database.json" if components.len() == 2 => {
-          return utils::fast_concat(&[&tr_file_path, "/", match json_components[0] {
+          return utils::fast_concat(&[&*tr_file_path, "/", match json_components[0] {
             // "achievements" => "achievements",
             "commonEvents" => "commonEvents",
             "enemies" => "enemies",
