@@ -177,9 +177,7 @@ impl Exporter for LocalizeMeTrPack {
 }
 
 #[derive(Debug)]
-pub struct GettextPo {
-  global_index: u64,
-}
+pub struct GettextPo;
 
 impl GettextPo {
   pub const ID: &'static str = "po";
@@ -199,7 +197,7 @@ impl Exporter for GettextPo {
   where
     Self: Sized,
   {
-    Box::new(Self { global_index: 1 })
+    Box::new(Self)
   }
 
   #[inline(always)]
@@ -291,7 +289,7 @@ impl Exporter for GettextPo {
 
       writer.write_all(b"\n")?;
 
-      write_po_comment(writer, "#. ", &format!("[{}] {}", self.global_index, location_line))?;
+      write_po_comment(writer, "#. ", &location_line)?;
       for line in &fragment.description {
         write_po_comment(writer, "#. ", line)?;
       }
@@ -310,8 +308,6 @@ impl Exporter for GettextPo {
       write_po_string(writer, &fragment.original_text)?;
       writer.write_all(b"msgstr ")?;
       write_po_string(writer, &translation_text)?;
-
-      self.global_index += 1;
     }
 
     Ok(())
