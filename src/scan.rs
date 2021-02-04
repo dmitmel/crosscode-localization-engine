@@ -180,7 +180,7 @@ impl ScanDbGameFile {
     Rc::new(Self {
       dirty_flag: scan_db.dirty_flag.share_rc(),
       scan_db: Rc::downgrade(scan_db),
-      path: RcString::from(path),
+      path,
       fragments: RefCell::new(IndexMap::new()),
     })
   }
@@ -259,7 +259,7 @@ impl ScanDbFragment {
       scan_db: Rc::downgrade(scan_db),
       file: file.share_rc_weak(),
       file_path: file.path.share_rc(),
-      json_path: RcString::from(fragment_init_opts.json_path),
+      json_path: fragment_init_opts.json_path,
       lang_uid: fragment_init_opts.lang_uid,
       description: fragment_init_opts.description,
       text: fragment_init_opts.text,

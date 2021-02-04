@@ -6,9 +6,11 @@
 #[macro_use]
 pub mod macros;
 
+pub mod cc_ru_compat;
 pub mod cli;
 pub mod gettext_po;
 pub mod impl_prelude;
+pub mod localize_me;
 pub mod project;
 pub mod rc_string;
 pub mod scan;

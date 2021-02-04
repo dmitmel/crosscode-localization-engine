@@ -1,6 +1,7 @@
 use crate::utils;
 
 use indexmap::IndexMap;
+use serde::Deserialize;
 use std::borrow::Cow;
 
 /// See <https://github.com/L-Sherry/Localize-me/blob/9d0ff32abde457997ff58c35f20864d37ac8b2bf/Documentation.md#file_dict_path_str>.
@@ -34,16 +35,15 @@ pub fn deserialize_file_path(lm_file_path: &str) -> Cow<str> {
 }
 
 /// See <https://github.com/L-Sherry/Localize-me/blob/9d0ff32abde457997ff58c35f20864d37ac8b2bf/Documentation.md#plain-text-variant>.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, serde::Deserialize)]
-pub struct TrPackEntryRaw<'a> {
-  #[serde(borrow)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Deserialize)]
+pub struct TrPackEntrySerde<'a> {
   pub orig: Cow<'a, str>,
-  #[serde(borrow)]
   pub text: Cow<'a, str>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Deserialize)]
-pub struct TrPackRaw<'a> {
-  #[serde(borrow, flatten)]
-  pub entries: IndexMap<Cow<'a, str>, TrPackEntryRaw<'a>>,
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+#[serde(transparent)]
+pub struct TrPackSerde<'a> {
+  #[serde(borrow)]
+  pub entries: IndexMap<Cow<'a, str>, TrPackEntrySerde<'a>>,
 }

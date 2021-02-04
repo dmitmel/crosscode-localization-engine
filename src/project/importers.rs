@@ -1,17 +1,28 @@
+use crate::cc_ru_compat;
 use crate::impl_prelude::*;
 use crate::localize_me;
 use crate::rc_string::RcString;
+use crate::utils::Timestamp;
 
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ImportedFragment {
   pub file_path: RcString,
   pub json_path: RcString,
   pub original_text: RcString,
-  pub translation_text: RcString,
+  pub translations: Vec<ImportedTranslation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ImportedTranslation {
+  pub author_username: Option<RcString>,
+  pub creation_timestamp: Option<Timestamp>,
+  pub text: RcString,
+  // TODO: use a Vec for storing flags (everywhere)
+  pub flags: HashMap<RcString, bool>,
 }
 
 pub trait Importer: fmt::Debug {
@@ -94,7 +105,7 @@ impl Importer for LocalizeMeTrPackImporter {
     input: &str,
     imported_fragments: &mut Vec<ImportedFragment>,
   ) -> AnyResult<()> {
-    let tr_pack: localize_me::TrPackRaw = serde_json::from_str(input)?;
+    let tr_pack: localize_me::TrPackSerde = serde_json::from_str(input)?;
     for (lm_file_dict_path, tr_pack_entry) in tr_pack.entries {
       let (lm_file_path, json_path) = match localize_me::parse_file_dict_path(&lm_file_dict_path) {
         Some(v) => v,
@@ -109,7 +120,12 @@ impl Importer for LocalizeMeTrPackImporter {
         file_path: RcString::from(file_path),
         json_path: RcString::from(json_path),
         original_text: RcString::from(tr_pack_entry.orig),
-        translation_text: RcString::from(tr_pack_entry.text),
+        translations: vec![ImportedTranslation {
+          author_username: None,
+          creation_timestamp: None,
+          text: RcString::from(tr_pack_entry.text),
+          flags: HashMap::new(),
+        }],
       });
     }
 
@@ -149,10 +165,29 @@ impl Importer for CcRuChapterFragmentsImporter {
 
   fn import(
     &mut self,
-    _input: &str,
-    _imported_fragments: &mut Vec<ImportedFragment>,
+    input: &str,
+    imported_fragments: &mut Vec<ImportedFragment>,
   ) -> AnyResult<()> {
-    todo!()
+    let chapter_fragments: cc_ru_compat::ChapterFragmentsFileSerde = serde_json::from_str(input)?;
+    for fragment in chapter_fragments.fragments {
+      imported_fragments.push(ImportedFragment {
+        file_path: RcString::from(fragment.original.file),
+        json_path: RcString::from(fragment.original.json_path),
+        original_text: RcString::from(fragment.original.text),
+
+        translations: fragment
+          .translations
+          .into_iter()
+          .map(|t| ImportedTranslation {
+            author_username: Some(RcString::from(t.author_username)),
+            creation_timestamp: Some(t.timestamp),
+            text: RcString::from(t.text),
+            flags: t.flags.into_iter().map(|(k, v)| (RcString::from(k), v)).collect(),
+          })
+          .collect(),
+      });
+    }
+    Ok(())
   }
 }
 
