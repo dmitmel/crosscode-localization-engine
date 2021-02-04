@@ -11,10 +11,100 @@ use indexmap::IndexMap;
 use std::borrow::Cow;
 use std::fs;
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ExportCommandOpts) -> AnyResult<()> {
+#[derive(Debug, Clone)]
+pub struct CommandOpts {
+  pub project_dir: PathBuf,
+  pub output: PathBuf,
+  pub format: RcString,
+  pub splitting_strategy: Option<RcString>,
+  pub remove_untranslated: bool,
+  pub mapping_file_output: Option<PathBuf>,
+  pub compact: bool,
+}
+
+impl CommandOpts {
+  pub fn from_matches(matches: &clap::ArgMatches<'_>) -> Self {
+    Self {
+      project_dir: PathBuf::from(matches.value_of_os("project_dir").unwrap()),
+      output: PathBuf::from(matches.value_of_os("output").unwrap()),
+      format: RcString::from(matches.value_of("format").unwrap()),
+      splitting_strategy: matches.value_of("splitting_strategy").map(RcString::from),
+      remove_untranslated: matches.is_present("remove_untranslated"),
+      mapping_file_output: matches.value_of_os("mapping_file_output").map(PathBuf::from),
+      compact: matches.is_present("compact"),
+    }
+  }
+}
+
+pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
+  clap::App::new("export")
+    .about(
+      "Exports translations from a project into a different format, for example for compiling \
+      into Localize Me translation packs for use in CrossCode mods.",
+    )
+    .arg(
+      clap::Arg::with_name("project_dir")
+        .value_name("PROJECT")
+        .required(true)
+        .help("Path to the project directory."),
+    )
+    .arg(
+      clap::Arg::with_name("output")
+        .value_name("PATH")
+        .short("o")
+        .long("output")
+        .required(true)
+        .help(
+          "Path to the destination file or directory for exporting. A directory is used when a \
+          splitting strategy is specified.",
+        ),
+    )
+    .arg(
+      clap::Arg::with_name("format")
+        .value_name("NAME")
+        .short("f")
+        .long("format")
+        .possible_values(exporters::EXPORTERS_IDS)
+        .required(true)
+        .help("Format to export to."),
+    )
+    .arg(
+      clap::Arg::with_name("splitting_strategy")
+        .value_name("NAME")
+        .long("splitting-strategy")
+        .possible_values(splitting_strategies::SPLITTING_STRATEGIES_IDS)
+        .help("Strategy used for splitting exported files."),
+    )
+    .arg(
+      clap::Arg::with_name("remove_untranslated")
+        .long("remove-untranslated")
+        //
+        .help(
+          "Whether to remove untranslated strings from the exported files. Note that some \
+          formats and/or tasks may still need the empty translations.",
+        ),
+    )
+    .arg(
+      clap::Arg::with_name("mapping_file_output")
+        .value_name("PATH")
+        .long("mapping-file-output")
+        .help("File to write a Localize Me-style mapping table to."),
+    )
+    .arg(
+      clap::Arg::with_name("compact")
+        .long("compact")
+        //
+        .help(
+          "Write exported files compactly, for example before packaging them for distribution. \
+          Note that this will mean different things depending on the output format.",
+        ),
+    )
+}
+
+pub fn run(_common_opts: cli::CommonOpts, command_opts: CommandOpts) -> AnyResult<()> {
   let output_path = command_opts.output;
   info!(
     "Exporting a translation project in '{}' as '{}' into '{}'",

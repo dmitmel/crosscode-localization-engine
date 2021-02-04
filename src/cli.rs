@@ -1,17 +1,12 @@
 pub mod create_project;
 pub mod export;
+pub mod import;
 pub mod parse_po;
 pub mod scan;
 
 use crate::impl_prelude::*;
-use crate::project::exporters;
-use crate::project::importers;
-use crate::project::splitting_strategies;
-use crate::rc_string::RcString;
 
 use clap::{App, AppSettings, Arg};
-use std::ffi::OsString;
-use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct CommonOpts {
@@ -28,56 +23,11 @@ pub struct Opts {
 pub enum CommandOpts {
   // Individual command options structs are boxed to prevent wasting memory on
   // small variants because their sizes vary a lot.
-  Scan(Box<ScanCommandOpts>),
-  CreateProject(Box<CreateProjectCommandOpts>),
-  ParsePo(Box<ParsePoCommandOpts>),
-  Export(Box<ExportCommandOpts>),
-  Import(Box<ImportCommandOpts>),
-}
-
-#[derive(Debug, Clone)]
-pub struct ScanCommandOpts {
-  pub assets_dir: PathBuf,
-  pub output: PathBuf,
-}
-
-#[derive(Debug, Clone)]
-pub struct CreateProjectCommandOpts {
-  pub project_dir: PathBuf,
-  pub scan_db: PathBuf,
-  pub original_locale: RcString,
-  pub reference_locales: Vec<RcString>,
-  pub translation_locale: RcString,
-  pub splitting_strategy: RcString,
-  pub translations_dir: RcString,
-}
-
-#[derive(Debug, Clone)]
-pub struct ParsePoCommandOpts {
-  pub file: Option<PathBuf>,
-  pub json: bool,
-}
-
-#[derive(Debug, Clone)]
-pub struct ExportCommandOpts {
-  pub project_dir: PathBuf,
-  pub output: PathBuf,
-  pub format: RcString,
-  pub splitting_strategy: Option<RcString>,
-  pub remove_untranslated: bool,
-  pub mapping_file_output: Option<PathBuf>,
-  pub compact: bool,
-}
-
-#[derive(Debug, Clone)]
-pub struct ImportCommandOpts {
-  pub project_dir: PathBuf,
-  pub inputs: Vec<PathBuf>,
-  pub format: RcString,
-  pub importer_username: RcString,
-  pub delete_other_translations: bool,
-  pub edit_prev_imports: bool,
-  pub add_flags: Vec<RcString>,
+  Scan(Box<scan::CommandOpts>),
+  CreateProject(Box<create_project::CommandOpts>),
+  ParsePo(Box<parse_po::CommandOpts>),
+  Export(Box<export::CommandOpts>),
+  Import(Box<import::CommandOpts>),
 }
 
 pub fn parse_opts() -> AnyResult<Opts> {
@@ -86,51 +36,25 @@ pub fn parse_opts() -> AnyResult<Opts> {
     common_opts: CommonOpts { verbose: matches.is_present("verbose") },
 
     command_opts: match matches.subcommand() {
-      ("scan", Some(matches)) => CommandOpts::Scan(Box::new(ScanCommandOpts {
-        assets_dir: PathBuf::from(matches.value_of_os("assets_dir").unwrap()),
-        output: PathBuf::from(matches.value_of_os("output").unwrap()),
-      })),
-
-      ("create-project", Some(matches)) => {
-        CommandOpts::CreateProject(Box::new(CreateProjectCommandOpts {
-          project_dir: PathBuf::from(matches.value_of_os("project_dir").unwrap()),
-          scan_db: PathBuf::from(matches.value_of_os("scan_db").unwrap()),
-          original_locale: RcString::from(matches.value_of("original_locale").unwrap()),
-          reference_locales: matches
-            .values_of("reference_locales")
-            .map_or_else(Vec::new, |values| values.map(RcString::from).collect()),
-          translation_locale: RcString::from(matches.value_of("translation_locale").unwrap()),
-          splitting_strategy: RcString::from(matches.value_of("splitting_strategy").unwrap()),
-          translations_dir: RcString::from(matches.value_of("translations_dir").unwrap()),
-        }))
+      ("scan", Some(matches)) => {
+        CommandOpts::Scan(Box::new(scan::CommandOpts::from_matches(matches)))
       }
 
-      ("parse-po", Some(matches)) => CommandOpts::ParsePo(Box::new(ParsePoCommandOpts {
-        file: matches.value_of("file").map(PathBuf::from),
-        json: matches.is_present("json"),
-      })),
+      ("create-project", Some(matches)) => {
+        CommandOpts::CreateProject(Box::new(create_project::CommandOpts::from_matches(matches)))
+      }
 
-      ("export", Some(matches)) => CommandOpts::Export(Box::new(ExportCommandOpts {
-        project_dir: PathBuf::from(matches.value_of_os("project_dir").unwrap()),
-        output: PathBuf::from(matches.value_of_os("output").unwrap()),
-        format: RcString::from(matches.value_of("format").unwrap()),
-        splitting_strategy: matches.value_of("splitting_strategy").map(RcString::from),
-        remove_untranslated: matches.is_present("remove_untranslated"),
-        mapping_file_output: matches.value_of_os("mapping_file_output").map(PathBuf::from),
-        compact: matches.is_present("compact"),
-      })),
+      ("parse-po", Some(matches)) => {
+        CommandOpts::ParsePo(Box::new(parse_po::CommandOpts::from_matches(matches)))
+      }
 
-      ("import", Some(matches)) => CommandOpts::Import(Box::new(ImportCommandOpts {
-        project_dir: PathBuf::from(matches.value_of_os("project_dir").unwrap()),
-        inputs: matches.values_of_os("inputs").unwrap().map(PathBuf::from).collect(),
-        format: RcString::from(matches.value_of("format").unwrap()),
-        importer_username: RcString::from(matches.value_of("importer_username").unwrap()),
-        delete_other_translations: matches.is_present("delete_other_translations"),
-        edit_prev_imports: matches.is_present("edit_prev_imports"),
-        add_flags: matches
-          .values_of("add_flags")
-          .map_or_else(Vec::new, |values| values.map(RcString::from).collect()),
-      })),
+      ("export", Some(matches)) => {
+        CommandOpts::Export(Box::new(export::CommandOpts::from_matches(matches)))
+      }
+
+      ("import", Some(matches)) => {
+        CommandOpts::Import(Box::new(import::CommandOpts::from_matches(matches)))
+      }
 
       _ => unreachable!("{:#?}", matches),
     },
@@ -154,226 +78,9 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
         .help("Print more logs, may be helpful for troubleshooting.")
         .global(true),
     )
-    .subcommand(
-      App::new("scan")
-        .about(
-          "Scans the assets directory of the game and extracts the localizable strings and other \
-          interesting data.",
-        )
-        .arg(
-          Arg::with_name("assets_dir")
-            .value_name("ASSETS")
-            .required(true)
-            .help("Path to the assets directory."),
-        )
-        .arg(
-          Arg::with_name("output")
-            .value_name("PATH")
-            .short("o")
-            .long("output")
-            .required(true)
-            .help("Path to the output JSON file."),
-        ),
-    )
-    .subcommand(
-      App::new("create-project")
-        .about(
-          "Creates an empty translation project using the data obtained by scanning the game.",
-        )
-        .arg(
-          Arg::with_name("project_dir")
-            .value_name("PROJECT")
-            .required(true)
-            .help("Path to the project directory."),
-        )
-        .arg(
-          Arg::with_name("scan_db")
-            .value_name("PATH")
-            .long("scan-db")
-            .required(true)
-            .help("Path to the scan database."),
-        )
-        .arg(
-          Arg::with_name("original_locale")
-            .value_name("LOCALE")
-            .long("original-locale")
-            .default_value("en_US")
-            .help("Locale to translate from."),
-        )
-        .arg(
-          Arg::with_name("reference_locales")
-            .value_name("LOCALE")
-            .multiple(true)
-            .number_of_values(1)
-            .long("reference-locales")
-            .help("Other original locales to include for reference."),
-        )
-        .arg(
-          Arg::with_name("translation_locale")
-            .value_name("LOCALE")
-            .long("translation-locale")
-            .required(true)
-            .help("Locale of the translation."),
-        )
-        .arg(
-          Arg::with_name("splitting_strategy")
-            .value_name("NAME")
-            .long("splitting-strategy")
-            .possible_values(splitting_strategies::SPLITTING_STRATEGIES_IDS)
-            .default_value(splitting_strategies::NextGenerationStrategy::ID)
-            .help(
-              "Strategy used for assigning game files (and individual fragments in them) to \
-              translation storage files.",
-            ),
-        )
-        .arg(
-          Arg::with_name("translations_dir")
-            .value_name("PATH")
-            .long("translations-dir")
-            .validator_os(|s| {
-              if !Path::new(s).is_relative() {
-                return Err(OsString::from("Path must be relative"));
-              }
-              Ok(())
-            })
-            .default_value("tr")
-            .help("Path to project's translation storage files, relative to project's directory."),
-        ),
-    )
-    .subcommand(
-      App::new("parse-po")
-        .arg(Arg::with_name("file").value_name("FILE"))
-        .arg(Arg::with_name("json").short("J").long("json")),
-    )
-    .subcommand(
-      App::new("export")
-        .about(
-          "Exports translations from a project into a different format, for example for \
-          compiling into Localize Me translation packs for use in CrossCode mods.",
-        )
-        .arg(
-          Arg::with_name("project_dir")
-            .value_name("PROJECT")
-            .required(true)
-            .help("Path to the project directory."),
-        )
-        .arg(
-          Arg::with_name("output")
-            .value_name("PATH")
-            .short("o")
-            .long("output")
-            .required(true)
-            .help(
-              "Path to the destination file or directory for exporting. A directory is used when \
-              a splitting strategy is specified.",
-            ),
-        )
-        .arg(
-          Arg::with_name("format")
-            .value_name("NAME")
-            .short("f")
-            .long("format")
-            .possible_values(exporters::EXPORTERS_IDS)
-            .required(true)
-            .help("Format to export to."),
-        )
-        .arg(
-          Arg::with_name("splitting_strategy")
-            .value_name("NAME")
-            .long("splitting-strategy")
-            .possible_values(splitting_strategies::SPLITTING_STRATEGIES_IDS)
-            .help("Strategy used for splitting exported files."),
-        )
-        .arg(
-          Arg::with_name("remove_untranslated")
-            .long("remove-untranslated")
-            //
-            .help(
-              "Whether to remove untranslated strings from the exported files. Note that some \
-              formats and/or tasks may still need the empty translations.",
-            ),
-        )
-        .arg(
-          Arg::with_name("mapping_file_output")
-            .value_name("PATH")
-            .long("mapping-file-output")
-            .help("File to write a Localize Me-style mapping table to."),
-        )
-        .arg(
-          Arg::with_name("compact")
-            .long("compact")
-            //
-            .help(
-              "Write exported files compactly, for example before packaging them for \
-              distribution. Note that this will mean different things depending on the output \
-              format.",
-            ),
-        ),
-    )
-    .subcommand(
-      App::new("import")
-        .about(
-          "Imports translations from a different format into a project, for example for \
-          migrating projects created with the old translation tools.",
-        )
-        .arg(
-          Arg::with_name("project_dir")
-            .value_name("PROJECT")
-            .required(true)
-            .help("Path to the project directory."),
-        )
-        .arg(
-          Arg::with_name("inputs")
-            .value_name("PATH")
-            .required(true)
-            .multiple(true)
-            .help("Path to files to import translations from."),
-        )
-        .arg(
-          Arg::with_name("format")
-            .value_name("NAME")
-            .short("f")
-            .long("format")
-            .possible_values(importers::IMPORTERS_IDS)
-            .required(true)
-            .help("Format to import from."),
-        )
-        .arg(
-          Arg::with_name("importer_username")
-            .value_name("USERNAME")
-            .short("u")
-            .long("importer-username")
-            .default_value("autoimport")
-            .help(
-              "Username to use for creating imported translations and editing previously \
-              imported ones.",
-            ),
-        )
-        .arg(
-          Arg::with_name("delete_other_translations")
-            .long("delete-other-translations")
-            //
-            .help(
-              "Delete other translations (by other users) on fragments before adding the \
-              imported translation.",
-            ),
-        )
-        .arg(
-          Arg::with_name("edit_prev_imports")
-            .long("edit-prev-imports")
-            //
-            .help(
-              "Edit the translations created from previous imports instead of creating new ones. \
-              The author username is used for determining if a translation was imported.",
-            ),
-        )
-        .arg(
-          Arg::with_name("add_flags")
-            .short("F")
-            .long("add-flag")
-            .multiple(true)
-            .number_of_values(1)
-            .help("Add flags to the imported translations."),
-        ),
-    )
+    .subcommand(scan::create_arg_parser())
+    .subcommand(create_project::create_arg_parser())
+    .subcommand(parse_po::create_arg_parser())
+    .subcommand(export::create_arg_parser())
+    .subcommand(import::create_arg_parser())
 }

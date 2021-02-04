@@ -14,11 +14,48 @@ use std::borrow::Cow;
 use std::char;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::str::FromStr;
 
-pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ScanCommandOpts) -> AnyResult<()> {
+#[derive(Debug, Clone)]
+pub struct CommandOpts {
+  pub assets_dir: PathBuf,
+  pub output: PathBuf,
+}
+
+impl CommandOpts {
+  pub fn from_matches(matches: &clap::ArgMatches<'_>) -> Self {
+    Self {
+      assets_dir: PathBuf::from(matches.value_of_os("assets_dir").unwrap()),
+      output: PathBuf::from(matches.value_of_os("output").unwrap()),
+    }
+  }
+}
+
+pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
+  clap::App::new("scan")
+    .about(
+      "Scans the assets directory of the game and extracts the localizable strings and other \
+          interesting data.",
+    )
+    .arg(
+      clap::Arg::with_name("assets_dir")
+        .value_name("ASSETS")
+        .required(true)
+        .help("Path to the assets directory."),
+    )
+    .arg(
+      clap::Arg::with_name("output")
+        .value_name("PATH")
+        .short("o")
+        .long("output")
+        .required(true)
+        .help("Path to the output JSON file."),
+    )
+}
+
+pub fn run(_common_opts: cli::CommonOpts, command_opts: CommandOpts) -> AnyResult<()> {
   info!(
     "Performing a scan of game files in the assets dir '{}'",
     command_opts.assets_dir.display()

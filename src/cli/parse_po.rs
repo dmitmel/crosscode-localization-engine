@@ -7,8 +7,27 @@ use crate::utils::json;
 use std::borrow::Cow;
 use std::fs;
 use std::io::{self, Read, Write};
+use std::path::PathBuf;
 
-pub fn run(_common_opts: cli::CommonOpts, command_opts: cli::ParsePoCommandOpts) -> AnyResult<()> {
+#[derive(Debug, Clone)]
+pub struct CommandOpts {
+  pub file: Option<PathBuf>,
+  pub json: bool,
+}
+
+impl CommandOpts {
+  pub fn from_matches(matches: &clap::ArgMatches<'_>) -> Self {
+    Self { file: matches.value_of("file").map(PathBuf::from), json: matches.is_present("json") }
+  }
+}
+
+pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
+  clap::App::new("parse-po")
+    .arg(clap::Arg::with_name("file").value_name("FILE"))
+    .arg(clap::Arg::with_name("json").short("J").long("json"))
+}
+
+pub fn run(_common_opts: cli::CommonOpts, command_opts: CommandOpts) -> AnyResult<()> {
   let (src, filename): (String, Cow<str>) = match &command_opts.file {
     Some(file) => (fs::read_to_string(file)?, file.to_string_lossy()),
     None => {
