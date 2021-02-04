@@ -1,9 +1,18 @@
 use crate::impl_prelude::*;
+use crate::localize_me;
+use crate::rc_string::RcString;
 
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::fmt;
-use std::io::{self, Read};
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct ImportedFragment {
+  pub file_path: RcString,
+  pub json_path: RcString,
+  pub original_text: RcString,
+  pub translation_text: RcString,
+}
 
 pub trait Importer: fmt::Debug {
   fn id_static() -> &'static str
@@ -18,7 +27,11 @@ pub trait Importer: fmt::Debug {
 
   fn file_extension(&self) -> &'static str;
 
-  fn import(&mut self, reader: &mut dyn Read) -> AnyResult<()>;
+  fn import(
+    &mut self,
+    input: &str,
+    imported_fragments: &mut Vec<ImportedFragment>,
+  ) -> AnyResult<()>;
 }
 
 macro_rules! importers_map {
@@ -76,7 +89,32 @@ impl Importer for LocalizeMeTrPackImporter {
   #[inline(always)]
   fn file_extension(&self) -> &'static str { "json" }
 
-  fn import(&mut self, _reader: &mut dyn Read) -> AnyResult<()> { todo!() }
+  fn import(
+    &mut self,
+    input: &str,
+    imported_fragments: &mut Vec<ImportedFragment>,
+  ) -> AnyResult<()> {
+    let tr_pack: localize_me::TrPackRaw = serde_json::from_str(input)?;
+    for (lm_file_dict_path, tr_pack_entry) in tr_pack.entries {
+      let (lm_file_path, json_path) = match localize_me::parse_file_dict_path(&lm_file_dict_path) {
+        Some(v) => v,
+        None => {
+          warn!("Invalid Localize Me file_dict_path_str: {:?}", lm_file_dict_path);
+          continue;
+        }
+      };
+      let file_path = localize_me::deserialize_file_path(lm_file_path);
+
+      imported_fragments.push(ImportedFragment {
+        file_path: RcString::from(file_path),
+        json_path: RcString::from(json_path),
+        original_text: RcString::from(tr_pack_entry.orig),
+        translation_text: RcString::from(tr_pack_entry.text),
+      });
+    }
+
+    Ok(())
+  }
 }
 
 #[derive(Debug)]
@@ -109,7 +147,13 @@ impl Importer for CcRuChapterFragmentsImporter {
   #[inline(always)]
   fn file_extension(&self) -> &'static str { "json" }
 
-  fn import(&mut self, _reader: &mut dyn Read) -> AnyResult<()> { todo!() }
+  fn import(
+    &mut self,
+    _input: &str,
+    _imported_fragments: &mut Vec<ImportedFragment>,
+  ) -> AnyResult<()> {
+    todo!()
+  }
 }
 
 #[derive(Debug)]
@@ -142,5 +186,11 @@ impl Importer for GettextPoImporter {
   #[inline(always)]
   fn file_extension(&self) -> &'static str { "po" }
 
-  fn import(&mut self, _reader: &mut dyn Read) -> AnyResult<()> { todo!() }
+  fn import(
+    &mut self,
+    _input: &str,
+    _imported_fragments: &mut Vec<ImportedFragment>,
+  ) -> AnyResult<()> {
+    todo!()
+  }
 }
