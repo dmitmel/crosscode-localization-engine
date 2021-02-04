@@ -1,5 +1,6 @@
 use crate::impl_prelude::*;
 use crate::project::exporters;
+use crate::project::importers;
 use crate::project::splitting_strategies;
 use crate::rc_string::RcString;
 
@@ -26,6 +27,7 @@ pub enum CommandOpts {
   CreateProject(Box<CreateProjectCommandOpts>),
   ParsePo(Box<ParsePoCommandOpts>),
   Export(Box<ExportCommandOpts>),
+  Import(Box<ImportCommandOpts>),
 }
 
 #[derive(Debug, Clone)]
@@ -62,6 +64,17 @@ pub struct ExportCommandOpts {
   pub compact: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct ImportCommandOpts {
+  pub project_dir: PathBuf,
+  pub inputs: Vec<PathBuf>,
+  pub format: RcString,
+  pub importer_username: RcString,
+  pub delete_other_translations: bool,
+  pub edit_prev_imports: bool,
+  pub add_flags: Vec<RcString>,
+}
+
 pub fn parse_opts() -> AnyResult<Opts> {
   let matches = create_arg_parser().get_matches();
   Ok(Opts {
@@ -80,8 +93,7 @@ pub fn parse_opts() -> AnyResult<Opts> {
           original_locale: RcString::from(matches.value_of("original_locale").unwrap()),
           reference_locales: matches
             .values_of("reference_locales")
-            .map(|values| values.map(RcString::from).collect())
-            .unwrap_or_else(Vec::new),
+            .map_or_else(Vec::new, |values| values.map(RcString::from).collect()),
           translation_locale: RcString::from(matches.value_of("translation_locale").unwrap()),
           splitting_strategy: RcString::from(matches.value_of("splitting_strategy").unwrap()),
           translations_dir: RcString::from(matches.value_of("translations_dir").unwrap()),
@@ -103,6 +115,18 @@ pub fn parse_opts() -> AnyResult<Opts> {
         compact: matches.is_present("compact"),
       })),
 
+      ("import", Some(matches)) => CommandOpts::Import(Box::new(ImportCommandOpts {
+        project_dir: PathBuf::from(matches.value_of_os("project_dir").unwrap()),
+        inputs: matches.values_of_os("inputs").unwrap().map(PathBuf::from).collect(),
+        format: RcString::from(matches.value_of("format").unwrap()),
+        importer_username: RcString::from(matches.value_of("importer_username").unwrap()),
+        delete_other_translations: matches.is_present("delete_other_translations"),
+        edit_prev_imports: matches.is_present("edit_prev_imports"),
+        add_flags: matches
+          .values_of("add_flags")
+          .map_or_else(Vec::new, |values| values.map(RcString::from).collect()),
+      })),
+
       _ => unreachable!("{:#?}", matches),
     },
   })
@@ -122,7 +146,7 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
       Arg::with_name("verbose")
         .short("v")
         .long("verbose")
-        .help("Print more logs, may help with troubleshooting.")
+        .help("Print more logs, may be helpful for troubleshooting.")
         .global(true),
     )
     .subcommand(
@@ -219,8 +243,8 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
     .subcommand(
       App::new("export")
         .about(
-          "Exports a project into a different format, for example for compiling translations \
-          into Localize Me translation packs for use in CrossCode mods.",
+          "Exports translations from a project into a different format, for example for \
+          compiling into Localize Me translation packs for use in CrossCode mods.",
         )
         .arg(
           Arg::with_name("project_dir")
@@ -279,6 +303,72 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
               distribution. Note that this will mean different things depending on the output \
               format.",
             ),
+        ),
+    )
+    .subcommand(
+      App::new("import")
+        .about(
+          "Imports translations from a different format into a project, for example for \
+          migrating projects created with the old translation tools.",
+        )
+        .arg(
+          Arg::with_name("project_dir")
+            .value_name("PROJECT")
+            .required(true)
+            .help("Path to the project directory."),
+        )
+        .arg(
+          Arg::with_name("inputs")
+            .value_name("PATH")
+            .required(true)
+            .multiple(true)
+            .help("Path to files to import translations from."),
+        )
+        .arg(
+          Arg::with_name("format")
+            .value_name("NAME")
+            .short("f")
+            .long("format")
+            .possible_values(importers::IMPORTERS_IDS)
+            .required(true)
+            .help("Format to import from."),
+        )
+        .arg(
+          Arg::with_name("importer_username")
+            .value_name("USERNAME")
+            .short("u")
+            .long("importer-username")
+            .default_value("autoimport")
+            .help(
+              "Username to use for creating imported translations and editing previously \
+              imported ones.",
+            ),
+        )
+        .arg(
+          Arg::with_name("delete_other_translations")
+            .long("delete-other-translations")
+            //
+            .help(
+              "Delete other translations (by other users) on fragments before adding the \
+              imported translation.",
+            ),
+        )
+        .arg(
+          Arg::with_name("edit_prev_imports")
+            .long("edit-prev-imports")
+            //
+            .help(
+              "Edit the translations created from previous imports instead of creating new ones. \
+              The author username is used for determining if a translation was imported.",
+            ),
+        )
+        .arg(
+          Arg::with_name("add_flags")
+            .short("F")
+            .long("add-flag")
+            .multiple(true)
+            .number_of_values(1)
+            .help("Add flags to the imported translations."),
         ),
     )
 }
