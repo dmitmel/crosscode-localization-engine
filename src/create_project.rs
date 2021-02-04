@@ -32,16 +32,16 @@ pub fn run(
     reference_locales: command_opts.reference_locales,
     translation_locale: command_opts.translation_locale,
     translations_dir: command_opts.translations_dir,
-  });
-
-  let mut splitting_strategy =
-    project::splitting_strategies::create_by_id(&command_opts.splitting_strategy)
-      .context("Failed to create the splitting strategy")?;
+    splitting_strategy: command_opts.splitting_strategy,
+  })
+  .context("Failed to create the project structure")?;
 
   info!("Generating project translation files");
 
   for scan_game_file in scan_db.game_files().values() {
-    let global_tr_file_path: Option<RcString> = splitting_strategy
+    let global_tr_file_path: Option<RcString> = project
+      .meta()
+      .splitting_strategy_mut()
       .get_tr_file_for_entire_game_file(scan_game_file.path())
       .map(RcString::from);
 
@@ -54,7 +54,9 @@ pub fn run(
       let fragment_tr_file_path: RcString = match &global_tr_file_path {
         Some(v) => v.share_rc(),
         None => RcString::from(
-          splitting_strategy
+          project
+            .meta()
+            .splitting_strategy_mut()
             .get_tr_file_for_fragment(scan_fragment.file_path(), scan_fragment.json_path()),
         ),
       };

@@ -1,6 +1,8 @@
 pub mod exporters;
+pub mod importers;
 pub mod splitting_strategies;
 
+use self::splitting_strategies::SplittingStrategy;
 use crate::impl_prelude::*;
 use crate::rc_string::RcString;
 use crate::utils::json;
@@ -10,7 +12,7 @@ use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use once_cell::unsync::OnceCell;
 use serde::{Deserialize, Serialize};
-use std::cell::{Cell, Ref, RefCell};
+use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak as RcWeak};
@@ -30,7 +32,7 @@ pub struct ProjectMetaSerde {
   pub reference_locales: Vec<RcString>,
   pub translation_locale: RcString,
   pub translations_dir: RcString,
-  // pub splitting_strategy: RcString,
+  pub splitting_strategy: RcString,
   pub translation_files: Vec<RcString>,
 }
 
@@ -104,7 +106,7 @@ pub struct ProjectMeta {
   reference_locales: Vec<RcString>,
   translation_locale: RcString,
   translations_dir: RcString,
-  // splitting_strategy: Box<dyn SplittingStrategy>,
+  splitting_strategy: RefCell<Box<dyn SplittingStrategy>>,
 
   // HACK: Don't ask.
   #[serde(
@@ -124,7 +126,7 @@ pub struct ProjectMetaInitOpts {
   pub reference_locales: Vec<RcString>,
   pub translation_locale: RcString,
   pub translations_dir: RcString,
-  // pub splitting_strategy: RcString,
+  pub splitting_strategy: RcString,
 }
 
 impl ProjectMeta {
@@ -148,12 +150,17 @@ impl ProjectMeta {
   pub fn translation_locale(&self) -> &RcString { &self.translation_locale }
   #[inline(always)]
   pub fn translations_dir(&self) -> &RcString { &self.translations_dir }
-  // #[allow(clippy::borrowed_box)]
-  // #[inline(always)]
-  // pub fn splitting_strategy(&self) -> &Box<dyn SplittingStrategy> { &self.splitting_strategy }
+  #[inline(always)]
+  pub fn splitting_strategy(&self) -> Ref<Box<dyn SplittingStrategy>> {
+    self.splitting_strategy.borrow()
+  }
+  #[inline(always)]
+  pub fn splitting_strategy_mut(&self) -> RefMut<Box<dyn SplittingStrategy>> {
+    self.splitting_strategy.borrow_mut()
+  }
 
-  fn new(project: &Rc<Project>, opts: ProjectMetaInitOpts) -> Self {
-    Self {
+  fn new(project: &Rc<Project>, opts: ProjectMetaInitOpts) -> AnyResult<Self> {
+    Ok(Self {
       dirty_flag: Rc::new(Cell::new(true)),
       project: project.share_rc_weak(),
 
@@ -166,9 +173,12 @@ impl ProjectMeta {
       translation_locale: opts.translation_locale,
       translations_dir: opts.translations_dir,
 
-      // splitting_strategy: splitting_strategies::create_by_id(&opts.splitting_strategy)?,
+      splitting_strategy: RefCell::new(
+        splitting_strategies::create_by_id(&opts.splitting_strategy)
+          .context("Failed to create the splitting strategy")?,
+      ),
       translation_files_link: project.share_rc_weak(),
-    }
+    })
   }
 
   pub fn fs_path(&self) -> PathBuf { self.project().root_dir.join(*META_FILE_NAME) }
@@ -223,7 +233,7 @@ impl Project {
     self.virtual_game_files.borrow()
   }
 
-  pub fn create(root_dir: PathBuf, opts: ProjectMetaInitOpts) -> Rc<Self> {
+  pub fn create(root_dir: PathBuf, opts: ProjectMetaInitOpts) -> AnyResult<Rc<Self>> {
     let myself = Rc::new(Self {
       root_dir,
       meta: OnceCell::new(),
@@ -232,8 +242,8 @@ impl Project {
       virtual_game_files: RefCell::new(IndexMap::new()),
     });
 
-    myself.meta.set(ProjectMeta::new(&myself, opts)).unwrap();
-    myself
+    myself.meta.set(ProjectMeta::new(&myself, opts)?).unwrap();
+    Ok(myself)
   }
 
   pub fn open(root_dir: PathBuf) -> AnyResult<Rc<Self>> {
@@ -252,7 +262,8 @@ impl Project {
       reference_locales: meta_raw.reference_locales,
       translation_locale: meta_raw.translation_locale,
       translations_dir: meta_raw.translations_dir,
-    });
+      splitting_strategy: meta_raw.splitting_strategy,
+    })?;
     myself.meta().dirty_flag.set(false);
 
     for tr_file_relative_path in meta_raw.translation_files {

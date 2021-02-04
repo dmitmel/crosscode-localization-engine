@@ -44,19 +44,19 @@ impl serde::Serialize for Box<dyn SplittingStrategy> {
 }
 
 macro_rules! strategies_map {
-  ($($strat:ident,)+) => { strategies_map![$($strat),+]; };
-  ($($strat:ident),*) => {
-    pub const SPLITTING_STRATEGIES_IDS: &'static [&'static str] = &[$($strat::ID),+];
+  ($($impl:ident,)+) => { strategies_map![$($impl),+]; };
+  ($($impl:ident),*) => {
+    pub const SPLITTING_STRATEGIES_IDS: &'static [&'static str] = &[$($impl::ID),+];
     lazy_static! {
       pub static ref SPLITTING_STRATEGIES_MAP: HashMap<
         &'static str,
         fn() -> Box<dyn SplittingStrategy>,
       > = {
-        let _cap = count_exprs!($($strat),*);
+        let _cap = count_exprs!($($impl),*);
         // Don't ask me why the compiler requires the following type
         // annotation.
         let mut _map: HashMap<_, fn() -> _> = HashMap::with_capacity(_cap);
-        $(let _ = _map.insert($strat::ID, $strat::new_boxed);)*
+        $(let _ = _map.insert($impl::ID, $impl::new_boxed);)*
         _map
       };
     }
