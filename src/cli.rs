@@ -9,14 +9,8 @@ use crate::impl_prelude::*;
 use clap::{App, AppSettings, Arg};
 
 #[derive(Debug, Clone)]
-pub struct CommonOpts {
+pub struct GlobalOpts {
   pub verbose: bool,
-}
-
-#[derive(Debug, Clone)]
-pub struct Opts {
-  pub common_opts: CommonOpts,
-  pub command_opts: CommandOpts,
 }
 
 #[derive(Debug, Clone)]
@@ -30,35 +24,35 @@ pub enum CommandOpts {
   Import(Box<import::CommandOpts>),
 }
 
-pub fn parse_opts() -> AnyResult<Opts> {
+pub fn parse_opts() -> AnyResult<(GlobalOpts, CommandOpts)> {
   let matches = create_arg_parser().get_matches();
-  Ok(Opts {
-    common_opts: CommonOpts { verbose: matches.is_present("verbose") },
+  let global_opts = GlobalOpts { verbose: matches.is_present("verbose") };
 
-    command_opts: match matches.subcommand() {
-      ("scan", Some(matches)) => {
-        CommandOpts::Scan(Box::new(scan::CommandOpts::from_matches(matches)))
-      }
+  let command_opts = match matches.subcommand() {
+    ("scan", Some(matches)) => {
+      CommandOpts::Scan(Box::new(scan::CommandOpts::from_matches(matches)))
+    }
 
-      ("create-project", Some(matches)) => {
-        CommandOpts::CreateProject(Box::new(create_project::CommandOpts::from_matches(matches)))
-      }
+    ("create-project", Some(matches)) => {
+      CommandOpts::CreateProject(Box::new(create_project::CommandOpts::from_matches(matches)))
+    }
 
-      ("parse-po", Some(matches)) => {
-        CommandOpts::ParsePo(Box::new(parse_po::CommandOpts::from_matches(matches)))
-      }
+    ("parse-po", Some(matches)) => {
+      CommandOpts::ParsePo(Box::new(parse_po::CommandOpts::from_matches(matches)))
+    }
 
-      ("export", Some(matches)) => {
-        CommandOpts::Export(Box::new(export::CommandOpts::from_matches(matches)))
-      }
+    ("export", Some(matches)) => {
+      CommandOpts::Export(Box::new(export::CommandOpts::from_matches(matches)))
+    }
 
-      ("import", Some(matches)) => {
-        CommandOpts::Import(Box::new(import::CommandOpts::from_matches(matches)))
-      }
+    ("import", Some(matches)) => {
+      CommandOpts::Import(Box::new(import::CommandOpts::from_matches(matches)))
+    }
 
-      _ => unreachable!("{:#?}", matches),
-    },
-  })
+    _ => unreachable!("{:#?}", matches),
+  };
+
+  Ok((global_opts, command_opts))
 }
 
 fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {

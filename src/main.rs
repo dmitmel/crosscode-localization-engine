@@ -47,12 +47,12 @@ pub fn try_main() -> AnyResult<()> {
     "trace",
   ));
 
-  let cli::Opts { common_opts, command_opts } =
+  let (global_opts, command_opts) =
     cli::parse_opts().context("Failed to parse command-line arguments")?;
 
   log::set_max_level({
     let log_level_from_options =
-      if common_opts.verbose { log::LevelFilter::Trace } else { log::LevelFilter::Debug };
+      if global_opts.verbose { log::LevelFilter::Trace } else { log::LevelFilter::Debug };
     log::max_level().min(log_level_from_options)
   });
 
@@ -60,10 +60,10 @@ pub fn try_main() -> AnyResult<()> {
   info!("{}/{} v{}", CRATE_TITLE, CRATE_NAME, CRATE_VERSION);
 
   match command_opts {
-    cli::CommandOpts::Scan(cmd_opts) => cli::scan::run(common_opts, *cmd_opts),
-    cli::CommandOpts::CreateProject(cmd_opts) => cli::create_project::run(common_opts, *cmd_opts),
-    cli::CommandOpts::ParsePo(cmd_opts) => cli::parse_po::run(common_opts, *cmd_opts),
-    cli::CommandOpts::Export(cmd_opts) => cli::export::run(common_opts, *cmd_opts),
+    cli::CommandOpts::Scan(cmd_opts) => cli::scan::run(global_opts, *cmd_opts),
+    cli::CommandOpts::CreateProject(cmd_opts) => cli::create_project::run(global_opts, *cmd_opts),
+    cli::CommandOpts::ParsePo(cmd_opts) => cli::parse_po::run(global_opts, *cmd_opts),
+    cli::CommandOpts::Export(cmd_opts) => cli::export::run(global_opts, *cmd_opts),
     cli::CommandOpts::Import(cmd_opts) => {
       println!("{:#?}", cmd_opts);
       Ok(())

@@ -55,7 +55,7 @@ pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
     )
 }
 
-pub fn run(_common_opts: cli::CommonOpts, command_opts: CommandOpts) -> AnyResult<()> {
+pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResult<()> {
   info!(
     "Performing a scan of game files in the assets dir '{}'",
     command_opts.assets_dir.display()

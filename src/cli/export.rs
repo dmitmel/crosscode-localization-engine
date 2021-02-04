@@ -104,7 +104,7 @@ pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
     )
 }
 
-pub fn run(_common_opts: cli::CommonOpts, command_opts: CommandOpts) -> AnyResult<()> {
+pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResult<()> {
   let output_path = command_opts.output;
   info!(
     "Exporting a translation project in '{}' as '{}' into '{}'",

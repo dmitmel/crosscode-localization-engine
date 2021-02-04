@@ -101,7 +101,7 @@ pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
     )
 }
 
-pub fn run(_common_opts: cli::CommonOpts, command_opts: CommandOpts) -> AnyResult<()> {
+pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResult<()> {
   let project_dir = command_opts.project_dir;
   info!(
     "Creating a translation project in '{}', translation from '{}' to '{}'",
