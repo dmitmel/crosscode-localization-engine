@@ -104,10 +104,8 @@ pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
 pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResult<()> {
   let project_dir = command_opts.project_dir;
   info!(
-    "Creating a translation project in '{}', translation from '{}' to '{}'",
-    project_dir.display(),
-    command_opts.original_locale,
-    command_opts.translation_locale,
+    "Creating a translation project in {:?}, translation from {:?} to {:?}",
+    project_dir, command_opts.original_locale, command_opts.translation_locale,
   );
 
   let scan_db =

@@ -13,7 +13,7 @@ pub fn extract_from_file<'json>(
 ) -> Option<LangLabelIter<'json>> {
   let extraction_fn = if found_file.is_lang_file {
     if json_data.get("DOCTYPE").and_then(|v| v.as_str()) != Some("STATIC-LANG-FILE") {
-      warn!("{}: lang file is invalid: DOCTYPE isn't 'STATIC-LANG-FILE'", found_file.path);
+      warn!("{:?}: lang file is invalid: DOCTYPE isn't 'STATIC-LANG-FILE'", found_file.path);
       return None;
     }
     try_extract_lang_label_from_lang_file
@@ -39,7 +39,7 @@ fn try_extract_lang_label<'json>(
 
   let text = object.get(EXTRACTED_LOCALE)?.as_str().or_else(|| {
     warn!(
-      "{}: lang label {} is invalid: property '{}' is not a string",
+      "{:?}: lang label {:?} is invalid: property {:?} is not a string",
       file_path,
       json_path.join("/"),
       EXTRACTED_LOCALE,
@@ -51,7 +51,7 @@ fn try_extract_lang_label<'json>(
     json::Value::Null => 0,
     json::Value::Number(n) => n.as_i64().and_then(|n| i32::try_from(n).ok()).or_else(|| {
       warn!(
-        "{}: lang label {} is invalid: lang UID {} can't be converted to i32",
+        "{:?}: lang label {:?} is invalid: lang UID {:?} can't be converted to i32",
         file_path,
         json_path.join("/"),
         n,
@@ -60,7 +60,7 @@ fn try_extract_lang_label<'json>(
     })?,
     _ => {
       warn!(
-        "{}: lang label {} is invalid: optional property 'langUid' is not a number",
+        "{:?}: lang label {:?} is invalid: optional property 'langUid' is not a number",
         file_path,
         json_path.join("/"),
       );

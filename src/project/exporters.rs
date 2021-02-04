@@ -62,7 +62,7 @@ exporters_map![LocalizeMeTrPackExporter, GettextPoExporter];
 
 pub fn create(id: &str, config: ExporterConfig) -> AnyResult<Box<dyn Exporter>> {
   let constructor: &fn(config: ExporterConfig) -> Box<dyn Exporter> =
-    EXPORTERS_MAP.get(id).ok_or_else(|| format_err!("no such exporter '{}'", id))?;
+    EXPORTERS_MAP.get(id).ok_or_else(|| format_err!("no such exporter {:?}", id))?;
   Ok(constructor(config))
 }
 

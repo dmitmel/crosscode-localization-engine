@@ -56,10 +56,7 @@ pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
 }
 
 pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResult<()> {
-  info!(
-    "Performing a scan of game files in the assets dir '{}'",
-    command_opts.assets_dir.display()
-  );
+  info!("Performing a scan of game files in the assets dir {:?}", command_opts.assets_dir);
 
   let game_version =
     read_game_version(&command_opts.assets_dir).context("Failed to read the game version")?;
@@ -83,12 +80,12 @@ pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResul
 
   let all_json_files_len = all_json_files.len();
   for (i, found_file) in all_json_files.into_iter().enumerate() {
-    trace!("[{}/{}] {}", i + 1, all_json_files_len, found_file.path);
+    trace!("[{}/{}] {:?}", i + 1, all_json_files_len, found_file.path);
     let mut scan_db_file: Option<Rc<scan::ScanDbGameFile>> = None;
 
     let abs_path = command_opts.assets_dir.join(&found_file.path);
     let json_data: json::Value = utils::json::read_file(&abs_path, &mut Vec::new())
-      .with_context(|| format!("Failed to deserialize from JSON file '{}'", abs_path.display()))?;
+      .with_context(|| format!("Failed to deserialize from JSON file {:?}", abs_path))?;
 
     let lang_labels_iter = match lang_label_extractor::extract_from_file(&found_file, &json_data) {
       Some(v) => v,
@@ -106,7 +103,7 @@ pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResul
         match fragment_descriptions::generate(&json_data, &json_path) {
           Ok(v) => v,
           Err(e) => {
-            warn!("file '{}': fragment '{}': {:?}", found_file.path, json_path, e);
+            warn!("file {:?}: fragment {:?}: {:?}", found_file.path, json_path, e);
             continue;
           }
         }
@@ -169,9 +166,8 @@ pub fn read_game_version(assets_dir: &Path) -> AnyResult<RcString> {
 
   let mut changelog_bytes = Vec::new();
   let changelog_data: ChangelogFileRef =
-    utils::json::read_file(&abs_changelog_path, &mut changelog_bytes).with_context(|| {
-      format!("Failed to serialize to JSON file '{}'", abs_changelog_path.display())
-    })?;
+    utils::json::read_file(&abs_changelog_path, &mut changelog_bytes)
+      .with_context(|| format!("Failed to serialize to JSON file {:?}", abs_changelog_path))?;
 
   let latest_entry = changelog_data
     .changelog

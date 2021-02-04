@@ -42,7 +42,7 @@ importers_map![LocalizeMeTrPackImporter, CcRuChapterFragmentsImporter, GettextPo
 
 pub fn create_by_id(id: &str) -> AnyResult<Box<dyn Importer>> {
   let constructor: &fn() -> Box<dyn Importer> =
-    IMPORTERS_MAP.get(id).ok_or_else(|| format_err!("no such importer '{}'", id))?;
+    IMPORTERS_MAP.get(id).ok_or_else(|| format_err!("no such importer {:?}", id))?;
   Ok(constructor())
 }
 

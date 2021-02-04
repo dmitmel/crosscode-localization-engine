@@ -101,10 +101,8 @@ impl ScanDb {
   }
 
   pub fn open(db_file_path: PathBuf) -> AnyResult<Rc<Self>> {
-    let raw_data: ScanDbSerde =
-      json::read_file(&db_file_path, &mut Vec::new()).with_context(|| {
-        format!("Failed to deserialize from JSON file '{}'", db_file_path.display())
-      })?;
+    let raw_data: ScanDbSerde = json::read_file(&db_file_path, &mut Vec::new())
+      .with_context(|| format!("Failed to deserialize from JSON file {:?}", db_file_path))?;
 
     let myself = Self::new(db_file_path, ScanDbMeta {
       uuid: raw_data.uuid,
@@ -137,9 +135,7 @@ impl ScanDb {
 
   pub fn write_force(&self) -> AnyResult<()> {
     json::write_file(&self.db_file_path, self, json::UltimateFormatterConfig::default())
-      .with_context(|| {
-        format!("Failed to serialize to JSON file '{}'", self.db_file_path.display())
-      })?;
+      .with_context(|| format!("Failed to serialize to JSON file {:?}", self.db_file_path))?;
     self.dirty_flag.set(false);
     Ok(())
   }

@@ -52,15 +52,14 @@ pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>
   let asset_roots_len = asset_roots.len();
   for (i, asset_root) in asset_roots.into_iter().enumerate() {
     let data_dir = asset_root.join(*DATA_DIR);
-    info!("[{}/{}] Listing all JSON files in '{}'", i + 1, asset_roots_len, data_dir.display());
+    info!("[{}/{}] Listing all JSON files in {:?}", i + 1, asset_roots_len, data_dir);
 
     let data_dir_abs = assets_dir.join(&data_dir);
 
     let mut file_count: usize = 0;
     for entry in walkdir::WalkDir::new(&data_dir_abs).into_iter() {
-      let entry = entry.with_context(|| {
-        format!("Failed to list all files in dir '{}'", data_dir_abs.display())
-      })?;
+      let entry =
+        entry.with_context(|| format!("Failed to list all files in dir {:?}", data_dir_abs))?;
 
       if !entry.file_type().is_file() || entry.path().extension() != Some(*JSON_EXTENSION) {
         continue;
@@ -105,7 +104,7 @@ fn read_extensions_dir(
       let entry: fs::DirEntry = entry?;
       let file_type: fs::FileType = entry
         .file_type()
-        .with_context(|| format!("Failed to get the file type of '{}'", entry.path().display()))?;
+        .with_context(|| format!("Failed to get the file type of {:?}", entry.path()))?;
 
       if !file_type.is_dir() {
         continue;
@@ -118,18 +117,18 @@ fn read_extensions_dir(
 
       if !assets_dir.join(&metadata_file).exists() {
         trace!(
-          "Dir '{}' is not an extension - the metadata file '{}' doesn't exist",
-          extension_dir_name.display(),
-          metadata_file.display(),
+          "Dir {:?} is not an extension - the metadata file {:?} doesn't exist",
+          extension_dir_name,
+          metadata_file,
         );
         continue;
       }
 
       extension_count += 1;
       trace!(
-        "Found extension '{}' with the metadata file '{}'",
-        extension_dir_name.display(),
-        metadata_file.display(),
+        "Found extension {:?} with the metadata file {:?}",
+        extension_dir_name,
+        metadata_file,
       );
       found_files.push(FoundJsonFile {
         path: RcString::from(path_to_str_with_error(&metadata_file)?),
@@ -143,5 +142,5 @@ fn read_extensions_dir(
 }
 
 fn path_to_str_with_error(path: &Path) -> AnyResult<&str> {
-  path.to_str().ok_or_else(|| format_err!("Non-utf8 file path: '{}'", path.display()))
+  path.to_str().ok_or_else(|| format_err!("Non-utf8 file path: {:?}", path))
 }

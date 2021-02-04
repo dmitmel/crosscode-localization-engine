@@ -188,7 +188,7 @@ impl ProjectMeta {
   pub fn write_force(&self) -> AnyResult<()> {
     let fs_path = self.fs_path();
     json::write_file(&fs_path, self, json::UltimateFormatterConfig::default())
-      .with_context(|| format!("Failed to serialize to JSON file '{}'", fs_path.display()))?;
+      .with_context(|| format!("Failed to serialize to JSON file {:?}", fs_path))?;
     self.dirty_flag.set(false);
     Ok(())
   }
@@ -244,9 +244,7 @@ impl Project {
   pub fn open(root_dir: PathBuf) -> AnyResult<Rc<Self>> {
     let meta_file_path = root_dir.join(*META_FILE_NAME);
     let meta_raw: ProjectMetaSerde = json::read_file(&meta_file_path, &mut Vec::new())
-      .with_context(|| {
-        format!("Failed to deserialize from JSON file '{}'", meta_file_path.display())
-      })?;
+      .with_context(|| format!("Failed to deserialize from JSON file {:?}", meta_file_path))?;
 
     let myself = Self::create(root_dir, ProjectMetaInitOpts {
       uuid: meta_raw.uuid,
@@ -271,9 +269,7 @@ impl Project {
       };
 
       let tr_file_raw: TrFileSerde = json::read_file(&tr_file_fs_path, &mut Vec::new())
-        .with_context(|| {
-          format!("Failed to deserialize from JSON file '{}'", tr_file_fs_path.display())
-        })?;
+        .with_context(|| format!("Failed to deserialize from JSON file {:?}", tr_file_fs_path))?;
       let tr_file = myself.new_tr_file(TrFileInitOpts {
         uuid: tr_file_raw.uuid,
         creation_timestamp: tr_file_raw.creation_timestamp,
@@ -357,8 +353,8 @@ impl Project {
 
     for (path, tr_file) in tr_files.iter() {
       file_index += 1;
-      trace!("[{}/{}] Writing translation file '{}'", file_index, total_files_count, path);
-      tr_file.write().with_context(|| format!("Failed to write TrFile '{}'", path))?;
+      trace!("[{}/{}] Writing translation file {:?}", file_index, total_files_count, path);
+      tr_file.write().with_context(|| format!("Failed to write TrFile {:?}", path))?;
     }
 
     Ok(())
@@ -463,11 +459,10 @@ impl TrFile {
 
   pub fn write_force(&self) -> AnyResult<()> {
     let fs_path = self.fs_path();
-    utils::create_dir_recursively(fs_path.parent().unwrap()).with_context(|| {
-      format!("Failed to create the parent directories for '{}'", fs_path.display())
-    })?;
+    utils::create_dir_recursively(fs_path.parent().unwrap())
+      .with_context(|| format!("Failed to create the parent directories for {:?}", fs_path))?;
     json::write_file(&fs_path, self, json::UltimateFormatterConfig::default())
-      .with_context(|| format!("Failed to serialize to JSON file '{}'", fs_path.display()))?;
+      .with_context(|| format!("Failed to serialize to JSON file {:?}", fs_path))?;
     self.dirty_flag.set(false);
     Ok(())
   }

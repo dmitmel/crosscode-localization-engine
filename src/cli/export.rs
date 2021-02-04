@@ -107,10 +107,8 @@ pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
 pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResult<()> {
   let output_path = command_opts.output;
   info!(
-    "Exporting a translation project in '{}' as '{}' into '{}'",
-    command_opts.project_dir.display(),
-    command_opts.format,
-    output_path.display(),
+    "Exporting a translation project in {:?} as {:?} into {:?}",
+    command_opts.project_dir, command_opts.format, output_path,
   );
 
   let project = Project::open(command_opts.project_dir).context("Failed to open the project")?;
@@ -140,7 +138,7 @@ pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResul
         } else {
           bail!(
             "The selected splitter can't be used for export because it has requested per-fragment \
-            splitting on the game file '{}'. An entire game file can be assigned to one and only \
+            splitting on the game file {:?}. An entire game file can be assigned to one and only \
             one export file.",
             game_file_path,
           )
@@ -154,8 +152,8 @@ pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResul
       {
         ensure!(
           prev_assigned_export_file_path == export_file_path,
-          "The splitter has assigned inconsistent export paths to the game file '{}': the \
-          previous value was '{}', the new one is '{}'. This is a bug in the splitter.",
+          "The splitter has assigned inconsistent export paths to the game file {:?}: the \
+          previous value was {:?}, the new one is {:?}. This is a bug in the splitter.",
           game_file_path,
           prev_assigned_export_file_path,
           export_file_path,
@@ -182,7 +180,7 @@ pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResul
   let mut export_fragments_to_file = |path: &Path, fragments: &[Rc<Fragment>]| -> AnyResult<()> {
     let mut writer = io::BufWriter::new(
       fs::File::create(&path)
-        .with_context(|| format!("Failed to open file '{}' for writing", path.display()))?,
+        .with_context(|| format!("Failed to open file {:?} for writing", path))?,
     );
     exporter.export(project.meta(), &fragments, &mut writer)?;
     writer.flush()?;
@@ -193,11 +191,10 @@ pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResul
     for (export_file_path, fragments) in &fragments_by_export_path {
       let export_file_path = output_path.join(export_file_path);
       utils::create_dir_recursively(export_file_path.parent().unwrap()).with_context(|| {
-        format!("Failed to create the parent directories for '{}'", export_file_path.display())
+        format!("Failed to create the parent directories for {:?}", export_file_path)
       })?;
-      export_fragments_to_file(&export_file_path, fragments).with_context(|| {
-        format!("Failed to export all fragments to file '{}'", output_path.display())
-      })?;
+      export_fragments_to_file(&export_file_path, fragments)
+        .with_context(|| format!("Failed to export all fragments to file {:?}", output_path))?;
     }
 
     info!(
@@ -206,9 +203,8 @@ pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResul
       fragments_by_export_path.len(),
     );
   } else {
-    export_fragments_to_file(&output_path, &all_exported_fragments).with_context(|| {
-      format!("Failed to export all fragments to file '{}'", output_path.display())
-    })?;
+    export_fragments_to_file(&output_path, &all_exported_fragments)
+      .with_context(|| format!("Failed to export all fragments to file {:?}", output_path))?;
     info!("Exported {} fragments", all_exported_fragments.len());
   }
 
@@ -222,9 +218,7 @@ pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResul
           ..Default::default()
         },
       )
-      .with_context(|| {
-        format!("Failed to write the mapping file to '{}'", mapping_file_path.display())
-      })?;
+      .with_context(|| format!("Failed to write the mapping file to {:?}", mapping_file_path))?;
 
       info!("Written the mapping file with {} entries", exported_files_mapping.len());
     } else {

@@ -69,7 +69,7 @@ splitters_map![
 
 pub fn create_by_id(id: &str) -> AnyResult<Box<dyn Splitter>> {
   let constructor: &fn() -> Box<dyn Splitter> =
-    SPLITTERS_MAPS.get(id).ok_or_else(|| format_err!("no such splitter '{}'", id))?;
+    SPLITTERS_MAPS.get(id).ok_or_else(|| format_err!("no such splitter {:?}", id))?;
   Ok(constructor())
 }
 
