@@ -1,7 +1,7 @@
 use crate::cli;
 use crate::impl_prelude::*;
 use crate::project;
-use crate::project::splitting_strategies;
+use crate::project::splitters;
 use crate::rc_string::RcString;
 use crate::scan;
 use crate::utils;
@@ -17,7 +17,7 @@ pub struct CommandOpts {
   pub original_locale: RcString,
   pub reference_locales: Vec<RcString>,
   pub translation_locale: RcString,
-  pub splitting_strategy: RcString,
+  pub splitter: RcString,
   pub translations_dir: RcString,
 }
 
@@ -31,7 +31,7 @@ impl CommandOpts {
         .values_of("reference_locales")
         .map_or_else(Vec::new, |values| values.map(RcString::from).collect()),
       translation_locale: RcString::from(matches.value_of("translation_locale").unwrap()),
-      splitting_strategy: RcString::from(matches.value_of("splitting_strategy").unwrap()),
+      splitter: RcString::from(matches.value_of("splitter").unwrap()),
       translations_dir: RcString::from(matches.value_of("translations_dir").unwrap()),
     }
   }
@@ -76,14 +76,14 @@ pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
         .help("Locale of the translation."),
     )
     .arg(
-      clap::Arg::with_name("splitting_strategy")
+      clap::Arg::with_name("splitter")
         .value_name("NAME")
-        .long("splitting-strategy")
-        .possible_values(splitting_strategies::SPLITTING_STRATEGIES_IDS)
-        .default_value(splitting_strategies::NextGenerationStrategy::ID)
+        .long("splitter")
+        .possible_values(splitters::SPLITTERS_IDS)
+        .default_value(splitters::NextGenerationSplitter::ID)
         .help(
           "Strategy used for assigning game files (and individual fragments in them) to \
-              translation storage files.",
+          translation storage files.",
         ),
     )
     .arg(
@@ -124,7 +124,7 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: CommandOpts) -> AnyResul
     reference_locales: command_opts.reference_locales,
     translation_locale: command_opts.translation_locale,
     translations_dir: command_opts.translations_dir,
-    splitting_strategy: command_opts.splitting_strategy,
+    splitter: command_opts.splitter,
   })
   .context("Failed to create the project structure")?;
 
@@ -133,7 +133,7 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: CommandOpts) -> AnyResul
   for scan_game_file in scan_db.game_files().values() {
     let global_tr_file_path: Option<RcString> = project
       .meta()
-      .splitting_strategy_mut()
+      .splitter_mut()
       .get_tr_file_for_entire_game_file(scan_game_file.path())
       .map(RcString::from);
 
@@ -148,7 +148,7 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: CommandOpts) -> AnyResul
         None => RcString::from(
           project
             .meta()
-            .splitting_strategy_mut()
+            .splitter_mut()
             .get_tr_file_for_fragment(scan_fragment.file_path(), scan_fragment.json_path()),
         ),
       };

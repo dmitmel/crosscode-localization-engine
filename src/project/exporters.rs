@@ -58,7 +58,7 @@ macro_rules! exporters_map {
   };
 }
 
-exporters_map![LocalizeMeTrPack, GettextPo];
+exporters_map![LocalizeMeTrPackExporter, GettextPoExporter];
 
 pub fn create(id: &str, config: ExporterConfig) -> AnyResult<Box<dyn Exporter>> {
   let constructor: &fn(config: ExporterConfig) -> Box<dyn Exporter> =
@@ -67,15 +67,15 @@ pub fn create(id: &str, config: ExporterConfig) -> AnyResult<Box<dyn Exporter>> 
 }
 
 #[derive(Debug)]
-pub struct LocalizeMeTrPack {
+pub struct LocalizeMeTrPackExporter {
   json_fmt: json::UltimateFormatter<'static>,
 }
 
-impl LocalizeMeTrPack {
+impl LocalizeMeTrPackExporter {
   pub const ID: &'static str = "lm-tr-pack";
 }
 
-impl Exporter for LocalizeMeTrPack {
+impl Exporter for LocalizeMeTrPackExporter {
   #[inline(always)]
   fn id_static() -> &'static str
   where
@@ -177,13 +177,13 @@ impl Exporter for LocalizeMeTrPack {
 }
 
 #[derive(Debug)]
-pub struct GettextPo;
+pub struct GettextPoExporter;
 
-impl GettextPo {
+impl GettextPoExporter {
   pub const ID: &'static str = "po";
 }
 
-impl Exporter for GettextPo {
+impl Exporter for GettextPoExporter {
   #[inline(always)]
   fn id_static() -> &'static str
   where

@@ -1,8 +1,8 @@
 pub mod exporters;
 pub mod importers;
-pub mod splitting_strategies;
+pub mod splitters;
 
-use self::splitting_strategies::SplittingStrategy;
+use self::splitters::Splitter;
 use crate::impl_prelude::*;
 use crate::rc_string::RcString;
 use crate::utils::json;
@@ -32,7 +32,7 @@ pub struct ProjectMetaSerde {
   pub reference_locales: Vec<RcString>,
   pub translation_locale: RcString,
   pub translations_dir: RcString,
-  pub splitting_strategy: RcString,
+  pub splitter: RcString,
   pub translation_files: Vec<RcString>,
 }
 
@@ -106,7 +106,7 @@ pub struct ProjectMeta {
   reference_locales: Vec<RcString>,
   translation_locale: RcString,
   translations_dir: RcString,
-  splitting_strategy: RefCell<Box<dyn SplittingStrategy>>,
+  splitter: RefCell<Box<dyn Splitter>>,
 
   // HACK: Don't ask.
   #[serde(
@@ -126,7 +126,7 @@ pub struct ProjectMetaInitOpts {
   pub reference_locales: Vec<RcString>,
   pub translation_locale: RcString,
   pub translations_dir: RcString,
-  pub splitting_strategy: RcString,
+  pub splitter: RcString,
 }
 
 impl ProjectMeta {
@@ -151,13 +151,9 @@ impl ProjectMeta {
   #[inline(always)]
   pub fn translations_dir(&self) -> &RcString { &self.translations_dir }
   #[inline(always)]
-  pub fn splitting_strategy(&self) -> Ref<Box<dyn SplittingStrategy>> {
-    self.splitting_strategy.borrow()
-  }
+  pub fn splitter(&self) -> Ref<Box<dyn Splitter>> { self.splitter.borrow() }
   #[inline(always)]
-  pub fn splitting_strategy_mut(&self) -> RefMut<Box<dyn SplittingStrategy>> {
-    self.splitting_strategy.borrow_mut()
-  }
+  pub fn splitter_mut(&self) -> RefMut<Box<dyn Splitter>> { self.splitter.borrow_mut() }
 
   fn new(project: &Rc<Project>, opts: ProjectMetaInitOpts) -> AnyResult<Self> {
     Ok(Self {
@@ -173,9 +169,8 @@ impl ProjectMeta {
       translation_locale: opts.translation_locale,
       translations_dir: opts.translations_dir,
 
-      splitting_strategy: RefCell::new(
-        splitting_strategies::create_by_id(&opts.splitting_strategy)
-          .context("Failed to create the splitting strategy")?,
+      splitter: RefCell::new(
+        splitters::create_by_id(&opts.splitter).context("Failed to create the splitter")?,
       ),
       translation_files_link: project.share_rc_weak(),
     })
@@ -262,7 +257,7 @@ impl Project {
       reference_locales: meta_raw.reference_locales,
       translation_locale: meta_raw.translation_locale,
       translations_dir: meta_raw.translations_dir,
-      splitting_strategy: meta_raw.splitting_strategy,
+      splitter: meta_raw.splitter,
     })?;
     myself.meta().dirty_flag.set(false);
 

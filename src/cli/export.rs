@@ -1,7 +1,7 @@
 use crate::cli;
 use crate::impl_prelude::*;
 use crate::project::exporters;
-use crate::project::splitting_strategies;
+use crate::project::splitters;
 use crate::project::{Fragment, Project};
 use crate::rc_string::RcString;
 use crate::utils::json;
@@ -19,7 +19,7 @@ pub struct CommandOpts {
   pub project_dir: PathBuf,
   pub output: PathBuf,
   pub format: RcString,
-  pub splitting_strategy: Option<RcString>,
+  pub splitter: Option<RcString>,
   pub remove_untranslated: bool,
   pub mapping_file_output: Option<PathBuf>,
   pub compact: bool,
@@ -31,7 +31,7 @@ impl CommandOpts {
       project_dir: PathBuf::from(matches.value_of_os("project_dir").unwrap()),
       output: PathBuf::from(matches.value_of_os("output").unwrap()),
       format: RcString::from(matches.value_of("format").unwrap()),
-      splitting_strategy: matches.value_of("splitting_strategy").map(RcString::from),
+      splitter: matches.value_of("splitter").map(RcString::from),
       remove_untranslated: matches.is_present("remove_untranslated"),
       mapping_file_output: matches.value_of_os("mapping_file_output").map(PathBuf::from),
       compact: matches.is_present("compact"),
@@ -59,7 +59,7 @@ pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
         .required(true)
         .help(
           "Path to the destination file or directory for exporting. A directory is used when a \
-          splitting strategy is specified.",
+          splitter is specified.",
         ),
     )
     .arg(
@@ -72,11 +72,11 @@ pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
         .help("Format to export to."),
     )
     .arg(
-      clap::Arg::with_name("splitting_strategy")
+      clap::Arg::with_name("splitter")
         .value_name("NAME")
-        .long("splitting-strategy")
-        .possible_values(splitting_strategies::SPLITTING_STRATEGIES_IDS)
-        .help("Strategy used for splitting exported files."),
+        .long("splitter")
+        .possible_values(splitters::SPLITTERS_IDS)
+        .help("Strategy used for splitting the exported files."),
     )
     .arg(
       clap::Arg::with_name("remove_untranslated")
@@ -119,11 +119,8 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: CommandOpts) -> AnyResul
   })
   .context("Failed to create the exporter")?;
 
-  let mut splitting_strategy = if let Some(id) = command_opts.splitting_strategy {
-    Some(
-      splitting_strategies::create_by_id(&id)
-        .context("Failed to create the splitting strategy")?,
-    )
+  let mut splitter = if let Some(id) = command_opts.splitter {
+    Some(splitters::create_by_id(&id).context("Failed to create the splitter")?)
   } else {
     None
   };
@@ -136,17 +133,15 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: CommandOpts) -> AnyResul
 
   for game_file in project.virtual_game_files().values() {
     let game_file_path = game_file.path();
-    let mut fragments_in_export_file: Option<&mut Vec<_>> = if let Some(splitting_strategy) =
-      &mut splitting_strategy
-    {
+    let mut fragments_in_export_file: Option<&mut Vec<_>> = if let Some(splitter) = &mut splitter {
       let export_file_path: Cow<'static, str> =
-        if let Some(path) = splitting_strategy.get_tr_file_for_entire_game_file(game_file_path) {
+        if let Some(path) = splitter.get_tr_file_for_entire_game_file(game_file_path) {
           path
         } else {
           bail!(
-            "The selected splitting strategy can't be used for export because it has requested \
-            per-fragment splitting on the game file '{}'. An entire game file can be assigned \
-            to one and only one export file.",
+            "The selected splitter can't be used for export because it has requested per-fragment \
+            splitting on the game file '{}'. An entire game file can be assigned to one and only \
+            one export file.",
             game_file_path,
           )
         };
@@ -159,9 +154,8 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: CommandOpts) -> AnyResul
       {
         ensure!(
           prev_assigned_export_file_path == export_file_path,
-          "The splitting strategy has assigned inconsistent export paths to the game file \
-          '{}': the previous value was '{}', the new one is '{}'. This is a bug in the \
-          splitting strategy.",
+          "The splitter has assigned inconsistent export paths to the game file '{}': the \
+          previous value was '{}', the new one is '{}'. This is a bug in the splitter.",
           game_file_path,
           prev_assigned_export_file_path,
           export_file_path,
@@ -195,7 +189,7 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: CommandOpts) -> AnyResul
     Ok(())
   };
 
-  if splitting_strategy.is_some() {
+  if splitter.is_some() {
     for (export_file_path, fragments) in &fragments_by_export_path {
       let export_file_path = output_path.join(export_file_path);
       utils::create_dir_recursively(export_file_path.parent().unwrap()).with_context(|| {
@@ -219,7 +213,7 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: CommandOpts) -> AnyResul
   }
 
   if let Some(mapping_file_path) = command_opts.mapping_file_output {
-    if splitting_strategy.is_some() {
+    if splitter.is_some() {
       json::write_file(
         &mapping_file_path,
         &exported_files_mapping,
@@ -235,7 +229,7 @@ pub fn run(_common_opts: cli::CommonOpts, command_opts: CommandOpts) -> AnyResul
       info!("Written the mapping file with {} entries", exported_files_mapping.len());
     } else {
       warn!(
-        "mapping_file_output was specified, but splitting_strategy wasn't. A mapping file doesn't \
+        "mapping_file_output was specified, but splitter wasn't. A mapping file doesn't \
         make sense without splitting."
       );
     }

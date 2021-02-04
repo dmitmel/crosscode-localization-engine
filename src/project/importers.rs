@@ -26,10 +26,7 @@ macro_rules! importers_map {
   ($($impl:ident),*) => {
     pub const IMPORTERS_IDS: &'static [&'static str] = &[$($impl::ID),+];
     lazy_static! {
-      pub static ref IMPORTERS_MAP: HashMap<
-        &'static str,
-        fn() -> Box<dyn Importer>,
-      > = {
+      pub static ref IMPORTERS_MAP: HashMap<&'static str, fn() -> Box<dyn Importer>> = {
         let _cap = count_exprs!($($impl),*);
         // Don't ask me why the compiler requires the following type
         // annotation.
@@ -41,7 +38,7 @@ macro_rules! importers_map {
   };
 }
 
-importers_map![LocalizeMeTrPack, CcRuChapterFragments, GettextPo];
+importers_map![LocalizeMeTrPackImporter, CcRuChapterFragmentsImporter, GettextPoImporter];
 
 pub fn create_by_id(id: &str) -> AnyResult<Box<dyn Importer>> {
   let constructor: &fn() -> Box<dyn Importer> =
@@ -50,13 +47,13 @@ pub fn create_by_id(id: &str) -> AnyResult<Box<dyn Importer>> {
 }
 
 #[derive(Debug)]
-pub struct LocalizeMeTrPack;
+pub struct LocalizeMeTrPackImporter;
 
-impl LocalizeMeTrPack {
+impl LocalizeMeTrPackImporter {
   pub const ID: &'static str = "lm-tr-pack";
 }
 
-impl Importer for LocalizeMeTrPack {
+impl Importer for LocalizeMeTrPackImporter {
   #[inline(always)]
   fn id_static() -> &'static str
   where
@@ -83,13 +80,13 @@ impl Importer for LocalizeMeTrPack {
 }
 
 #[derive(Debug)]
-pub struct CcRuChapterFragments;
+pub struct CcRuChapterFragmentsImporter;
 
-impl CcRuChapterFragments {
+impl CcRuChapterFragmentsImporter {
   pub const ID: &'static str = "cc-ru-chapter-fragments";
 }
 
-impl Importer for CcRuChapterFragments {
+impl Importer for CcRuChapterFragmentsImporter {
   #[inline(always)]
   fn id_static() -> &'static str
   where
@@ -116,13 +113,13 @@ impl Importer for CcRuChapterFragments {
 }
 
 #[derive(Debug)]
-pub struct GettextPo;
+pub struct GettextPoImporter;
 
-impl GettextPo {
+impl GettextPoImporter {
   pub const ID: &'static str = "po";
 }
 
-impl Importer for GettextPo {
+impl Importer for GettextPoImporter {
   #[inline(always)]
   fn id_static() -> &'static str
   where

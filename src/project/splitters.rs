@@ -6,12 +6,12 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
-pub trait SplittingStrategy: fmt::Debug {
+pub trait Splitter: fmt::Debug {
   fn id_static() -> &'static str
   where
     Self: Sized;
 
-  fn new_boxed() -> Box<dyn SplittingStrategy>
+  fn new_boxed() -> Box<dyn Splitter>
   where
     Self: Sized;
 
@@ -24,17 +24,17 @@ pub trait SplittingStrategy: fmt::Debug {
   }
 }
 
-impl<'de> serde::Deserialize<'de> for Box<dyn SplittingStrategy> {
+impl<'de> serde::Deserialize<'de> for Box<dyn Splitter> {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
   where
     D: serde::Deserializer<'de>,
   {
     let id = <&str>::deserialize(deserializer)?;
-    create_by_id(id).map_err(|_| serde::de::Error::unknown_variant(id, SPLITTING_STRATEGIES_IDS))
+    create_by_id(id).map_err(|_| serde::de::Error::unknown_variant(id, SPLITTERS_IDS))
   }
 }
 
-impl serde::Serialize for Box<dyn SplittingStrategy> {
+impl serde::Serialize for Box<dyn Splitter> {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where
     S: serde::Serializer,
@@ -43,15 +43,12 @@ impl serde::Serialize for Box<dyn SplittingStrategy> {
   }
 }
 
-macro_rules! strategies_map {
-  ($($impl:ident,)+) => { strategies_map![$($impl),+]; };
+macro_rules! splitters_map {
+  ($($impl:ident,)+) => { splitters_map![$($impl),+]; };
   ($($impl:ident),*) => {
-    pub const SPLITTING_STRATEGIES_IDS: &'static [&'static str] = &[$($impl::ID),+];
+    pub const SPLITTERS_IDS: &'static [&'static str] = &[$($impl::ID),+];
     lazy_static! {
-      pub static ref SPLITTING_STRATEGIES_MAP: HashMap<
-        &'static str,
-        fn() -> Box<dyn SplittingStrategy>,
-      > = {
+      pub static ref SPLITTERS_MAPS: HashMap<&'static str, fn() -> Box<dyn Splitter>> = {
         let _cap = count_exprs!($($impl),*);
         // Don't ask me why the compiler requires the following type
         // annotation.
@@ -63,38 +60,37 @@ macro_rules! strategies_map {
   };
 }
 
-strategies_map![
-  MonolithicFileStrategy,
-  SameFileTreeStrategy,
-  NotabenoidChaptersStrategy,
-  NextGenerationStrategy,
+splitters_map![
+  MonolithicFileSplitter,
+  SameFileTreeSplitter,
+  NotabenoidChaptersSplitter,
+  NextGenerationSplitter,
 ];
 
-pub fn create_by_id(id: &str) -> AnyResult<Box<dyn SplittingStrategy>> {
-  let constructor: &fn() -> Box<dyn SplittingStrategy> = SPLITTING_STRATEGIES_MAP
-    .get(id)
-    .ok_or_else(|| format_err!("no such splitting strategy '{}'", id))?;
+pub fn create_by_id(id: &str) -> AnyResult<Box<dyn Splitter>> {
+  let constructor: &fn() -> Box<dyn Splitter> =
+    SPLITTERS_MAPS.get(id).ok_or_else(|| format_err!("no such splitter '{}'", id))?;
   Ok(constructor())
 }
 
 #[derive(Debug)]
-pub struct MonolithicFileStrategy;
+pub struct MonolithicFileSplitter;
 
-impl MonolithicFileStrategy {
+impl MonolithicFileSplitter {
   pub const ID: &'static str = "monolithic-file";
 }
 
-impl SplittingStrategy for MonolithicFileStrategy {
+impl Splitter for MonolithicFileSplitter {
   #[inline(always)]
   fn id_static() -> &'static str
   where
     Self: Sized,
   {
-    MonolithicFileStrategy::ID
+    MonolithicFileSplitter::ID
   }
 
   #[inline(always)]
-  fn new_boxed() -> Box<dyn SplittingStrategy>
+  fn new_boxed() -> Box<dyn Splitter>
   where
     Self: Sized,
   {
@@ -110,13 +106,13 @@ impl SplittingStrategy for MonolithicFileStrategy {
 }
 
 #[derive(Debug)]
-pub struct SameFileTreeStrategy;
+pub struct SameFileTreeSplitter;
 
-impl SameFileTreeStrategy {
+impl SameFileTreeSplitter {
   pub const ID: &'static str = "same-file-tree";
 }
 
-impl SplittingStrategy for SameFileTreeStrategy {
+impl Splitter for SameFileTreeSplitter {
   #[inline(always)]
   fn id_static() -> &'static str
   where
@@ -126,7 +122,7 @@ impl SplittingStrategy for SameFileTreeStrategy {
   }
 
   #[inline(always)]
-  fn new_boxed() -> Box<dyn SplittingStrategy>
+  fn new_boxed() -> Box<dyn Splitter>
   where
     Self: Sized,
   {
@@ -143,13 +139,13 @@ impl SplittingStrategy for SameFileTreeStrategy {
 }
 
 #[derive(Debug)]
-pub struct NotabenoidChaptersStrategy;
+pub struct NotabenoidChaptersSplitter;
 
-impl NotabenoidChaptersStrategy {
+impl NotabenoidChaptersSplitter {
   pub const ID: &'static str = "notabenoid-chapters";
 }
 
-impl SplittingStrategy for NotabenoidChaptersStrategy {
+impl Splitter for NotabenoidChaptersSplitter {
   #[inline(always)]
   fn id_static() -> &'static str
   where
@@ -159,7 +155,7 @@ impl SplittingStrategy for NotabenoidChaptersStrategy {
   }
 
   #[inline(always)]
-  fn new_boxed() -> Box<dyn SplittingStrategy>
+  fn new_boxed() -> Box<dyn Splitter>
   where
     Self: Sized,
   {
@@ -241,14 +237,14 @@ impl SplittingStrategy for NotabenoidChaptersStrategy {
 }
 
 #[derive(Debug)]
-pub struct NextGenerationStrategy;
+pub struct NextGenerationSplitter;
 
-impl NextGenerationStrategy {
+impl NextGenerationSplitter {
   pub const ID: &'static str = "next-generation";
 }
 
 #[allow(clippy::single_match)]
-impl SplittingStrategy for NextGenerationStrategy {
+impl Splitter for NextGenerationSplitter {
   #[inline(always)]
   fn id_static() -> &'static str
   where
@@ -258,7 +254,7 @@ impl SplittingStrategy for NextGenerationStrategy {
   }
 
   #[inline(always)]
-  fn new_boxed() -> Box<dyn SplittingStrategy>
+  fn new_boxed() -> Box<dyn Splitter>
   where
     Self: Sized,
   {
@@ -291,13 +287,13 @@ impl SplittingStrategy for NextGenerationStrategy {
       _ => {}
     }
 
-    Some(SameFileTreeStrategy.get_tr_file_for_entire_game_file(file_path).unwrap())
+    Some(SameFileTreeSplitter.get_tr_file_for_entire_game_file(file_path).unwrap())
   }
 
   fn get_tr_file_for_fragment(&mut self, file_path: &str, json_path: &str) -> Cow<'static, str> {
     let components: Vec<_> = file_path.split('/').collect();
     let json_components: Vec<_> = json_path.split('/').collect();
-    let tr_file_path = SameFileTreeStrategy.get_tr_file_for_entire_game_file(file_path).unwrap();
+    let tr_file_path = SameFileTreeSplitter.get_tr_file_for_entire_game_file(file_path).unwrap();
 
     match components[0] {
       "data" if components.len() > 1 => match components[1] {
