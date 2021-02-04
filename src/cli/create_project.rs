@@ -2,7 +2,7 @@ use crate::cli;
 use crate::impl_prelude::*;
 use crate::project;
 use crate::rc_string::RcString;
-use crate::scan::db::ScanDb;
+use crate::scan;
 use crate::utils;
 
 use std::collections::HashMap;
@@ -19,7 +19,8 @@ pub fn run(
     command_opts.translation_locale,
   );
 
-  let scan_db = ScanDb::open(command_opts.scan_db).context("Failed to open the scan database")?;
+  let scan_db =
+    scan::ScanDb::open(command_opts.scan_db).context("Failed to open the scan database")?;
 
   utils::create_dir_recursively(&project_dir).context("Failed to create the project dir")?;
   let timestamp = utils::get_timestamp();

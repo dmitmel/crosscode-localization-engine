@@ -7,11 +7,8 @@
 pub mod macros;
 
 pub mod cli;
-pub mod create_project;
-pub mod export;
 pub mod gettext_po;
 pub mod impl_prelude;
-pub mod parse_po;
 pub mod project;
 pub mod rc_string;
 pub mod scan;
@@ -63,10 +60,10 @@ pub fn try_main() -> AnyResult<()> {
   info!("{}/{} v{}", CRATE_TITLE, CRATE_NAME, CRATE_VERSION);
 
   match command_opts {
-    cli::CommandOpts::Scan(cmd_opts) => scan::run(common_opts, *cmd_opts),
-    cli::CommandOpts::CreateProject(cmd_opts) => create_project::run(common_opts, *cmd_opts),
-    cli::CommandOpts::ParsePo(cmd_opts) => parse_po::run(common_opts, *cmd_opts),
-    cli::CommandOpts::Export(cmd_opts) => export::run(common_opts, *cmd_opts),
+    cli::CommandOpts::Scan(cmd_opts) => cli::scan::run(common_opts, *cmd_opts),
+    cli::CommandOpts::CreateProject(cmd_opts) => cli::create_project::run(common_opts, *cmd_opts),
+    cli::CommandOpts::ParsePo(cmd_opts) => cli::parse_po::run(common_opts, *cmd_opts),
+    cli::CommandOpts::Export(cmd_opts) => cli::export::run(common_opts, *cmd_opts),
     cli::CommandOpts::Import(cmd_opts) => {
       println!("{:#?}", cmd_opts);
       Ok(())
