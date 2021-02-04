@@ -48,16 +48,16 @@ pub trait Importer: fmt::Debug {
 }
 
 macro_rules! importers_map {
-  ($($impl:ident,)+) => { importers_map![$($impl),+]; };
-  ($($impl:ident),*) => {
-    pub const IMPORTERS_IDS: &'static [&'static str] = &[$($impl::ID),+];
+  ($($imp:ident,)+) => { importers_map![$($imp),+]; };
+  ($($imp:ident),*) => {
+    pub const IMPORTERS_IDS: &'static [&'static str] = &[$($imp::ID),+];
     lazy_static! {
       pub static ref IMPORTERS_MAP: HashMap<&'static str, fn() -> Box<dyn Importer>> = {
-        let _cap = count_exprs!($($impl),*);
+        let _cap = count_exprs!($($imp),*);
         // Don't ask me why the compiler requires the following type
         // annotation.
         let mut _map: HashMap<_, fn() -> _> = HashMap::with_capacity(_cap);
-        $(let _ = _map.insert($impl::ID, $impl::new_boxed);)*
+        $(let _ = _map.insert($imp::ID, $imp::new_boxed);)*
         _map
       };
     }

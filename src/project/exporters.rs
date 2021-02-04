@@ -39,19 +39,19 @@ pub trait Exporter: fmt::Debug {
 }
 
 macro_rules! exporters_map {
-  ($($impl:ident,)+) => { exporters_map![$($impl),+]; };
-  ($($impl:ident),*) => {
-    pub const EXPORTERS_IDS: &'static [&'static str] = &[$($impl::ID),+];
+  ($($imp:ident,)+) => { exporters_map![$($imp),+]; };
+  ($($imp:ident),*) => {
+    pub const EXPORTERS_IDS: &'static [&'static str] = &[$($imp::ID),+];
     lazy_static! {
       pub static ref EXPORTERS_MAP: HashMap<
         &'static str,
         fn(config: ExporterConfig) -> Box<dyn Exporter>,
       > = {
-        let _cap = count_exprs!($($impl),*);
+        let _cap = count_exprs!($($imp),*);
         // Don't ask me why the compiler requires the following type
         // annotation.
         let mut _map: HashMap<_, fn(config: ExporterConfig) -> _> = HashMap::with_capacity(_cap);
-        $(let _ = _map.insert($impl::ID, $impl::new_boxed);)*
+        $(let _ = _map.insert($imp::ID, $imp::new_boxed);)*
         _map
       };
     }
