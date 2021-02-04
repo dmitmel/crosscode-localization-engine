@@ -1,12 +1,14 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[inline]
 pub fn is_refcell_vec_empty<T>(v: &RefCell<Vec<T>>) -> bool { v.borrow().is_empty() }
 #[inline]
 pub fn is_refcell_hashmap_empty<K, V>(v: &RefCell<HashMap<K, V>>) -> bool { v.borrow().is_empty() }
+#[inline]
+pub fn is_refcell_hashset_empty<K, V>(v: &RefCell<HashSet<K, V>>) -> bool { v.borrow().is_empty() }
 
 #[derive(Debug)]
 pub struct MultilineStringHelper;

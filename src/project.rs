@@ -13,7 +13,7 @@ use lazy_static::lazy_static;
 use once_cell::unsync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::cell::{Cell, Ref, RefCell, RefMut};
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak as RcWeak};
 use uuid::Uuid;
@@ -61,7 +61,7 @@ pub struct FragmentSerde {
   // #[serde(default)]
   // pub reference_texts: HashMap<RcString, Vec<RcString>>,
   #[serde(default)]
-  pub flags: HashMap<RcString, bool>,
+  pub flags: HashSet<RcString>,
   pub translations: Vec<TranslationSerde>,
   #[serde(default)]
   pub comments: Vec<CommentSerde>,
@@ -76,7 +76,7 @@ pub struct TranslationSerde {
   #[serde(with = "utils::serde::MultilineStringHelper")]
   pub text: RcString,
   #[serde(default)]
-  pub flags: HashMap<RcString, bool>,
+  pub flags: HashSet<RcString>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -553,7 +553,7 @@ pub struct FragmentInitOpts {
   pub description: Vec<RcString>,
   pub original_text: RcString,
   // pub reference_texts: HashMap<RcString, RcString>,
-  pub flags: HashMap<RcString, bool>,
+  pub flags: HashSet<RcString>,
 }
 
 #[derive(Debug, Serialize)]
@@ -578,8 +578,8 @@ pub struct Fragment {
   original_text: RcString,
   // #[serde(default, skip_serializing_if = "HashMap::is_empty")]
   // reference_texts: HashMap<RcString, RcString>,
-  #[serde(default, skip_serializing_if = "utils::serde::is_refcell_hashmap_empty")]
-  flags: RefCell<HashMap<RcString, bool>>,
+  #[serde(default, skip_serializing_if = "utils::serde::is_refcell_hashset_empty")]
+  flags: RefCell<HashSet<RcString>>,
 
   translations: RefCell<Vec<Rc<Translation>>>,
   #[serde(default, skip_serializing_if = "utils::serde::is_refcell_vec_empty")]
@@ -608,7 +608,7 @@ impl Fragment {
   // #[inline(always)]
   // pub fn reference_texts(&self) -> &HashMap<RcString, RcString> { &self.reference_texts }
   #[inline(always)]
-  pub fn flags(&self) -> Ref<HashMap<RcString, bool>> { self.flags.borrow() }
+  pub fn flags(&self) -> Ref<HashSet<RcString>> { self.flags.borrow() }
   #[inline(always)]
   pub fn translations(&self) -> Ref<Vec<Rc<Translation>>> { self.translations.borrow() }
   #[inline(always)]
@@ -669,8 +669,8 @@ pub struct Translation {
   creation_timestamp: Timestamp,
   modification_timestamp: Cell<Timestamp>,
   text: RefCell<RcString>,
-  #[serde(default, skip_serializing_if = "utils::serde::is_refcell_hashmap_empty")]
-  flags: RefCell<HashMap<RcString, bool>>,
+  #[serde(default, skip_serializing_if = "utils::serde::is_refcell_hashset_empty")]
+  flags: RefCell<HashSet<RcString>>,
 }
 
 impl Translation {

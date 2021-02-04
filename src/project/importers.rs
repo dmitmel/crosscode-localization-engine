@@ -5,7 +5,7 @@ use crate::rc_string::RcString;
 use crate::utils::Timestamp;
 
 use lazy_static::lazy_static;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -21,8 +21,7 @@ pub struct ImportedTranslation {
   pub author_username: Option<RcString>,
   pub creation_timestamp: Option<Timestamp>,
   pub text: RcString,
-  // TODO: use a Vec for storing flags (everywhere)
-  pub flags: HashMap<RcString, bool>,
+  pub flags: HashSet<RcString>,
 }
 
 pub trait Importer: fmt::Debug {
@@ -124,7 +123,7 @@ impl Importer for LocalizeMeTrPackImporter {
           author_username: None,
           creation_timestamp: None,
           text: RcString::from(tr_pack_entry.text),
-          flags: HashMap::new(),
+          flags: HashSet::new(),
         }],
       });
     }
@@ -182,7 +181,15 @@ impl Importer for CcRuChapterFragmentsImporter {
             author_username: Some(RcString::from(t.author_username)),
             creation_timestamp: Some(t.timestamp),
             text: RcString::from(t.text),
-            flags: t.flags.into_iter().map(|(k, v)| (RcString::from(k), v)).collect(),
+            flags: {
+              let mut flags = HashSet::with_capacity(t.flags.len());
+              for (k, v) in t.flags {
+                if v {
+                  flags.insert(RcString::from(k));
+                }
+              }
+              flags
+            },
           })
           .collect(),
       });
