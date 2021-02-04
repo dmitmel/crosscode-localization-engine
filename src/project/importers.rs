@@ -1,7 +1,9 @@
 use crate::cc_ru_compat;
+use crate::gettext_po;
 use crate::impl_prelude::*;
 use crate::localize_me;
 use crate::rc_string::RcString;
+use crate::utils;
 use crate::utils::Timestamp;
 
 use lazy_static::lazy_static;
@@ -39,6 +41,7 @@ pub trait Importer: fmt::Debug {
 
   fn import(
     &mut self,
+    file_path: &str,
     input: &str,
     imported_fragments: &mut Vec<ImportedFragment>,
   ) -> AnyResult<()>;
@@ -101,6 +104,7 @@ impl Importer for LocalizeMeTrPackImporter {
 
   fn import(
     &mut self,
+    file_path: &str,
     input: &str,
     imported_fragments: &mut Vec<ImportedFragment>,
   ) -> AnyResult<()> {
@@ -109,7 +113,7 @@ impl Importer for LocalizeMeTrPackImporter {
       let (lm_file_path, json_path) = match localize_me::parse_file_dict_path(&lm_file_dict_path) {
         Some(v) => v,
         None => {
-          warn!("Invalid Localize Me file_dict_path_str: {:?}", lm_file_dict_path);
+          warn!("TrPack {:?}: Invalid file_dict_path_str: {:?}", file_path, lm_file_dict_path);
           continue;
         }
       };
@@ -164,6 +168,7 @@ impl Importer for CcRuChapterFragmentsImporter {
 
   fn import(
     &mut self,
+    _file_path: &str,
     input: &str,
     imported_fragments: &mut Vec<ImportedFragment>,
   ) -> AnyResult<()> {
@@ -230,9 +235,47 @@ impl Importer for GettextPoImporter {
 
   fn import(
     &mut self,
-    _input: &str,
-    _imported_fragments: &mut Vec<ImportedFragment>,
+    file_path: &str,
+    input: &str,
+    imported_fragments: &mut Vec<ImportedFragment>,
   ) -> AnyResult<()> {
-    todo!()
+    for (i, message) in gettext_po::parse(&input).enumerate() {
+      let message = match message {
+        Ok(v) => v,
+        Err(e) => bail!("{}", e.nice_formatter(file_path, input)),
+      };
+      let msgctxt = utils::fast_concat_cow(&message.msgctxt);
+      let msgid = utils::fast_concat_cow(&message.msgid);
+      let msgstr = utils::fast_concat_cow(&message.msgstr);
+      if msgid.is_empty() {
+        continue;
+      }
+
+      let (file_path, json_path) = match localize_me::parse_file_dict_path(&msgctxt) {
+        Some(v) => v,
+        None => {
+          warn!(
+            "PO message #{} in {:?}: Invalid file_dict_path_str: {:?}",
+            i + 1,
+            file_path,
+            msgctxt,
+          );
+          continue;
+        }
+      };
+
+      imported_fragments.push(ImportedFragment {
+        file_path: RcString::from(file_path),
+        json_path: RcString::from(json_path),
+        original_text: RcString::from(msgid),
+        translations: vec![ImportedTranslation {
+          author_username: None,
+          creation_timestamp: None,
+          text: RcString::from(msgstr),
+          flags: HashSet::new(),
+        }],
+      });
+    }
+    Ok(())
   }
 }

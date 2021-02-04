@@ -3,6 +3,7 @@ pub mod serde;
 
 use crate::impl_prelude::*;
 
+use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::fs;
 use std::io;
@@ -24,6 +25,18 @@ pub fn get_timestamp() -> Timestamp {
 }
 
 pub fn fast_concat(strings: &[&str]) -> String {
+  let mut capacity = 0;
+  for s in strings {
+    capacity += s.len();
+  }
+  let mut result = String::with_capacity(capacity);
+  for s in strings {
+    result.push_str(s);
+  }
+  result
+}
+
+pub fn fast_concat_cow(strings: &[Cow<str>]) -> String {
   let mut capacity = 0;
   for s in strings {
     capacity += s.len();
