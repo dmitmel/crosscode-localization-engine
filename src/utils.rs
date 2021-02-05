@@ -93,7 +93,7 @@ mod private {
 }
 
 #[inline]
-pub fn is_default<T: Default + PartialEq>(t: &T) -> bool { t == &T::default() }
+pub fn is_default<T: Default + PartialEq>(t: &T) -> bool { *t == T::default() }
 
 /// Taken from <https://stackoverflow.com/a/40457615>.
 #[derive(Debug, Clone)]

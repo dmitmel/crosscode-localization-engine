@@ -227,6 +227,7 @@ pub struct ScanDbFragment {
   lang_uid: i32,
   description: Vec<RcString>,
   text: HashMap<RcString, RcString>,
+  // TODO: flags, for instance INJECTED_IN_MOD
 }
 
 impl ScanDbFragment {

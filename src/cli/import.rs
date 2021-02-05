@@ -48,8 +48,8 @@ pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
     .arg(
       clap::Arg::with_name("inputs")
         .value_name("PATH")
-        .required(true)
         .multiple(true)
+        .required(true)
         .help("Path to files to import translations from."),
     )
     .arg(
