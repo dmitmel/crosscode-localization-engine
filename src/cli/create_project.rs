@@ -6,7 +6,6 @@ use crate::rc_string::RcString;
 use crate::scan;
 use crate::utils;
 
-use std::collections::HashSet;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
@@ -209,7 +208,7 @@ pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResul
           description: scan_fragment.description().to_owned(),
           original_text,
           // reference_texts: HashMap::new(),
-          flags: HashSet::new(),
+          flags: scan_fragment.flags().to_owned(),
         });
       }
     }

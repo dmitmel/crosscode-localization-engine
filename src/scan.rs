@@ -10,7 +10,7 @@ use crate::utils::{self, RcExt, Timestamp};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::cell::{Cell, Ref, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak as RcWeak};
 use uuid::Uuid;
@@ -34,6 +34,7 @@ pub struct ScanDbFragmentSerde {
   pub lang_uid: i32,
   pub description: Vec<RcString>,
   pub text: HashMap<RcString, RcString>,
+  pub flags: HashSet<RcString>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -119,6 +120,7 @@ impl ScanDb {
           lang_uid: fragment_raw.lang_uid,
           description: fragment_raw.description,
           text: fragment_raw.text,
+          flags: fragment_raw.flags,
         });
       }
     }
@@ -210,6 +212,7 @@ pub struct ScanDbFragmentInitOpts {
   pub lang_uid: i32,
   pub description: Vec<RcString>,
   pub text: HashMap<RcString, RcString>,
+  pub flags: HashSet<RcString>,
 }
 
 #[derive(Debug, Serialize)]
@@ -227,7 +230,7 @@ pub struct ScanDbFragment {
   lang_uid: i32,
   description: Vec<RcString>,
   text: HashMap<RcString, RcString>,
-  // TODO: flags, for instance INJECTED_IN_MOD
+  flags: HashSet<RcString>,
 }
 
 impl ScanDbFragment {
@@ -249,6 +252,8 @@ impl ScanDbFragment {
   pub fn description(&self) -> &[RcString] { &self.description }
   #[inline(always)]
   pub fn text(&self) -> &HashMap<RcString, RcString> { &self.text }
+  #[inline(always)]
+  pub fn flags(&self) -> &HashSet<RcString> { &self.flags }
 
   fn new(
     fragment_init_opts: ScanDbFragmentInitOpts,
@@ -264,6 +269,7 @@ impl ScanDbFragment {
       lang_uid: fragment_init_opts.lang_uid,
       description: fragment_init_opts.description,
       text: fragment_init_opts.text,
+      flags: fragment_init_opts.flags,
     })
   }
 }

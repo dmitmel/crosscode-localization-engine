@@ -120,6 +120,7 @@ pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResul
         lang_uid,
         description,
         text: tmp_fragment_text.clone(),
+        flags: HashSet::new(),
       });
     }
   }
