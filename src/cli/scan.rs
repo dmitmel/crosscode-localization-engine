@@ -8,7 +8,7 @@ use crate::scan::lang_label_extractor::{self, LangLabel};
 use crate::utils;
 use crate::utils::json;
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::char;
@@ -138,9 +138,7 @@ pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResul
   Ok(())
 }
 
-lazy_static! {
-  static ref CHANGELOG_FILE_PATH: &'static Path = Path::new("data/changelog.json");
-}
+static CHANGELOG_FILE_PATH: Lazy<&'static Path> = Lazy::new(|| Path::new("data/changelog.json"));
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
 struct ChangelogFileRef<'a> {
@@ -207,16 +205,16 @@ pub fn read_game_version(assets_dir: &Path) -> AnyResult<RcString> {
   }
 }
 
-lazy_static! {
-  static ref IGNORED_STRINGS: HashSet<&'static str> = hashset![
+static IGNORED_STRINGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+  hashset![
     "",
     "en_US",
     "LOL, DO NOT TRANSLATE THIS!",
     "LOL, DO NOT TRANSLATE THIS! (hologram)",
     "\\c[1][DO NOT TRANSLATE THE FOLLOWING]\\c[0]",
     "\\c[1][DO NOT TRANSLATE FOLLOWING TEXTS]\\c[0]",
-  ];
-}
+  ]
+});
 
 #[allow(clippy::iter_nth_zero)]
 fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &FoundJsonFile) -> bool {

@@ -9,7 +9,7 @@ use crate::utils::json;
 use crate::utils::{self, RcExt, Timestamp};
 
 use indexmap::IndexMap;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use once_cell::unsync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::cell::{Cell, Ref, RefCell, RefMut};
@@ -18,9 +18,8 @@ use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak as RcWeak};
 use uuid::Uuid;
 
-lazy_static! {
-  pub static ref META_FILE_NAME: &'static Path = Path::new("crosslocale-project.json");
-}
+pub static META_FILE_NAME: Lazy<&'static Path> =
+  Lazy::new(|| Path::new("crosslocale-project.json"));
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectMetaSerde {

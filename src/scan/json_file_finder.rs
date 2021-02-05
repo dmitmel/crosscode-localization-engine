@@ -1,17 +1,15 @@
 use crate::impl_prelude::*;
 use crate::rc_string::RcString;
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 
-lazy_static! {
-  static ref DATA_DIR: &'static Path = Path::new("data");
-  static ref EXTENSIONS_DIR: &'static Path = Path::new("extension");
-  static ref LANG_DIR: &'static Path = Path::new("lang");
-  static ref JSON_EXTENSION: &'static OsStr = OsStr::new("json");
-}
+static DATA_DIR: Lazy<&'static Path> = Lazy::new(|| Path::new("data"));
+static EXTENSIONS_DIR: Lazy<&'static Path> = Lazy::new(|| Path::new("extension"));
+static LANG_DIR: Lazy<&'static Path> = Lazy::new(|| Path::new("lang"));
+static JSON_EXTENSION: Lazy<&'static OsStr> = Lazy::new(|| OsStr::new("json"));
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct FoundJsonFile {

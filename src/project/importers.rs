@@ -6,7 +6,7 @@ use crate::rc_string::RcString;
 use crate::utils;
 use crate::utils::Timestamp;
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
@@ -51,16 +51,15 @@ macro_rules! importers_map {
   ($($imp:ident,)+) => { importers_map![$($imp),+]; };
   ($($imp:ident),*) => {
     pub const IMPORTERS_IDS: &'static [&'static str] = &[$($imp::ID),+];
-    lazy_static! {
-      pub static ref IMPORTERS_MAP: HashMap<&'static str, fn() -> Box<dyn Importer>> = {
+    pub static IMPORTERS_MAP: Lazy<HashMap<&'static str, fn() -> Box<dyn Importer>>> =
+      Lazy::new(|| {
         let _cap = count_exprs!($($imp),*);
         // Don't ask me why the compiler requires the following type
         // annotation.
         let mut _map: HashMap<_, fn() -> _> = HashMap::with_capacity(_cap);
         $(let _ = _map.insert($imp::ID, $imp::new_boxed);)*
-        _map
-      };
-    }
+          _map
+      });
   };
 }
 

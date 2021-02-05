@@ -1,7 +1,7 @@
 use crate::impl_prelude::*;
 use crate::utils;
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -47,16 +47,15 @@ macro_rules! splitters_map {
   ($($imp:ident,)+) => { splitters_map![$($imp),+]; };
   ($($imp:ident),*) => {
     pub const SPLITTERS_IDS: &'static [&'static str] = &[$($imp::ID),+];
-    lazy_static! {
-      pub static ref SPLITTERS_MAPS: HashMap<&'static str, fn() -> Box<dyn Splitter>> = {
+    pub static SPLITTERS_MAPS: Lazy<HashMap<&'static str, fn() -> Box<dyn Splitter>>> =
+      Lazy::new(|| {
         let _cap = count_exprs!($($imp),*);
         // Don't ask me why the compiler requires the following type
         // annotation.
         let mut _map: HashMap<_, fn() -> _> = HashMap::with_capacity(_cap);
         $(let _ = _map.insert($imp::ID, $imp::new_boxed);)*
         _map
-      };
-    }
+      });
   };
 }
 
@@ -204,8 +203,8 @@ impl Splitter for NotabenoidChaptersSplitter {
 
       return "etc";
 
-      lazy_static! {
-        static ref AREAS_WITH_CHAPTERS: HashSet<&'static str> = hashset![
+      static AREAS_WITH_CHAPTERS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+        hashset![
           "arena",
           "arid-dng",
           "arid",
@@ -230,8 +229,8 @@ impl Splitter for NotabenoidChaptersSplitter {
           "shock-dng",
           "tree-dng",
           "wave-dng",
-        ];
-      }
+        ]
+      });
     }
   }
 }

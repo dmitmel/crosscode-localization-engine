@@ -95,7 +95,6 @@ dependencies = [
  "clap",
  "env_logger",
  "indexmap",
- "lazy_static",
  "log",
  "once_cell",
  "serde",

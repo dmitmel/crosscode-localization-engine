@@ -5,7 +5,7 @@ use crate::rc_string::RcString;
 use crate::utils::json;
 use crate::utils::{self, Timestamp};
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use serde_json::ser::Formatter;
 use std::collections::HashMap;
 use std::fmt;
@@ -42,19 +42,16 @@ macro_rules! exporters_map {
   ($($imp:ident,)+) => { exporters_map![$($imp),+]; };
   ($($imp:ident),*) => {
     pub const EXPORTERS_IDS: &'static [&'static str] = &[$($imp::ID),+];
-    lazy_static! {
-      pub static ref EXPORTERS_MAP: HashMap<
-        &'static str,
-        fn(config: ExporterConfig) -> Box<dyn Exporter>,
-      > = {
-        let _cap = count_exprs!($($imp),*);
-        // Don't ask me why the compiler requires the following type
-        // annotation.
-        let mut _map: HashMap<_, fn(config: ExporterConfig) -> _> = HashMap::with_capacity(_cap);
-        $(let _ = _map.insert($imp::ID, $imp::new_boxed);)*
-        _map
-      };
-    }
+    pub static EXPORTERS_MAP: Lazy<
+      HashMap<&'static str, fn(config: ExporterConfig) -> Box<dyn Exporter>>,
+    > = Lazy::new(|| {
+      let _cap = count_exprs!($($imp),*);
+      // Don't ask me why the compiler requires the following type
+      // annotation.
+      let mut _map: HashMap<_, fn(config: ExporterConfig) -> _> = HashMap::with_capacity(_cap);
+      $(let _ = _map.insert($imp::ID, $imp::new_boxed);)*
+      _map
+    });
   };
 }
 
