@@ -256,8 +256,10 @@ impl Importer for GettextPoImporter {
         continue;
       }
 
-      let (file_path, json_path) = match localize_me::parse_file_dict_path(&msgctxt) {
-        Some(v) => v,
+      let (file_path, json_path) = match msgctxt.find("//") {
+        Some(msgctxt_sep_index) => {
+          (&msgctxt[..msgctxt_sep_index], &msgctxt[msgctxt_sep_index + 2..])
+        }
         None => {
           warn!(
             "PO message #{} in {:?}: Invalid file_dict_path_str: {:?}",

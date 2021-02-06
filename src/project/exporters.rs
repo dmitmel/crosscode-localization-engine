@@ -211,11 +211,17 @@ impl Exporter for GettextPoExporter {
     writer: &mut dyn Write,
   ) -> AnyResult<()> {
     fn write_po_string(writer: &mut dyn io::Write, text: &str) -> io::Result<()> {
-      writer.write_all(b"\"")?;
-      let mut buf = String::new();
-      gettext_po::escape_str(text, &mut buf);
-      writer.write_all(buf.as_bytes())?;
-      writer.write_all(b"\"\n")?;
+      let resplit_text: Vec<&str> = utils::LinesWithEndings::new(text).collect();
+      if resplit_text.len() != 1 {
+        writer.write_all(b"\"\"\n")?;
+      }
+      for substr in resplit_text {
+        writer.write_all(b"\"")?;
+        let mut buf = String::new();
+        gettext_po::escape_str(substr, &mut buf);
+        writer.write_all(buf.as_bytes())?;
+        writer.write_all(b"\"\n")?;
+      }
       Ok(())
     }
 
@@ -236,38 +242,31 @@ impl Exporter for GettextPoExporter {
       time::OffsetDateTime::from_unix_timestamp(timestamp).lazy_format("%Y-%m-%d %H:%M")
     }
 
-    writer.write_all(b"msgid \"\"\n")?;
-    writer.write_all(b"msgstr \"\"\n")?;
-    write_po_string(
-      writer,
+    let metadata_block = utils::fast_concat(&[
       &format!("Project-Id-Version: crosscode {}\n", project_meta.game_version),
-    )?;
-    write_po_string(writer, "Report-Msgid-Bugs-To: \n")?;
-    write_po_string(
-      writer,
+      "Report-Msgid-Bugs-To: \n",
       &format!(
         "POT-Creation-Date: {}+0000\n",
         format_po_timestamp(project_meta.creation_timestamp)
       ),
-    )?;
-    write_po_string(
-      writer,
       &format!(
         "PO-Revision-Date: {}+0000\n",
         format_po_timestamp(project_meta.modification_timestamp.get())
       ),
-    )?;
-    write_po_string(writer, "Last-Translator: \n")?;
-    write_po_string(writer, "Language-Team: \n")?;
-    write_po_string(writer, &format!("Language: {}\n", project_meta.translation_locale))?;
-    write_po_string(writer, "MIME-Version: 1.0\n")?;
-    write_po_string(writer, "Content-Type: text/plain; charset=UTF-8\n")?;
-    write_po_string(writer, "Content-Transfer-Encoding: 8bit\n")?;
-    write_po_string(writer, "Plural-Forms: \n")?;
-    write_po_string(
-      writer,
+      "Last-Translator: \n",
+      "Language-Team: \n",
+      &format!("Language: {}\n", project_meta.translation_locale),
+      "MIME-Version: 1.0\n",
+      "Content-Type: text/plain; charset=UTF-8\n",
+      "Content-Transfer-Encoding: 8bit\n",
+      "Plural-Forms: \n",
       &format!("X-Generator: {} {}\n", crate::CRATE_NAME, crate::CRATE_VERSION),
-    )?;
+    ]);
+
+    writer.write_all(b"msgid ")?;
+    write_po_string(writer, "")?;
+    writer.write_all(b"msgstr ")?;
+    write_po_string(writer, &metadata_block)?;
 
     for fragment in fragments {
       // The empty msgid is reserved only for the very first entry in a po file
@@ -299,7 +298,7 @@ impl Exporter for GettextPoExporter {
       writer.write_all(b"msgctxt ")?;
       write_po_string(
         writer,
-        &utils::fast_concat(&[&fragment.file_path, " ", &fragment.json_path]),
+        &utils::fast_concat(&[&fragment.file_path, "//", &fragment.json_path]),
       )?;
       writer.write_all(b"msgid ")?;
       write_po_string(writer, &fragment.original_text)?;
