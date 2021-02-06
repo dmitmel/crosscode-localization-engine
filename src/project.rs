@@ -177,7 +177,10 @@ impl ProjectMeta {
     })
   }
 
-  pub fn fs_path(&self) -> PathBuf { self.project().root_dir.join(*META_FILE_NAME) }
+  pub fn resolve_fs_path(project_root_dir: &Path) -> PathBuf {
+    project_root_dir.join(*META_FILE_NAME)
+  }
+  pub fn fs_path(&self) -> PathBuf { Self::resolve_fs_path(&self.project().root_dir) }
 
   pub fn write(&self) -> AnyResult<()> {
     if self.is_dirty() {
@@ -243,7 +246,7 @@ impl Project {
   }
 
   pub fn open(root_dir: PathBuf) -> AnyResult<Rc<Self>> {
-    let meta_file_path = root_dir.join(*META_FILE_NAME);
+    let meta_file_path = ProjectMeta::resolve_fs_path(&root_dir);
     let meta_raw: ProjectMetaSerde = json::read_file(&meta_file_path, &mut Vec::new())
       .with_context(|| format!("Failed to deserialize from JSON file {:?}", meta_file_path))?;
 
@@ -260,14 +263,9 @@ impl Project {
     })?;
     myself.meta().dirty_flag.set(false);
 
+    myself.reserve_additional_tr_files(meta_raw.translation_files.len());
     for tr_file_relative_path in meta_raw.translation_files {
-      let tr_file_fs_path = {
-        let path =
-          myself.root_dir.join(&myself.meta().translations_dir).join(&tr_file_relative_path);
-        let mut path = path.into_os_string();
-        path.push(".json");
-        PathBuf::from(path)
-      };
+      let tr_file_fs_path = TrFile::resolve_fs_path(&myself, &tr_file_relative_path);
 
       let tr_file_raw: TrFileSerde = json::read_file(&tr_file_fs_path, &mut Vec::new())
         .with_context(|| format!("Failed to deserialize from JSON file {:?}", tr_file_fs_path))?;
@@ -278,10 +276,12 @@ impl Project {
         relative_path: tr_file_relative_path,
       });
 
+      tr_file.reserve_additional_game_file_chunks(tr_file_raw.game_file_chunks.len());
       for (game_file_path, game_file_chunk_raw) in tr_file_raw.game_file_chunks {
         let game_file_chunk =
           tr_file.new_game_file_chunk(GameFileChunkInitOpts { path: game_file_path.share_rc() });
 
+        game_file_chunk.reserve_additional_fragments(game_file_chunk_raw.fragments.len());
         for (fragment_json_path, fragment_raw) in game_file_chunk_raw.fragments {
           let fragment = game_file_chunk.new_fragment(FragmentInitOpts {
             file_path: game_file_path.share_rc(),
@@ -292,6 +292,7 @@ impl Project {
             flags: fragment_raw.flags,
           });
 
+          fragment.reserve_additional_translations(fragment_raw.translations.len());
           for translation_raw in fragment_raw.translations {
             fragment.new_translation(TranslationInitOpts {
               uuid: translation_raw.uuid,
@@ -303,6 +304,7 @@ impl Project {
             });
           }
 
+          fragment.reserve_additional_comments(fragment_raw.comments.len());
           for comment_raw in fragment_raw.comments {
             fragment.new_comment(CommentInitOpts {
               uuid: comment_raw.uuid,
@@ -456,13 +458,13 @@ impl TrFile {
     self.game_file_chunks.borrow_mut().reserve(additional_capacity);
   }
 
-  pub fn fs_path(&self) -> PathBuf {
-    let project = self.project();
-    let path = project.root_dir.join(&project.meta().translations_dir).join(&self.relative_path);
+  pub fn resolve_fs_path(project: &Project, relative_path: &str) -> PathBuf {
+    let path = project.root_dir.join(&project.meta().translations_dir).join(relative_path);
     let mut path = path.into_os_string();
     path.push(".json");
     PathBuf::from(path)
   }
+  pub fn fs_path(&self) -> PathBuf { Self::resolve_fs_path(&self.project(), &self.relative_path) }
 
   pub fn write(&self) -> AnyResult<()> {
     if self.is_dirty() {
@@ -658,15 +660,21 @@ impl Fragment {
       .translations
       .borrow()
       .iter()
-      .max_by_key(|f| f.creation_timestamp.max(f.modification_timestamp.get()))
+      .max_by_key(|f| f.modification_timestamp.get())
       .map(|f| f.share_rc())
   }
 
-  pub fn reserve_additional_translations(&self, additional_capacity: usize) {
-    self.translations.borrow_mut().reserve(additional_capacity);
+  pub fn has_flag(&self, flag: &str) -> bool { self.flags.borrow().contains(flag) }
+  pub fn add_flag(&self, flag: RcString) -> bool {
+    self.dirty_flag.set(true);
+    self.flags.borrow_mut().insert(flag)
+  }
+  pub fn remove_flag(&self, flag: &str) -> bool {
+    self.dirty_flag.set(true);
+    self.flags.borrow_mut().remove(flag)
   }
 
-  pub fn reserve_additional_comments(&self, additional_capacity: usize) {
+  pub fn reserve_additional_translations(&self, additional_capacity: usize) {
     self.translations.borrow_mut().reserve(additional_capacity);
   }
 
@@ -677,11 +685,25 @@ impl Fragment {
     translation
   }
 
+  pub fn clear_translations(&self) {
+    self.dirty_flag.set(true);
+    self.translations.borrow_mut().clear();
+  }
+
+  pub fn reserve_additional_comments(&self, additional_capacity: usize) {
+    self.translations.borrow_mut().reserve(additional_capacity);
+  }
+
   pub fn new_comment(self: &Rc<Self>, opts: CommentInitOpts) -> Rc<Comment> {
     self.dirty_flag.set(true);
     let comment = Comment::new(self, opts);
     self.comments.borrow_mut().push(comment.share_rc());
     comment
+  }
+
+  pub fn clear_comments(&self) {
+    self.dirty_flag.set(true);
+    self.comments.borrow_mut().clear();
   }
 }
 
@@ -727,6 +749,8 @@ impl Translation {
   pub fn modification_timestamp(&self) -> Timestamp { self.modification_timestamp.get() }
   #[inline(always)]
   pub fn text(&self) -> Ref<RcString> { self.text.borrow() }
+  #[inline(always)]
+  pub fn flags(&self) -> Ref<HashSet<RcString>> { self.flags.borrow() }
 
   fn new(fragment: &Rc<Fragment>, opts: TranslationInitOpts) -> Rc<Self> {
     Rc::new(Self {
@@ -740,6 +764,26 @@ impl Translation {
       text: RefCell::new(opts.text),
       flags: RefCell::new(opts.flags),
     })
+  }
+
+  pub fn set_modification_timestamp(&self, modification_timestamp: Timestamp) {
+    self.dirty_flag.set(true);
+    self.modification_timestamp.set(modification_timestamp);
+  }
+
+  pub fn set_text(&self, text: RcString) {
+    self.dirty_flag.set(true);
+    *self.text.borrow_mut() = text;
+  }
+
+  pub fn has_flag(&self, flag: &str) -> bool { self.flags.borrow().contains(flag) }
+  pub fn add_flag(&self, flag: RcString) {
+    self.dirty_flag.set(true);
+    self.flags.borrow_mut().insert(flag);
+  }
+  pub fn remove_flag(&self, flag: &str) {
+    self.dirty_flag.set(true);
+    self.flags.borrow_mut().remove(flag);
   }
 }
 

@@ -1,12 +1,14 @@
 use crate::cli;
 use crate::impl_prelude::*;
 use crate::project::importers;
-use crate::project::{self, Project};
+use crate::project::{self, Project, Translation};
 use crate::rc_string::RcString;
 use crate::utils;
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct CommandOpts {
@@ -16,8 +18,8 @@ pub struct CommandOpts {
   pub default_author: RcString,
   pub marker_flag: RcString,
   pub delete_other_translations: bool,
-  pub edit_prev_imports: bool,
-  pub add_flags: Vec<RcString>,
+  pub always_add_new_translations: bool,
+  pub add_flags: HashSet<RcString>,
 }
 
 impl CommandOpts {
@@ -29,10 +31,10 @@ impl CommandOpts {
       default_author: RcString::from(matches.value_of("default_author").unwrap()),
       marker_flag: RcString::from(matches.value_of("marker_flag").unwrap()),
       delete_other_translations: matches.is_present("delete_other_translations"),
-      edit_prev_imports: matches.is_present("edit_prev_imports"),
+      always_add_new_translations: matches.is_present("always_add_new_translations"),
       add_flags: matches
         .values_of("add_flags")
-        .map_or_else(Vec::new, |values| values.map(RcString::from).collect()),
+        .map_or_else(HashSet::new, |values| values.map(RcString::from).collect()),
     }
   }
 }
@@ -92,12 +94,12 @@ pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
         ),
     )
     .arg(
-      clap::Arg::with_name("edit_prev_imports")
-        .long("edit-prev-imports")
+      clap::Arg::with_name("always_add_new_translations")
+        .long("always-add-new-translations")
         //
         .help(
-          "Edit the translations created from previous imports instead of creating new ones. The \
-          import marker flag is used for determining if a translation was imported.",
+          "Always add new translations instead of editing the translations created from previous \
+          imports. The import marker flag is used for determining if a translation was imported.",
         ),
     )
     .arg(
@@ -123,6 +125,7 @@ pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResul
   let mut total_imported_fragments_count = 0;
 
   let default_author = command_opts.default_author;
+  let marker_flag = command_opts.marker_flag;
 
   let inputs_len = command_opts.inputs.len();
   for (i, input_path) in command_opts.inputs.into_iter().enumerate() {
@@ -159,16 +162,67 @@ pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResul
         );
       }
 
+      if command_opts.delete_other_translations {
+        fragment.clear_translations();
+      }
+
+      if command_opts.always_add_new_translations {
+        fragment.reserve_additional_translations(imported_fragment.translations.len());
+      }
+
+      let mut remaining_existing_translations: Option<Vec<Rc<Translation>>> = None;
       for imported_translation in imported_fragment.translations {
+        let imported_translation_author =
+          imported_translation.author.unwrap_or_else(|| default_author.share_rc());
+
+        let existing_translation = if !command_opts.always_add_new_translations {
+          let remaining_existing_translations = remaining_existing_translations
+            .get_or_insert_with(|| fragment.translations().to_owned());
+
+          remaining_existing_translations
+            .iter()
+            .position(|tr| {
+              tr.has_flag(&marker_flag) && *tr.author() == imported_translation_author
+            })
+            .map(|existing_translation_i: usize| -> Rc<Translation> {
+              remaining_existing_translations.remove(existing_translation_i)
+            })
+        } else {
+          None
+        };
+
         let timestamp = utils::get_timestamp();
-        fragment.new_translation(project::TranslationInitOpts {
-          uuid: utils::new_uuid(),
-          author: imported_translation.author.unwrap_or_else(|| default_author.share_rc()),
-          creation_timestamp: imported_translation.creation_timestamp.unwrap_or(timestamp),
-          modification_timestamp: imported_translation.modification_timestamp.unwrap_or(timestamp),
-          text: imported_translation.text,
-          flags: imported_translation.flags,
-        });
+
+        if let Some(existing_translation) = existing_translation {
+          existing_translation.set_modification_timestamp(
+            imported_translation.modification_timestamp.unwrap_or(timestamp),
+          );
+          existing_translation.set_text(imported_translation.text);
+          for flag in imported_translation.flags {
+            existing_translation.add_flag(flag);
+          }
+          for flag in &command_opts.add_flags {
+            existing_translation.add_flag(flag.share_rc());
+          }
+        } else {
+          let mut flags = HashSet::with_capacity(
+            1 + imported_translation.flags.len() + command_opts.add_flags.len(),
+          );
+          flags.insert(marker_flag.share_rc());
+          flags.extend(imported_translation.flags.into_iter());
+          flags.extend(command_opts.add_flags.iter().cloned());
+
+          fragment.new_translation(project::TranslationInitOpts {
+            uuid: utils::new_uuid(),
+            author: imported_translation_author,
+            creation_timestamp: timestamp,
+            modification_timestamp: imported_translation
+              .modification_timestamp
+              .unwrap_or(timestamp),
+            text: imported_translation.text,
+            flags,
+          });
+        }
       }
 
       total_imported_fragments_count += 1;
