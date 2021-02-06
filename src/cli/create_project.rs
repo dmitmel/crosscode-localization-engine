@@ -1,4 +1,3 @@
-use crate::cli;
 use crate::impl_prelude::*;
 use crate::project;
 use crate::project::splitters;
@@ -113,7 +112,7 @@ pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
     )
 }
 
-pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResult<()> {
+pub fn run(_global_opts: super::GlobalOpts, command_opts: CommandOpts) -> AnyResult<()> {
   let project_dir = command_opts.project_dir;
   info!(
     "Creating a translation project in {:?}, translation from {:?} to {:?}",

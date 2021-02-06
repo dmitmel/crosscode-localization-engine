@@ -1,4 +1,3 @@
-use crate::cli;
 use crate::gettext_po::{self, ParsedMessage, ParsingError};
 use crate::impl_prelude::*;
 use crate::utils;
@@ -27,7 +26,7 @@ pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
     .arg(clap::Arg::with_name("json").short("J").long("json"))
 }
 
-pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResult<()> {
+pub fn run(_global_opts: super::GlobalOpts, command_opts: CommandOpts) -> AnyResult<()> {
   let (src, filename): (String, Cow<str>) = match &command_opts.file {
     Some(file) => (fs::read_to_string(file)?, file.to_string_lossy()),
     None => {

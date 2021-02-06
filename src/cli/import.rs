@@ -1,4 +1,3 @@
-use crate::cli;
 use crate::impl_prelude::*;
 use crate::project::importers;
 use crate::project::{self, Project, Translation};
@@ -112,7 +111,7 @@ pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
     )
 }
 
-pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResult<()> {
+pub fn run(_global_opts: super::GlobalOpts, command_opts: CommandOpts) -> AnyResult<()> {
   info!(
     "Importing into a translation project in {:?} from {:?}",
     command_opts.project_dir.display(),

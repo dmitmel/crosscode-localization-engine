@@ -67,5 +67,6 @@ pub fn try_main() -> AnyResult<()> {
     cli::CommandOpts::ParsePo(cmd_opts) => cli::parse_po::run(global_opts, *cmd_opts),
     cli::CommandOpts::Export(cmd_opts) => cli::export::run(global_opts, *cmd_opts),
     cli::CommandOpts::Import(cmd_opts) => cli::import::run(global_opts, *cmd_opts),
+    cli::CommandOpts::Status(cmd_opts) => cli::status::run(global_opts, *cmd_opts),
   }
 }

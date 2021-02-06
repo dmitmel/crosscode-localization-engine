@@ -252,7 +252,7 @@ impl Importer for GettextPoImporter {
       let msgctxt = utils::fast_concat_cow(&message.msgctxt);
       let msgid = utils::fast_concat_cow(&message.msgid);
       let msgstr = utils::fast_concat_cow(&message.msgstr);
-      if msgid.is_empty() {
+      if msgid.is_empty() || msgctxt.is_empty() || msgstr.is_empty() {
         continue;
       }
 

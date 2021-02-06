@@ -3,6 +3,7 @@ pub mod export;
 pub mod import;
 pub mod parse_po;
 pub mod scan;
+pub mod status;
 
 use crate::impl_prelude::*;
 
@@ -22,6 +23,7 @@ pub enum CommandOpts {
   ParsePo(Box<parse_po::CommandOpts>),
   Export(Box<export::CommandOpts>),
   Import(Box<import::CommandOpts>),
+  Status(Box<status::CommandOpts>),
 }
 
 pub fn parse_opts() -> AnyResult<(GlobalOpts, CommandOpts)> {
@@ -47,6 +49,10 @@ pub fn parse_opts() -> AnyResult<(GlobalOpts, CommandOpts)> {
 
     ("import", Some(matches)) => {
       CommandOpts::Import(Box::new(import::CommandOpts::from_matches(matches)))
+    }
+
+    ("status", Some(matches)) => {
+      CommandOpts::Status(Box::new(status::CommandOpts::from_matches(matches)))
     }
 
     _ => unreachable!("{:#?}", matches),
@@ -77,4 +83,5 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
     .subcommand(parse_po::create_arg_parser())
     .subcommand(export::create_arg_parser())
     .subcommand(import::create_arg_parser())
+    .subcommand(status::create_arg_parser())
 }

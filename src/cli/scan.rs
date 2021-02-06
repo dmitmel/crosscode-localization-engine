@@ -1,4 +1,3 @@
-use crate::cli;
 use crate::impl_prelude::*;
 use crate::rc_string::RcString;
 use crate::scan;
@@ -55,7 +54,7 @@ pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
     )
 }
 
-pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResult<()> {
+pub fn run(_global_opts: super::GlobalOpts, command_opts: CommandOpts) -> AnyResult<()> {
   info!("Performing a scan of game files in the assets dir {:?}", command_opts.assets_dir);
 
   let game_version =
