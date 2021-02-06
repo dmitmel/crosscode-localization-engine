@@ -1,11 +1,12 @@
 #![deny(missing_debug_implementations)]
 #![allow(clippy::new_without_default)]
-#![feature(try_blocks, cell_update, get_mut_unchecked)]
+#![feature(try_blocks)]
 // TODO: consider using feature(hash_raw_entry)
 
 #[macro_use]
 pub mod macros;
 
+pub mod backend;
 pub mod cc_ru_compat;
 pub mod cli;
 pub mod gettext_po;

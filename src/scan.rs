@@ -61,8 +61,6 @@ pub struct ScanDb {
   #[serde(flatten)]
   meta: ScanDbMeta,
   game_files: RefCell<IndexMap<RcString, Rc<ScanDbGameFile>>>,
-  #[serde(skip)]
-  total_fragments_count: Cell<usize>,
 }
 
 impl ScanDb {
@@ -76,8 +74,6 @@ impl ScanDb {
   pub fn game_files(&self) -> Ref<IndexMap<RcString, Rc<ScanDbGameFile>>> {
     self.game_files.borrow()
   }
-  #[inline(always)]
-  pub fn total_fragments_count(&self) -> usize { self.total_fragments_count.get() }
 
   fn new(db_file_path: PathBuf, meta: ScanDbMeta) -> Rc<Self> {
     Rc::new(Self {
@@ -85,7 +81,6 @@ impl ScanDb {
       db_file_path,
       meta,
       game_files: RefCell::new(IndexMap::new()),
-      total_fragments_count: Cell::new(0),
     })
   }
 
@@ -201,7 +196,6 @@ impl ScanDbGameFile {
     let prev_fragment =
       self.fragments.borrow_mut().insert(fragment.json_path.share_rc(), fragment.share_rc());
     assert!(prev_fragment.is_none());
-    scan_db.total_fragments_count.update(|c| c + 1);
     fragment
   }
 }

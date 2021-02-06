@@ -75,6 +75,7 @@ pub fn run(_global_opts: super::GlobalOpts, command_opts: CommandOpts) -> AnyRes
   let tmp_extracted_locale = RcString::from(lang_label_extractor::EXTRACTED_LOCALE);
 
   info!("Extracting localizable strings");
+  let mut total_fragments_count = 0;
   let mut ignored_lang_labels_count = 0;
 
   let all_json_files_len = all_json_files.len();
@@ -121,12 +122,13 @@ pub fn run(_global_opts: super::GlobalOpts, command_opts: CommandOpts) -> AnyRes
         text: tmp_fragment_text.clone(),
         flags: HashSet::new(),
       });
+      total_fragments_count += 1;
     }
   }
 
   info!(
     "Found {} localizable strings in {} files, {} were ignored",
-    scan_db.total_fragments_count(),
+    total_fragments_count,
     scan_db.game_files().len(),
     ignored_lang_labels_count,
   );
