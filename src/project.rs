@@ -585,6 +585,7 @@ pub struct Fragment {
 
   #[serde(skip)]
   file_path: RcString,
+  #[serde(skip)]
   json_path: RcString,
   #[serde(default, skip_serializing_if = "utils::is_default")]
   lang_uid: i32,

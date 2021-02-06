@@ -1,6 +1,7 @@
 use super::{Fragment, ProjectMeta};
 use crate::gettext_po;
 use crate::impl_prelude::*;
+use crate::localize_me;
 use crate::rc_string::RcString;
 use crate::utils::json;
 use crate::utils::{self, Timestamp};
@@ -116,8 +117,7 @@ impl Exporter for LocalizeMeTrPackExporter {
         None => RcString::from(""),
       };
 
-      let localize_me_file_path =
-        fragment.file_path.strip_prefix("data/").unwrap_or(&fragment.file_path);
+      let localize_me_file_path = localize_me::serialize_file_path(&fragment.file_path);
 
       fmt.begin_object_key(writer, is_first_entry)?;
       is_first_entry = false;
@@ -125,7 +125,7 @@ impl Exporter for LocalizeMeTrPackExporter {
         fmt.begin_string(writer)?;
         json::format_escaped_str_contents(writer, fmt, &localize_me_file_path)?;
         fmt.write_string_fragment(writer, "/")?;
-        json::format_escaped_str_contents(writer, fmt, &fragment.file_path)?;
+        json::format_escaped_str_contents(writer, fmt, &fragment.json_path)?;
         fmt.end_string(writer)?;
       }
       fmt.end_object_key(writer)?;

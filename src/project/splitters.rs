@@ -1,4 +1,5 @@
 use crate::impl_prelude::*;
+use crate::localize_me;
 use crate::utils;
 
 use once_cell::sync::Lazy;
@@ -62,6 +63,7 @@ macro_rules! splitters_map {
 splitters_map![
   MonolithicFileSplitter,
   SameFileTreeSplitter,
+  LocalizeMeFileTreeSplitter,
   NotabenoidChaptersSplitter,
   NextGenerationSplitter,
 ];
@@ -132,6 +134,40 @@ impl Splitter for SameFileTreeSplitter {
   fn id(&self) -> &'static str { Self::ID }
 
   fn get_tr_file_for_entire_game_file(&mut self, file_path: &str) -> Option<Cow<'static, str>> {
+    let (file_path, _) = utils::split_filename_extension(file_path);
+    Some(file_path.to_owned().into())
+  }
+}
+
+#[derive(Debug)]
+pub struct LocalizeMeFileTreeSplitter;
+
+impl LocalizeMeFileTreeSplitter {
+  pub const ID: &'static str = "lm-file-tree";
+}
+
+impl Splitter for LocalizeMeFileTreeSplitter {
+  #[inline(always)]
+  fn id_static() -> &'static str
+  where
+    Self: Sized,
+  {
+    Self::ID
+  }
+
+  #[inline(always)]
+  fn new_boxed() -> Box<dyn Splitter>
+  where
+    Self: Sized,
+  {
+    Box::new(Self)
+  }
+
+  #[inline(always)]
+  fn id(&self) -> &'static str { Self::ID }
+
+  fn get_tr_file_for_entire_game_file(&mut self, file_path: &str) -> Option<Cow<'static, str>> {
+    let file_path = localize_me::serialize_file_path(file_path);
     let (file_path, _) = utils::split_filename_extension(file_path);
     Some(file_path.to_owned().into())
   }

@@ -189,6 +189,9 @@ pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResul
 
   if splitter.is_some() {
     for (export_file_path, fragments) in &fragments_by_export_path {
+      if fragments.is_empty() {
+        continue;
+      }
       let export_file_path = output_path.join(export_file_path);
       utils::create_dir_recursively(export_file_path.parent().unwrap()).with_context(|| {
         format!("Failed to create the parent directories for {:?}", export_file_path)

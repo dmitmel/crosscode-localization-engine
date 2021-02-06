@@ -39,6 +39,18 @@ pub fn deserialize_file_path(lm_file_path: &str) -> Cow<str> {
 pub struct TrPackEntrySerde<'a> {
   pub orig: Cow<'a, str>,
   pub text: Cow<'a, str>,
+  pub quality: Option<Quality>,
+  pub note: Option<Cow<'a, str>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Quality {
+  Unknown,
+  Bad,
+  Incomplete,
+  Wrong,
+  Spell,
 }
 
 #[derive(Debug, Deserialize)]
