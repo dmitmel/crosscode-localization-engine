@@ -1,3 +1,4 @@
+pub mod backend;
 pub mod create_project;
 pub mod export;
 pub mod import;
@@ -18,11 +19,12 @@ pub struct GlobalOpts {
 pub enum CommandOpts {
   // Individual command options structs are boxed to prevent wasting memory on
   // small variants because their sizes vary a lot.
-  Scan(Box<scan::CommandOpts>),
+  Backend(Box<backend::CommandOpts>),
   CreateProject(Box<create_project::CommandOpts>),
-  ParsePo(Box<parse_po::CommandOpts>),
   Export(Box<export::CommandOpts>),
   Import(Box<import::CommandOpts>),
+  ParsePo(Box<parse_po::CommandOpts>),
+  Scan(Box<scan::CommandOpts>),
   Status(Box<status::CommandOpts>),
 }
 
@@ -31,27 +33,27 @@ pub fn parse_opts() -> AnyResult<(GlobalOpts, CommandOpts)> {
   let global_opts = GlobalOpts { verbose: matches.is_present("verbose") };
 
   let command_opts = match matches.subcommand() {
-    ("scan", Some(matches)) => {
+    (scan::NAME, Some(matches)) => {
       CommandOpts::Scan(Box::new(scan::CommandOpts::from_matches(matches)))
     }
 
-    ("create-project", Some(matches)) => {
+    (create_project::NAME, Some(matches)) => {
       CommandOpts::CreateProject(Box::new(create_project::CommandOpts::from_matches(matches)))
     }
 
-    ("parse-po", Some(matches)) => {
+    (parse_po::NAME, Some(matches)) => {
       CommandOpts::ParsePo(Box::new(parse_po::CommandOpts::from_matches(matches)))
     }
 
-    ("export", Some(matches)) => {
+    (export::NAME, Some(matches)) => {
       CommandOpts::Export(Box::new(export::CommandOpts::from_matches(matches)))
     }
 
-    ("import", Some(matches)) => {
+    (import::NAME, Some(matches)) => {
       CommandOpts::Import(Box::new(import::CommandOpts::from_matches(matches)))
     }
 
-    ("status", Some(matches)) => {
+    (status::NAME, Some(matches)) => {
       CommandOpts::Status(Box::new(status::CommandOpts::from_matches(matches)))
     }
 

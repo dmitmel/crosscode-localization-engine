@@ -8,6 +8,8 @@ use std::fs;
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
 
+pub const NAME: &str = "parse-po";
+
 #[derive(Debug)]
 pub struct CommandOpts {
   pub file: Option<PathBuf>,
@@ -21,7 +23,7 @@ impl CommandOpts {
 }
 
 pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
-  clap::App::new("parse-po")
+  clap::App::new(NAME)
     .arg(clap::Arg::with_name("file").value_name("FILE"))
     .arg(clap::Arg::with_name("json").short("J").long("json"))
 }

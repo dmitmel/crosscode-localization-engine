@@ -17,6 +17,8 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::str::FromStr;
 
+pub const NAME: &str = "scan";
+
 #[derive(Debug)]
 pub struct CommandOpts {
   pub assets_dir: PathBuf,
@@ -33,7 +35,7 @@ impl CommandOpts {
 }
 
 pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
-  clap::App::new("scan")
+  clap::App::new(NAME)
     .about(
       "Scans the assets directory of the game and extracts the localizable strings and other \
           interesting data.",

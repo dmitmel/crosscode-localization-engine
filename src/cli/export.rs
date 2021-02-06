@@ -13,6 +13,8 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+pub const NAME: &str = "export";
+
 #[derive(Debug)]
 pub struct CommandOpts {
   pub project_dir: PathBuf,
@@ -39,7 +41,7 @@ impl CommandOpts {
 }
 
 pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
-  clap::App::new("export")
+  clap::App::new(NAME)
     .about(
       "Exports translations from a project into a different format, for example for compiling \
       into Localize Me translation packs for use in CrossCode mods.",

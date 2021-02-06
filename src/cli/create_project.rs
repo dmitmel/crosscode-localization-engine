@@ -8,6 +8,8 @@ use crate::utils;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+pub const NAME: &str = "create-project";
+
 #[derive(Debug)]
 pub struct CommandOpts {
   pub project_dir: PathBuf,
@@ -40,7 +42,7 @@ impl CommandOpts {
 }
 
 pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
-  clap::App::new("create-project")
+  clap::App::new(NAME)
     .about("Creates an empty translation project using the data obtained by scanning the game.")
     .arg(
       clap::Arg::with_name("project_dir")

@@ -5,6 +5,8 @@ use crate::rc_string::RcString;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+pub const NAME: &str = "status";
+
 #[derive(Debug)]
 pub struct CommandOpts {
   pub project_dir: PathBuf,
@@ -17,7 +19,7 @@ impl CommandOpts {
 }
 
 pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
-  clap::App::new("status")
+  clap::App::new(NAME)
     .about("Displays general information about the project, such as translation progress.")
     .arg(
       clap::Arg::with_name("project_dir")

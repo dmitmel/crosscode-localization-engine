@@ -9,6 +9,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+pub const NAME: &str = "import";
+
 #[derive(Debug)]
 pub struct CommandOpts {
   pub project_dir: PathBuf,
@@ -39,7 +41,7 @@ impl CommandOpts {
 }
 
 pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
-  clap::App::new("import")
+  clap::App::new(NAME)
     .about(
       "Imports translations from a different format into a project, for example for migrating \
       projects created with the old translation tools.",
