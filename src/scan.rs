@@ -39,7 +39,7 @@ pub struct ScanDbFragmentSerde {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct ScanDbCreateOpts {
   pub game_version: RcString,
 }
@@ -206,7 +206,7 @@ impl ScanDbGameFile {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct ScanDbFragmentInitOpts {
   pub json_path: RcString,
   pub lang_uid: i32,

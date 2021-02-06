@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use std::iter;
 use std::str;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug)]
 pub struct Token<'src> {
   pub start_pos: CharPos,
   pub end_pos: CharPos,
@@ -32,7 +32,7 @@ pub enum CommentType {
   Flags,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Lexer<'src> {
   src: &'src str,
   src_iter: iter::Peekable<CharPosIter<'src>>,

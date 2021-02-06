@@ -23,7 +23,7 @@ pub fn extract_from_file<'json>(
   Some(LangLabelIter::new(&found_file.path, &json_data, extraction_fn))
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct LangLabel {
   pub json_path: RcString,
   pub lang_uid: i32, // 0 represents the lack of a lang UID

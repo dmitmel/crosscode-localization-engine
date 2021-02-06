@@ -12,7 +12,7 @@ use std::fmt;
 use std::io::{self, Write};
 use std::rc::Rc;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ExporterConfig {
   pub compact: bool,
 }

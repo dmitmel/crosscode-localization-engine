@@ -9,7 +9,7 @@ use crate::utils;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CommandOpts {
   pub project_dir: PathBuf,
   pub main_scan_db: PathBuf,

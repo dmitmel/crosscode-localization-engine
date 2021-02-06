@@ -35,13 +35,13 @@ pub fn deserialize_file_path(lm_file_path: &str) -> Cow<str> {
 }
 
 /// See <https://github.com/L-Sherry/Localize-me/blob/9d0ff32abde457997ff58c35f20864d37ac8b2bf/Documentation.md#plain-text-variant>.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct TrPackEntrySerde<'a> {
   pub orig: Cow<'a, str>,
   pub text: Cow<'a, str>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(transparent)]
 pub struct TrPackSerde<'a> {
   #[serde(borrow)]

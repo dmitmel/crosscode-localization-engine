@@ -9,8 +9,9 @@ use crate::utils::Timestamp;
 use once_cell::sync::Lazy;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
+use std::path::Path;
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug)]
 pub struct ImportedFragment {
   pub file_path: RcString,
   pub json_path: RcString,
@@ -18,10 +19,11 @@ pub struct ImportedFragment {
   pub translations: Vec<ImportedTranslation>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug)]
 pub struct ImportedTranslation {
-  pub author_username: Option<RcString>,
+  pub author: Option<RcString>,
   pub creation_timestamp: Option<Timestamp>,
+  pub modification_timestamp: Option<Timestamp>,
   pub text: RcString,
   pub flags: HashSet<RcString>,
 }
@@ -41,7 +43,7 @@ pub trait Importer: fmt::Debug {
 
   fn import(
     &mut self,
-    file_path: &str,
+    file_path: &Path,
     input: &str,
     imported_fragments: &mut Vec<ImportedFragment>,
   ) -> AnyResult<()>;
@@ -103,7 +105,7 @@ impl Importer for LocalizeMeTrPackImporter {
 
   fn import(
     &mut self,
-    file_path: &str,
+    file_path: &Path,
     input: &str,
     imported_fragments: &mut Vec<ImportedFragment>,
   ) -> AnyResult<()> {
@@ -123,8 +125,9 @@ impl Importer for LocalizeMeTrPackImporter {
         json_path: RcString::from(json_path),
         original_text: RcString::from(tr_pack_entry.orig),
         translations: vec![ImportedTranslation {
-          author_username: None,
+          author: None,
           creation_timestamp: None,
+          modification_timestamp: None,
           text: RcString::from(tr_pack_entry.text),
           flags: HashSet::new(),
         }],
@@ -167,7 +170,7 @@ impl Importer for CcRuChapterFragmentsImporter {
 
   fn import(
     &mut self,
-    _file_path: &str,
+    _file_path: &Path,
     input: &str,
     imported_fragments: &mut Vec<ImportedFragment>,
   ) -> AnyResult<()> {
@@ -182,8 +185,9 @@ impl Importer for CcRuChapterFragmentsImporter {
           .translations
           .into_iter()
           .map(|t| ImportedTranslation {
-            author_username: Some(RcString::from(t.author_username)),
+            author: Some(RcString::from(t.author_username)),
             creation_timestamp: Some(t.timestamp),
+            modification_timestamp: Some(t.timestamp),
             text: RcString::from(t.text),
             flags: {
               let mut flags = HashSet::with_capacity(t.flags.len());
@@ -234,14 +238,16 @@ impl Importer for GettextPoImporter {
 
   fn import(
     &mut self,
-    file_path: &str,
+    file_path: &Path,
     input: &str,
     imported_fragments: &mut Vec<ImportedFragment>,
   ) -> AnyResult<()> {
     for (i, message) in gettext_po::parse(&input).enumerate() {
       let message = match message {
         Ok(v) => v,
-        Err(e) => bail!("{}", e.nice_formatter(file_path, input)),
+        Err(e) => {
+          bail!("{}", e.nice_formatter(&file_path.file_name().unwrap().to_string_lossy(), input))
+        }
       };
       let msgctxt = utils::fast_concat_cow(&message.msgctxt);
       let msgid = utils::fast_concat_cow(&message.msgid);
@@ -268,8 +274,9 @@ impl Importer for GettextPoImporter {
         json_path: RcString::from(json_path),
         original_text: RcString::from(msgid),
         translations: vec![ImportedTranslation {
-          author_username: None,
+          author: None,
           creation_timestamp: None,
+          modification_timestamp: None,
           text: RcString::from(msgstr),
           flags: HashSet::new(),
         }],

@@ -11,7 +11,7 @@ static EXTENSIONS_DIR: Lazy<&'static Path> = Lazy::new(|| Path::new("extension")
 static LANG_DIR: Lazy<&'static Path> = Lazy::new(|| Path::new("lang"));
 static JSON_EXTENSION: Lazy<&'static OsStr> = Lazy::new(|| OsStr::new("json"));
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct FoundJsonFile {
   // TODO: split `path` into `asset_root` and `relative_path`
   pub path: RcString,

@@ -4,13 +4,13 @@ use serde::Deserialize;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(transparent)]
 pub struct ChapterFragmentsFileSerde<'a> {
   pub fragments: Vec<FragmentSerde<'a>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FragmentSerde<'a> {
   pub chapter_id: i32,
@@ -20,7 +20,7 @@ pub struct FragmentSerde<'a> {
   pub translations: Vec<FragmentTranslationSerde<'a>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FragmentOriginalSerde<'a> {
   pub raw_content: Cow<'a, str>,
@@ -31,7 +31,7 @@ pub struct FragmentOriginalSerde<'a> {
   pub text: Cow<'a, str>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FragmentTranslationSerde<'a> {
   pub id: i32,

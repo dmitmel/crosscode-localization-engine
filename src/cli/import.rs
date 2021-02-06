@@ -4,7 +4,7 @@ use crate::rc_string::RcString;
 use std::fs;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CommandOpts {
   pub project_dir: PathBuf,
   pub inputs: Vec<PathBuf>,

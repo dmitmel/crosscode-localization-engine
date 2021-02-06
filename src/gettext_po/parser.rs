@@ -1,11 +1,11 @@
-use super::lexer::{CommentType, Lexer, Token, TokenType};
+use super::lexer::{CommentType, Lexer, TokenType};
 use super::{CharPos, ParsingError};
 use crate::rc_string::RcString;
 
 use std::borrow::Cow;
 use std::iter;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug)]
 pub struct ParsedMessage<'src> {
   pub translator_comments: Vec<Cow<'src, str>>,
   pub automatic_comments: Vec<Cow<'src, str>>,
@@ -18,10 +18,9 @@ pub struct ParsedMessage<'src> {
   pub msgstr: Vec<Cow<'src, str>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Parser<'src> {
   lexer: iter::Peekable<Lexer<'src>>,
-  stored_token: Option<Token<'src>>,
   done: bool,
   current_token_start_pos: CharPos,
   current_token_end_pos: CharPos,
@@ -31,7 +30,6 @@ impl<'src> Parser<'src> {
   pub fn new(lexer: Lexer<'src>) -> Self {
     Self {
       lexer: lexer.peekable(),
-      stored_token: None,
       done: false,
       current_token_start_pos: CharPos { index: 0, line: 0, column: 0 },
       current_token_end_pos: CharPos { index: 0, line: 0, column: 0 },

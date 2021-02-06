@@ -39,7 +39,7 @@ pub struct CharPos {
   pub column: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct ParsingError {
   pub pos: CharPos,
   pub message: RcString,
@@ -56,7 +56,7 @@ impl ParsingError {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug)]
 pub struct NiceParsingErrorFormatter<'error> {
   error: &'error ParsingError,
   filename: &'error str,

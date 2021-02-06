@@ -8,12 +8,12 @@ use crate::impl_prelude::*;
 
 use clap::{App, AppSettings, Arg};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct GlobalOpts {
   pub verbose: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum CommandOpts {
   // Individual command options structs are boxed to prevent wasting memory on
   // small variants because their sizes vary a lot.

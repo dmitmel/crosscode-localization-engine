@@ -96,7 +96,7 @@ mod private {
 pub fn is_default<T: Default + PartialEq>(t: &T) -> bool { *t == T::default() }
 
 /// Taken from <https://stackoverflow.com/a/40457615>.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct LinesWithEndings<'a> {
   text: &'a str,
 }

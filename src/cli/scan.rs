@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::str::FromStr;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CommandOpts {
   pub assets_dir: PathBuf,
   pub output: PathBuf,
@@ -140,13 +140,13 @@ pub fn run(_global_opts: cli::GlobalOpts, command_opts: CommandOpts) -> AnyResul
 
 static CHANGELOG_FILE_PATH: Lazy<&'static Path> = Lazy::new(|| Path::new("data/changelog.json"));
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Debug, Deserialize)]
 struct ChangelogFileRef<'a> {
   #[serde(borrow)]
   changelog: Vec<ChangelogEntryRef<'a>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Debug, Deserialize)]
 struct ChangelogEntryRef<'a> {
   #[serde(borrow)]
   name: Cow<'a, str>,

@@ -171,7 +171,7 @@ where
 
 pub const DEFAULT_INDENT: &str = "  ";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct UltimateFormatterConfig<'a> {
   pub indent: Option<&'a str>,
   pub trailing_commas: bool,
@@ -182,7 +182,7 @@ impl<'a> Default for UltimateFormatterConfig<'a> {
 }
 
 /// Based on [`serde_json::ser::PrettyFormatter`].
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct UltimateFormatter<'a> {
   current_indent: usize,
   has_value: bool,

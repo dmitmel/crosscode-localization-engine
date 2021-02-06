@@ -21,7 +21,7 @@ use uuid::Uuid;
 pub static META_FILE_NAME: Lazy<&'static Path> =
   Lazy::new(|| Path::new("crosslocale-project.json"));
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct ProjectMetaSerde {
   pub uuid: Uuid,
   pub creation_timestamp: Timestamp,
@@ -35,7 +35,7 @@ pub struct ProjectMetaSerde {
   pub translation_files: Vec<RcString>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct TrFileSerde {
   pub uuid: Uuid,
   pub creation_timestamp: Timestamp,
@@ -44,12 +44,12 @@ pub struct TrFileSerde {
   pub game_file_chunks: IndexMap<RcString, GameFileChunkSerde>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct GameFileChunkSerde {
   pub fragments: IndexMap<RcString, FragmentSerde>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct FragmentSerde {
   #[serde(default)]
   pub lang_uid: i32,
@@ -66,7 +66,7 @@ pub struct FragmentSerde {
   pub comments: Vec<CommentSerde>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct TranslationSerde {
   pub uuid: Uuid,
   pub author: RcString,
@@ -78,7 +78,7 @@ pub struct TranslationSerde {
   pub flags: HashSet<RcString>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct CommentSerde {
   pub uuid: Uuid,
   pub author: RcString,
@@ -115,7 +115,7 @@ pub struct ProjectMeta {
   translation_files_link: RcWeak<Project>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct ProjectMetaInitOpts {
   pub uuid: Uuid,
   pub creation_timestamp: Timestamp,
@@ -360,7 +360,7 @@ impl Project {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct TrFileInitOpts {
   pub uuid: Uuid,
   pub creation_timestamp: Timestamp,
@@ -467,7 +467,7 @@ impl TrFile {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct GameFileChunkInitOpts {
   pub path: RcString,
 }
@@ -544,7 +544,7 @@ impl GameFileChunk {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct FragmentInitOpts {
   pub file_path: RcString,
   pub json_path: RcString,
