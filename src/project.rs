@@ -1,3 +1,5 @@
+// TODO: Remove unneeded weakrefs to the parent objects.
+
 pub mod exporters;
 pub mod importers;
 pub mod splitters;
@@ -281,7 +283,7 @@ impl Project {
           tr_file.new_game_file_chunk(GameFileChunkInitOpts { path: game_file_path.share_rc() });
 
         for (fragment_json_path, fragment_raw) in game_file_chunk_raw.fragments {
-          let _fragment = game_file_chunk.new_fragment(FragmentInitOpts {
+          let fragment = game_file_chunk.new_fragment(FragmentInitOpts {
             file_path: game_file_path.share_rc(),
             json_path: fragment_json_path,
             lang_uid: fragment_raw.lang_uid,
@@ -290,12 +292,25 @@ impl Project {
             flags: fragment_raw.flags,
           });
 
-          for _translation_raw in fragment_raw.translations {
-            // TODO
+          for translation_raw in fragment_raw.translations {
+            fragment.new_translation(TranslationInitOpts {
+              uuid: translation_raw.uuid,
+              author: translation_raw.author,
+              creation_timestamp: translation_raw.creation_timestamp,
+              modification_timestamp: translation_raw.modification_timestamp,
+              text: translation_raw.text,
+              flags: translation_raw.flags,
+            });
           }
 
-          for _comment_raw in fragment_raw.comments {
-            // TODO
+          for comment_raw in fragment_raw.comments {
+            fragment.new_comment(CommentInitOpts {
+              uuid: comment_raw.uuid,
+              author: comment_raw.author,
+              creation_timestamp: comment_raw.creation_timestamp,
+              modification_timestamp: comment_raw.modification_timestamp,
+              text: comment_raw.text,
+            });
           }
         }
       }
@@ -620,7 +635,7 @@ impl Fragment {
     opts: FragmentInitOpts,
   ) -> Rc<Self> {
     Rc::new(Self {
-      dirty_flag: tr_file.dirty_flag.share_rc(),
+      dirty_flag: game_file_chunk.dirty_flag.share_rc(),
       project: project.share_rc_weak(),
       tr_file: tr_file.share_rc_weak(),
       game_file_chunk: game_file_chunk.share_rc_weak(),
@@ -654,6 +669,30 @@ impl Fragment {
   pub fn reserve_additional_comments(&self, additional_capacity: usize) {
     self.translations.borrow_mut().reserve(additional_capacity);
   }
+
+  pub fn new_translation(self: &Rc<Self>, opts: TranslationInitOpts) -> Rc<Translation> {
+    self.dirty_flag.set(true);
+    let translation = Translation::new(self, opts);
+    self.translations.borrow_mut().push(translation.share_rc());
+    translation
+  }
+
+  pub fn new_comment(self: &Rc<Self>, opts: CommentInitOpts) -> Rc<Comment> {
+    self.dirty_flag.set(true);
+    let comment = Comment::new(self, opts);
+    self.comments.borrow_mut().push(comment.share_rc());
+    comment
+  }
+}
+
+#[derive(Debug)]
+pub struct TranslationInitOpts {
+  pub uuid: Uuid,
+  pub author: RcString,
+  pub creation_timestamp: Timestamp,
+  pub modification_timestamp: Timestamp,
+  pub text: RcString,
+  pub flags: HashSet<RcString>,
 }
 
 #[derive(Debug, Serialize)]
@@ -667,6 +706,7 @@ pub struct Translation {
   author: RcString,
   creation_timestamp: Timestamp,
   modification_timestamp: Cell<Timestamp>,
+  #[serde(with = "utils::serde::MultilineStringHelperRefCell")]
   text: RefCell<RcString>,
   #[serde(default, skip_serializing_if = "utils::serde::is_refcell_hashset_empty")]
   flags: RefCell<HashSet<RcString>>,
@@ -687,6 +727,29 @@ impl Translation {
   pub fn modification_timestamp(&self) -> Timestamp { self.modification_timestamp.get() }
   #[inline(always)]
   pub fn text(&self) -> Ref<RcString> { self.text.borrow() }
+
+  fn new(fragment: &Rc<Fragment>, opts: TranslationInitOpts) -> Rc<Self> {
+    Rc::new(Self {
+      dirty_flag: fragment.dirty_flag.share_rc(),
+      fragment: fragment.share_rc_weak(),
+
+      uuid: opts.uuid,
+      author: opts.author,
+      creation_timestamp: opts.creation_timestamp,
+      modification_timestamp: Cell::new(opts.modification_timestamp),
+      text: RefCell::new(opts.text),
+      flags: RefCell::new(opts.flags),
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct CommentInitOpts {
+  pub uuid: Uuid,
+  pub author: RcString,
+  pub creation_timestamp: Timestamp,
+  pub modification_timestamp: Timestamp,
+  pub text: RcString,
 }
 
 #[derive(Debug, Serialize)]
@@ -700,6 +763,7 @@ pub struct Comment {
   author: RcString,
   creation_timestamp: Timestamp,
   modification_timestamp: Cell<Timestamp>,
+  #[serde(with = "utils::serde::MultilineStringHelperRefCell")]
   text: RefCell<RcString>,
 }
 
@@ -718,6 +782,19 @@ impl Comment {
   pub fn modification_timestamp(&self) -> Timestamp { self.modification_timestamp.get() }
   #[inline(always)]
   pub fn text(&self) -> Ref<RcString> { self.text.borrow() }
+
+  fn new(fragment: &Rc<Fragment>, opts: CommentInitOpts) -> Rc<Self> {
+    Rc::new(Self {
+      dirty_flag: fragment.dirty_flag.share_rc(),
+      fragment: fragment.share_rc_weak(),
+
+      uuid: opts.uuid,
+      author: opts.author,
+      creation_timestamp: opts.creation_timestamp,
+      modification_timestamp: Cell::new(opts.modification_timestamp),
+      text: RefCell::new(opts.text),
+    })
+  }
 }
 
 #[derive(Debug)]
@@ -745,5 +822,9 @@ impl VirtualGameFile {
 
       fragments: RefCell::new(IndexMap::new()),
     })
+  }
+
+  pub fn get_fragment(&self, path: &str) -> Option<Rc<Fragment>> {
+    self.fragments.borrow().get(path).cloned()
   }
 }

@@ -40,3 +40,33 @@ impl MultilineStringHelper {
     Ok(result.into())
   }
 }
+
+#[derive(Debug)]
+pub struct MultilineStringHelperRefCell;
+
+impl MultilineStringHelperRefCell {
+  pub fn serialize<S, T>(value: &RefCell<T>, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+    T: AsRef<str>,
+  {
+    MultilineStringHelper::serialize(&*value.borrow(), serializer)
+  }
+
+  pub fn deserialize<'de, D, T>(deserializer: D) -> Result<RefCell<T>, D::Error>
+  where
+    D: Deserializer<'de>,
+    T: From<String>,
+  {
+    let lines = Vec::<Cow<'de, str>>::deserialize(deserializer)?;
+    let mut capacity = 0;
+    for s in &lines {
+      capacity += s.as_ref().len();
+    }
+    let mut result = String::with_capacity(capacity);
+    for s in &lines {
+      result.push_str(s.as_ref());
+    }
+    Ok(RefCell::new(result.into()))
+  }
+}

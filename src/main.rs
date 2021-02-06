@@ -66,9 +66,6 @@ pub fn try_main() -> AnyResult<()> {
     cli::CommandOpts::CreateProject(cmd_opts) => cli::create_project::run(global_opts, *cmd_opts),
     cli::CommandOpts::ParsePo(cmd_opts) => cli::parse_po::run(global_opts, *cmd_opts),
     cli::CommandOpts::Export(cmd_opts) => cli::export::run(global_opts, *cmd_opts),
-    cli::CommandOpts::Import(cmd_opts) => {
-      println!("{:#?}", cmd_opts);
-      Ok(())
-    }
+    cli::CommandOpts::Import(cmd_opts) => cli::import::run(global_opts, *cmd_opts),
   }
 }
