@@ -17,8 +17,10 @@ pub mod rc_string;
 pub mod scan;
 pub mod utils;
 
+use crate::cli::Command;
 use crate::impl_prelude::*;
 
+use std::collections::HashMap;
 use std::env;
 use std::ffi::OsStr;
 
@@ -58,8 +60,17 @@ pub fn try_main() -> AnyResult<()> {
     "trace",
   ));
 
-  let (global_opts, command_opts) =
-    cli::parse_opts().context("Failed to parse command-line arguments")?;
+  let mut arg_parser = cli::GlobalOpts::create_arg_parser();
+
+  let all_commands: Vec<Box<dyn Command>> = cli::all_commands();
+  let mut all_commands_map = HashMap::with_capacity(all_commands.len());
+  for command in all_commands {
+    arg_parser.p.add_subcommand(command.create_arg_parser(clap::App::new(command.name())));
+    all_commands_map.insert(command.name(), command);
+  }
+
+  let matches = arg_parser.get_matches();
+  let global_opts = cli::GlobalOpts::from_matches(&matches);
 
   log::set_max_level({
     let log_level_from_options =
@@ -67,16 +78,12 @@ pub fn try_main() -> AnyResult<()> {
     log::max_level().min(log_level_from_options)
   });
 
+  let (command_name, command_matches) = matches.subcommand();
+  let command = all_commands_map.remove(command_name).unwrap();
+  let command_matches = command_matches.unwrap();
+
   // Brace for impact.
   info!("{}/{} v{}", CRATE_TITLE, CRATE_NAME, CRATE_VERSION);
 
-  match command_opts {
-    cli::CommandOpts::Scan(cmd_opts) => cli::scan::run(global_opts, *cmd_opts),
-    cli::CommandOpts::CreateProject(cmd_opts) => cli::create_project::run(global_opts, *cmd_opts),
-    cli::CommandOpts::ParsePo(cmd_opts) => cli::parse_po::run(global_opts, *cmd_opts),
-    cli::CommandOpts::Export(cmd_opts) => cli::export::run(global_opts, *cmd_opts),
-    cli::CommandOpts::Import(cmd_opts) => cli::import::run(global_opts, *cmd_opts),
-    cli::CommandOpts::Status(cmd_opts) => cli::status::run(global_opts, *cmd_opts),
-    cli::CommandOpts::Backend(cmd_opts) => cli::backend::run(global_opts, *cmd_opts),
-  }
+  command.run(global_opts, command_matches)
 }

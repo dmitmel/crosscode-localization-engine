@@ -17,128 +17,121 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::str::FromStr;
 
-pub const NAME: &str = "scan";
-
 #[derive(Debug)]
-pub struct CommandOpts {
-  pub assets_dir: PathBuf,
-  pub output: PathBuf,
-}
+pub struct ScanCommand;
 
-impl CommandOpts {
-  pub fn from_matches(matches: &clap::ArgMatches<'_>) -> Self {
-    Self {
-      assets_dir: PathBuf::from(matches.value_of_os("assets_dir").unwrap()),
-      output: PathBuf::from(matches.value_of_os("output").unwrap()),
-    }
+impl super::Command for ScanCommand {
+  fn name(&self) -> &'static str { "scan" }
+
+  fn create_arg_parser<'a, 'b>(&self, app: clap::App<'a, 'b>) -> clap::App<'a, 'b> {
+    app
+      .about(
+        "Scans the assets directory of the game and extracts the localizable strings and other \
+        interesting data.",
+      )
+      .arg(
+        clap::Arg::with_name("assets_dir")
+          .value_name("ASSETS")
+          .required(true)
+          .help("Path to the assets directory."),
+      )
+      .arg(
+        clap::Arg::with_name("output")
+          .value_name("PATH")
+          .short("o")
+          .long("output")
+          .required(true)
+          .help("Path to the output JSON file."),
+      )
   }
-}
 
-pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
-  clap::App::new(NAME)
-    .about(
-      "Scans the assets directory of the game and extracts the localizable strings and other \
-          interesting data.",
-    )
-    .arg(
-      clap::Arg::with_name("assets_dir")
-        .value_name("ASSETS")
-        .required(true)
-        .help("Path to the assets directory."),
-    )
-    .arg(
-      clap::Arg::with_name("output")
-        .value_name("PATH")
-        .short("o")
-        .long("output")
-        .required(true)
-        .help("Path to the output JSON file."),
-    )
-}
+  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches<'_>) -> AnyResult<()> {
+    let opt_assets_dir = PathBuf::from(matches.value_of_os("assets_dir").unwrap());
+    let opt_output = PathBuf::from(matches.value_of_os("output").unwrap());
 
-pub fn run(_global_opts: super::GlobalOpts, command_opts: CommandOpts) -> AnyResult<()> {
-  info!("Performing a scan of game files in the assets dir {:?}", command_opts.assets_dir);
+    info!("Performing a scan of game files in the assets dir {:?}", opt_assets_dir);
 
-  let game_version =
-    read_game_version(&command_opts.assets_dir).context("Failed to read the game version")?;
-  info!("Game version is {}", game_version);
+    let game_version =
+      read_game_version(&opt_assets_dir).context("Failed to read the game version")?;
+    info!("Game version is {}", game_version);
 
-  info!("Finding all JSON files");
-  let all_json_files = json_file_finder::find_all_in_assets_dir(&command_opts.assets_dir)
-    .context("Failed to find all JSON files in the assets dir")?;
-  info!("Found {} JSON files in total", all_json_files.len());
+    info!("Finding all JSON files");
+    let all_json_files = json_file_finder::find_all_in_assets_dir(&opt_assets_dir)
+      .context("Failed to find all JSON files in the assets dir")?;
+    info!("Found {} JSON files in total", all_json_files.len());
 
-  let scan_db =
-    scan::ScanDb::create(command_opts.output.clone(), scan::ScanDbCreateOpts { game_version });
+    let scan_db = scan::ScanDb::create(opt_output, scan::ScanDbCreateOpts { game_version });
 
-  // Currently all fragments are generated with the one and only `en_US` locale
-  // anyway, so let's reuse the hashmap and just clone it.
-  let mut tmp_fragment_text = HashMap::<RcString, RcString>::with_capacity(1);
-  let tmp_extracted_locale = RcString::from(lang_label_extractor::EXTRACTED_LOCALE);
+    // Currently all fragments are generated with the one and only `en_US` locale
+    // anyway, so let's reuse the hashmap and just clone it.
+    let mut tmp_fragment_text = HashMap::<RcString, RcString>::with_capacity(1);
+    let tmp_extracted_locale = RcString::from(lang_label_extractor::EXTRACTED_LOCALE);
 
-  info!("Extracting localizable strings");
-  let mut total_fragments_count = 0;
-  let mut ignored_lang_labels_count = 0;
+    info!("Extracting localizable strings");
+    let mut total_fragments_count = 0;
+    let mut ignored_lang_labels_count = 0;
 
-  let all_json_files_len = all_json_files.len();
-  for (i, found_file) in all_json_files.into_iter().enumerate() {
-    trace!("[{}/{}] {:?}", i + 1, all_json_files_len, found_file.path);
-    let mut scan_db_file: Option<Rc<scan::ScanDbGameFile>> = None;
+    let all_json_files_len = all_json_files.len();
+    for (i, found_file) in all_json_files.into_iter().enumerate() {
+      trace!("[{}/{}] {:?}", i + 1, all_json_files_len, found_file.path);
+      let mut scan_db_file: Option<Rc<scan::ScanDbGameFile>> = None;
 
-    let abs_path = command_opts.assets_dir.join(&found_file.path);
-    let json_data: json::Value = utils::json::read_file(&abs_path, &mut Vec::new())
-      .with_context(|| format!("Failed to deserialize from JSON file {:?}", abs_path))?;
+      let abs_path = opt_assets_dir.join(&found_file.path);
+      let json_data: json::Value = utils::json::read_file(&abs_path, &mut Vec::new())
+        .with_context(|| format!("Failed to deserialize from JSON file {:?}", abs_path))?;
 
-    let lang_labels_iter = match lang_label_extractor::extract_from_file(&found_file, &json_data) {
-      Some(v) => v,
-      _ => continue,
-    };
-
-    for lang_label in lang_labels_iter {
-      if is_lang_label_ignored(&lang_label, &found_file) {
-        ignored_lang_labels_count += 1;
-        continue;
-      }
-      let LangLabel { json_path, lang_uid, text } = lang_label;
-
-      let description = if !found_file.is_lang_file {
-        match fragment_descriptions::generate(&json_data, &json_path) {
-          Ok(v) => v,
-          Err(e) => {
-            warn!("file {:?}: fragment {:?}: {:?}", found_file.path, json_path, e);
-            continue;
-          }
-        }
-      } else {
-        Vec::new()
+      let lang_labels_iter = match lang_label_extractor::extract_from_file(&found_file, &json_data)
+      {
+        Some(v) => v,
+        _ => continue,
       };
 
-      let scan_db_file =
-        scan_db_file.get_or_insert_with(|| scan_db.new_game_file(found_file.path.share_rc()));
+      for lang_label in lang_labels_iter {
+        if is_lang_label_ignored(&lang_label, &found_file) {
+          ignored_lang_labels_count += 1;
+          continue;
+        }
+        let LangLabel { json_path, lang_uid, text } = lang_label;
 
-      tmp_fragment_text.insert(tmp_extracted_locale.share_rc(), text);
-      scan_db_file.new_fragment(scan::ScanDbFragmentInitOpts {
-        json_path,
-        lang_uid,
-        description,
-        text: tmp_fragment_text.clone(),
-        flags: HashSet::new(),
-      });
-      total_fragments_count += 1;
+        let description = if !found_file.is_lang_file {
+          match fragment_descriptions::generate(&json_data, &json_path) {
+            Ok(v) => v,
+            Err(e) => {
+              warn!("file {:?}: fragment {:?}: {:?}", found_file.path, json_path, e);
+              continue;
+            }
+          }
+        } else {
+          Vec::new()
+        };
+
+        let scan_db_file =
+          scan_db_file.get_or_insert_with(|| scan_db.new_game_file(found_file.path.share_rc()));
+
+        tmp_fragment_text.insert(tmp_extracted_locale.share_rc(), text);
+        scan_db_file.new_fragment(scan::ScanDbFragmentInitOpts {
+          json_path,
+          lang_uid,
+          description,
+          text: tmp_fragment_text.clone(),
+          flags: HashSet::new(),
+        });
+        total_fragments_count += 1;
+      }
     }
+
+    info!(
+      "Found {} localizable strings in {} files, {} were ignored",
+      total_fragments_count,
+      scan_db.game_files().len(),
+      ignored_lang_labels_count,
+    );
+
+    info!("Writing the scan database");
+    scan_db.write().context("Failed to write the scan database")?;
+
+    Ok(())
   }
-
-  info!(
-    "Found {} localizable strings in {} files, {} were ignored",
-    total_fragments_count,
-    scan_db.game_files().len(),
-    ignored_lang_labels_count,
-  );
-
-  info!("Writing the scan database");
-  scan_db.write().context("Failed to write the scan database")?;
-
-  Ok(())
 }
 
 static CHANGELOG_FILE_PATH: Lazy<&'static Path> = Lazy::new(|| Path::new("data/changelog.json"));

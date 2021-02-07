@@ -7,6 +7,7 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
+assert_trait_is_object_safe!(Splitter);
 pub trait Splitter: fmt::Debug {
   fn id_static() -> &'static str
   where

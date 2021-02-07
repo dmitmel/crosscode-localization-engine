@@ -8,51 +8,47 @@ use std::fs;
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
 
-pub const NAME: &str = "parse-po";
-
 #[derive(Debug)]
-pub struct CommandOpts {
-  pub file: Option<PathBuf>,
-  pub json: bool,
-}
+pub struct ParsePoCommand;
 
-impl CommandOpts {
-  pub fn from_matches(matches: &clap::ArgMatches<'_>) -> Self {
-    Self { file: matches.value_of("file").map(PathBuf::from), json: matches.is_present("json") }
+impl super::Command for ParsePoCommand {
+  fn name(&self) -> &'static str { "parse-po" }
+
+  fn create_arg_parser<'a, 'b>(&self, app: clap::App<'a, 'b>) -> clap::App<'a, 'b> {
+    app
+      .arg(clap::Arg::with_name("file").value_name("FILE"))
+      .arg(clap::Arg::with_name("json").short("J").long("json"))
   }
-}
 
-pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
-  clap::App::new(NAME)
-    .arg(clap::Arg::with_name("file").value_name("FILE"))
-    .arg(clap::Arg::with_name("json").short("J").long("json"))
-}
+  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches<'_>) -> AnyResult<()> {
+    let opt_file = matches.value_of("file").map(PathBuf::from);
+    let opt_json = matches.is_present("json");
 
-pub fn run(_global_opts: super::GlobalOpts, command_opts: CommandOpts) -> AnyResult<()> {
-  let (src, filename): (String, Cow<str>) = match &command_opts.file {
-    Some(file) => (fs::read_to_string(file)?, file.to_string_lossy()),
-    None => {
-      let mut buf = String::new();
-      io::stdin().read_to_string(&mut buf)?;
-      (buf, "<stdin>".into())
-    }
-  };
-
-  let iter = gettext_po::parse(&src).filter_map(
-    |message: Result<ParsedMessage, ParsingError>| -> Option<ParsedMessage> {
-      match message {
-        Ok(message) => Some(message),
-        Err(e) => {
-          error!("{}", e.nice_formatter(&filename, &src));
-          None
-        }
+    let (src, filename): (String, Cow<str>) = match &opt_file {
+      Some(file) => (fs::read_to_string(file)?, file.to_string_lossy()),
+      None => {
+        let mut buf = String::new();
+        io::stdin().read_to_string(&mut buf)?;
+        (buf, "<stdin>".into())
       }
-    },
-  );
-  if command_opts.json {
-    print_messages_json(iter)
-  } else {
-    print_messages_po(iter)
+    };
+
+    let iter = gettext_po::parse(&src).filter_map(
+      |message: Result<ParsedMessage, ParsingError>| -> Option<ParsedMessage> {
+        match message {
+          Ok(message) => Some(message),
+          Err(e) => {
+            error!("{}", e.nice_formatter(&filename, &src));
+            None
+          }
+        }
+      },
+    );
+    if opt_json {
+      print_messages_json(iter)
+    } else {
+      print_messages_po(iter)
+    }
   }
 }
 

@@ -28,6 +28,7 @@ pub struct ImportedTranslation {
   pub flags: HashSet<RcString>,
 }
 
+assert_trait_is_object_safe!(Importer);
 pub trait Importer: fmt::Debug {
   fn id_static() -> &'static str
   where

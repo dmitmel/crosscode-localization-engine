@@ -18,6 +18,7 @@ pub struct ExporterConfig {
   pub compact: bool,
 }
 
+assert_trait_is_object_safe!(Exporter);
 pub trait Exporter: fmt::Debug {
   fn id_static() -> &'static str
   where
