@@ -59,7 +59,7 @@ pub struct GameFileChunkSerde {
 pub struct FragmentSerde {
   #[serde(default, rename = "luid")]
   pub lang_uid: i32,
-  #[serde(default)]
+  #[serde(default, rename = "desc")]
   pub description: Vec<RcString>,
   #[serde(with = "utils::serde::MultilineStringHelper", rename = "orig")]
   pub original_text: RcString,
