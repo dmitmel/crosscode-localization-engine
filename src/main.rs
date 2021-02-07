@@ -32,12 +32,20 @@ pub fn main() {
     env::set_var(backtrace_var_name, OsStr::new("1"));
   }
 
-  if let Err(err) = try_main().context("CRITICAL ERROR") {
-    if log::log_enabled!(log::Level::Error) {
-      error!("{:?}", err);
-    } else {
-      eprintln!("ERROR: {:?}", err);
-    }
+  if let Err(e) = try_main() {
+    report_error(e);
+  }
+}
+
+pub fn report_error(mut error: AnyError) {
+  error = error.context(format!(
+    "CRITICAL ERROR in thread '{}'",
+    std::thread::current().name().unwrap_or("<unnamed>"),
+  ));
+  if log::log_enabled!(log::Level::Error) {
+    error!("{:?}", error);
+  } else {
+    eprintln!("ERROR: {:?}", error);
   }
 }
 

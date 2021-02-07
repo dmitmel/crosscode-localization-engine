@@ -33,16 +33,12 @@ pub fn parse_opts() -> AnyResult<(GlobalOpts, CommandOpts)> {
   let global_opts = GlobalOpts { verbose: matches.is_present("verbose") };
 
   let command_opts = match matches.subcommand() {
-    (scan::NAME, Some(matches)) => {
-      CommandOpts::Scan(Box::new(scan::CommandOpts::from_matches(matches)))
+    (backend::NAME, Some(matches)) => {
+      CommandOpts::Backend(Box::new(backend::CommandOpts::from_matches(matches)))
     }
 
     (create_project::NAME, Some(matches)) => {
       CommandOpts::CreateProject(Box::new(create_project::CommandOpts::from_matches(matches)))
-    }
-
-    (parse_po::NAME, Some(matches)) => {
-      CommandOpts::ParsePo(Box::new(parse_po::CommandOpts::from_matches(matches)))
     }
 
     (export::NAME, Some(matches)) => {
@@ -51,6 +47,14 @@ pub fn parse_opts() -> AnyResult<(GlobalOpts, CommandOpts)> {
 
     (import::NAME, Some(matches)) => {
       CommandOpts::Import(Box::new(import::CommandOpts::from_matches(matches)))
+    }
+
+    (parse_po::NAME, Some(matches)) => {
+      CommandOpts::ParsePo(Box::new(parse_po::CommandOpts::from_matches(matches)))
+    }
+
+    (scan::NAME, Some(matches)) => {
+      CommandOpts::Scan(Box::new(scan::CommandOpts::from_matches(matches)))
     }
 
     (status::NAME, Some(matches)) => {
@@ -80,10 +84,11 @@ fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
         .help("Print more logs, may be helpful for troubleshooting.")
         .global(true),
     )
-    .subcommand(scan::create_arg_parser())
+    .subcommand(backend::create_arg_parser())
     .subcommand(create_project::create_arg_parser())
-    .subcommand(parse_po::create_arg_parser())
     .subcommand(export::create_arg_parser())
     .subcommand(import::create_arg_parser())
+    .subcommand(parse_po::create_arg_parser())
+    .subcommand(scan::create_arg_parser())
     .subcommand(status::create_arg_parser())
 }
