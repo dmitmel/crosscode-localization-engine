@@ -25,8 +25,10 @@ pub static META_FILE_NAME: Lazy<&'static Path> =
 
 #[derive(Debug, Deserialize)]
 pub struct ProjectMetaSerde {
-  pub uuid: Uuid,
+  pub id: Uuid,
+  #[serde(rename = "ctime")]
   pub creation_timestamp: Timestamp,
+  #[serde(rename = "mtime")]
   pub modification_timestamp: Timestamp,
   pub game_version: RcString,
   pub original_locale: RcString,
@@ -39,8 +41,10 @@ pub struct ProjectMetaSerde {
 
 #[derive(Debug, Deserialize)]
 pub struct TrFileSerde {
-  pub uuid: Uuid,
+  pub id: Uuid,
+  #[serde(rename = "ctime")]
   pub creation_timestamp: Timestamp,
+  #[serde(rename = "mtime")]
   pub modification_timestamp: Timestamp,
   // pub project_meta_file: RcString,
   pub game_file_chunks: IndexMap<RcString, GameFileChunkSerde>,
@@ -53,26 +57,30 @@ pub struct GameFileChunkSerde {
 
 #[derive(Debug, Deserialize)]
 pub struct FragmentSerde {
-  #[serde(default)]
+  #[serde(default, rename = "luid")]
   pub lang_uid: i32,
   #[serde(default)]
   pub description: Vec<RcString>,
-  #[serde(with = "utils::serde::MultilineStringHelper")]
+  #[serde(with = "utils::serde::MultilineStringHelper", rename = "orig")]
   pub original_text: RcString,
   // #[serde(default)]
   // pub reference_texts: HashMap<RcString, Vec<RcString>>,
   #[serde(default)]
   pub flags: HashSet<RcString>,
+  #[serde(rename = "tr")]
   pub translations: Vec<TranslationSerde>,
   #[serde(default)]
+  #[serde(rename = "cm")]
   pub comments: Vec<CommentSerde>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct TranslationSerde {
-  pub uuid: Uuid,
+  pub id: Uuid,
   pub author: RcString,
+  #[serde(rename = "ctime")]
   pub creation_timestamp: Timestamp,
+  #[serde(rename = "mtime")]
   pub modification_timestamp: Timestamp,
   #[serde(with = "utils::serde::MultilineStringHelper")]
   pub text: RcString,
@@ -82,9 +90,11 @@ pub struct TranslationSerde {
 
 #[derive(Debug, Deserialize)]
 pub struct CommentSerde {
-  pub uuid: Uuid,
+  pub id: Uuid,
   pub author: RcString,
+  #[serde(rename = "ctime")]
   pub creation_timestamp: Timestamp,
+  #[serde(rename = "mtime")]
   pub modification_timestamp: Timestamp,
   #[serde(with = "utils::serde::MultilineStringHelper")]
   pub text: RcString,
@@ -99,8 +109,10 @@ pub struct ProjectMeta {
   #[serde(skip)]
   project: RcWeak<Project>,
 
-  uuid: Uuid,
+  id: Uuid,
+  #[serde(rename = "ctime")]
   creation_timestamp: Timestamp,
+  #[serde(rename = "mtime")]
   modification_timestamp: Cell<Timestamp>, // TODO
   game_version: RcString,
   original_locale: RcString,
@@ -119,7 +131,7 @@ pub struct ProjectMeta {
 
 #[derive(Debug)]
 pub struct ProjectMetaInitOpts {
-  pub uuid: Uuid,
+  pub id: Uuid,
   pub creation_timestamp: Timestamp,
   pub modification_timestamp: Timestamp,
   pub game_version: RcString,
@@ -136,7 +148,7 @@ impl ProjectMeta {
   #[inline]
   pub fn project(&self) -> Rc<Project> { self.project.upgrade().unwrap() }
   #[inline(always)]
-  pub fn uuid(&self) -> Uuid { self.uuid }
+  pub fn id(&self) -> Uuid { self.id }
   #[inline(always)]
   pub fn creation_timestamp(&self) -> Timestamp { self.creation_timestamp }
   #[inline(always)]
@@ -161,7 +173,7 @@ impl ProjectMeta {
       dirty_flag: Rc::new(Cell::new(true)),
       project: project.share_rc_weak(),
 
-      uuid: opts.uuid,
+      id: opts.id,
       creation_timestamp: opts.creation_timestamp,
       modification_timestamp: Cell::new(opts.modification_timestamp),
       game_version: opts.game_version,
@@ -251,7 +263,7 @@ impl Project {
       .with_context(|| format!("Failed to deserialize from JSON file {:?}", meta_file_path))?;
 
     let myself = Self::create(root_dir, ProjectMetaInitOpts {
-      uuid: meta_raw.uuid,
+      id: meta_raw.id,
       creation_timestamp: meta_raw.creation_timestamp,
       modification_timestamp: meta_raw.modification_timestamp,
       game_version: meta_raw.game_version,
@@ -270,7 +282,7 @@ impl Project {
       let tr_file_raw: TrFileSerde = json::read_file(&tr_file_fs_path, &mut Vec::new())
         .with_context(|| format!("Failed to deserialize from JSON file {:?}", tr_file_fs_path))?;
       let tr_file = myself.new_tr_file(TrFileInitOpts {
-        uuid: tr_file_raw.uuid,
+        id: tr_file_raw.id,
         creation_timestamp: tr_file_raw.creation_timestamp,
         modification_timestamp: tr_file_raw.modification_timestamp,
         relative_path: tr_file_relative_path,
@@ -295,7 +307,7 @@ impl Project {
           fragment.reserve_additional_translations(fragment_raw.translations.len());
           for translation_raw in fragment_raw.translations {
             fragment.new_translation(TranslationInitOpts {
-              uuid: translation_raw.uuid,
+              id: translation_raw.id,
               author: translation_raw.author,
               creation_timestamp: translation_raw.creation_timestamp,
               modification_timestamp: translation_raw.modification_timestamp,
@@ -307,7 +319,7 @@ impl Project {
           fragment.reserve_additional_comments(fragment_raw.comments.len());
           for comment_raw in fragment_raw.comments {
             fragment.new_comment(CommentInitOpts {
-              uuid: comment_raw.uuid,
+              id: comment_raw.id,
               author: comment_raw.author,
               creation_timestamp: comment_raw.creation_timestamp,
               modification_timestamp: comment_raw.modification_timestamp,
@@ -379,7 +391,7 @@ impl Project {
 
 #[derive(Debug)]
 pub struct TrFileInitOpts {
-  pub uuid: Uuid,
+  pub id: Uuid,
   pub creation_timestamp: Timestamp,
   pub modification_timestamp: Timestamp,
   pub relative_path: RcString,
@@ -392,8 +404,10 @@ pub struct TrFile {
   #[serde(skip)]
   project: RcWeak<Project>,
 
-  uuid: Uuid,
+  id: Uuid,
+  #[serde(rename = "ctime")]
   creation_timestamp: Timestamp,
+  #[serde(rename = "mtime")]
   modification_timestamp: Timestamp,
   // project_meta_file: RcString, // TODO
   #[serde(skip)]
@@ -408,7 +422,7 @@ impl TrFile {
   #[inline]
   pub fn project(&self) -> Rc<Project> { self.project.upgrade().unwrap() }
   #[inline(always)]
-  pub fn uuid(&self) -> Uuid { self.uuid }
+  pub fn id(&self) -> Uuid { self.id }
   #[inline(always)]
   pub fn creation_timestamp(&self) -> Timestamp { self.creation_timestamp }
   #[inline(always)]
@@ -428,7 +442,7 @@ impl TrFile {
       dirty_flag: Rc::new(Cell::new(false)),
       project: project.share_rc_weak(),
 
-      uuid: opts.uuid,
+      id: opts.id,
       creation_timestamp: opts.creation_timestamp,
       modification_timestamp: opts.modification_timestamp,
       relative_path: opts.relative_path,
@@ -500,6 +514,7 @@ pub struct GameFileChunk {
   #[serde(skip)]
   virtual_game_file: Rc<VirtualGameFile>,
 
+  #[serde(skip)]
   path: RcString,
 
   fragments: RefCell<IndexMap<RcString, Rc<Fragment>>>,
@@ -587,19 +602,20 @@ pub struct Fragment {
   file_path: RcString,
   #[serde(skip)]
   json_path: RcString,
-  #[serde(default, skip_serializing_if = "utils::is_default")]
+  #[serde(skip_serializing_if = "utils::is_default", rename = "luid")]
   lang_uid: i32,
-  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  #[serde(skip_serializing_if = "Vec::is_empty", rename = "desc")]
   description: Vec<RcString>,
-  #[serde(with = "utils::serde::MultilineStringHelper")]
+  #[serde(with = "utils::serde::MultilineStringHelper", rename = "orig")]
   original_text: RcString,
   // #[serde(default, skip_serializing_if = "HashMap::is_empty")]
   // reference_texts: HashMap<RcString, RcString>,
   #[serde(default, skip_serializing_if = "utils::serde::is_refcell_hashset_empty")]
   flags: RefCell<HashSet<RcString>>,
 
+  #[serde(rename = "tr")]
   translations: RefCell<Vec<Rc<Translation>>>,
-  #[serde(default, skip_serializing_if = "utils::serde::is_refcell_vec_empty")]
+  #[serde(skip_serializing_if = "utils::serde::is_refcell_vec_empty", rename = "cm")]
   comments: RefCell<Vec<Rc<Comment>>>,
 }
 
@@ -710,7 +726,7 @@ impl Fragment {
 
 #[derive(Debug)]
 pub struct TranslationInitOpts {
-  pub uuid: Uuid,
+  pub id: Uuid,
   pub author: RcString,
   pub creation_timestamp: Timestamp,
   pub modification_timestamp: Timestamp,
@@ -725,9 +741,11 @@ pub struct Translation {
   #[serde(skip)]
   fragment: RcWeak<Fragment>,
 
-  uuid: Uuid,
+  id: Uuid,
   author: RcString,
+  #[serde(rename = "ctime")]
   creation_timestamp: Timestamp,
+  #[serde(rename = "mtime")]
   modification_timestamp: Cell<Timestamp>,
   #[serde(with = "utils::serde::MultilineStringHelperRefCell")]
   text: RefCell<RcString>,
@@ -741,7 +759,7 @@ impl Translation {
   #[inline]
   pub fn fragment(&self) -> Rc<Fragment> { self.fragment.upgrade().unwrap() }
   #[inline(always)]
-  pub fn uuid(&self) -> Uuid { self.uuid }
+  pub fn id(&self) -> Uuid { self.id }
   #[inline(always)]
   pub fn author(&self) -> &RcString { &self.author }
   #[inline(always)]
@@ -758,7 +776,7 @@ impl Translation {
       dirty_flag: fragment.dirty_flag.share_rc(),
       fragment: fragment.share_rc_weak(),
 
-      uuid: opts.uuid,
+      id: opts.id,
       author: opts.author,
       creation_timestamp: opts.creation_timestamp,
       modification_timestamp: Cell::new(opts.modification_timestamp),
@@ -790,7 +808,7 @@ impl Translation {
 
 #[derive(Debug)]
 pub struct CommentInitOpts {
-  pub uuid: Uuid,
+  pub id: Uuid,
   pub author: RcString,
   pub creation_timestamp: Timestamp,
   pub modification_timestamp: Timestamp,
@@ -804,9 +822,11 @@ pub struct Comment {
   #[serde(skip)]
   fragment: RcWeak<Fragment>,
 
-  uuid: Uuid,
+  id: Uuid,
   author: RcString,
+  #[serde(rename = "ctime")]
   creation_timestamp: Timestamp,
+  #[serde(rename = "mtime")]
   modification_timestamp: Cell<Timestamp>,
   #[serde(with = "utils::serde::MultilineStringHelperRefCell")]
   text: RefCell<RcString>,
@@ -818,7 +838,7 @@ impl Comment {
   #[inline]
   pub fn fragment(&self) -> Rc<Fragment> { self.fragment.upgrade().unwrap() }
   #[inline(always)]
-  pub fn uuid(&self) -> Uuid { self.uuid }
+  pub fn id(&self) -> Uuid { self.id }
   #[inline(always)]
   pub fn author(&self) -> &RcString { &self.author }
   #[inline(always)]
@@ -833,7 +853,7 @@ impl Comment {
       dirty_flag: fragment.dirty_flag.share_rc(),
       fragment: fragment.share_rc_weak(),
 
-      uuid: opts.uuid,
+      id: opts.id,
       author: opts.author,
       creation_timestamp: opts.creation_timestamp,
       modification_timestamp: Cell::new(opts.modification_timestamp),

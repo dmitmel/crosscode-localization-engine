@@ -214,7 +214,7 @@ pub fn run(_global_opts: super::GlobalOpts, command_opts: CommandOpts) -> AnyRes
           flags.extend(command_opts.add_flags.iter().cloned());
 
           fragment.new_translation(project::TranslationInitOpts {
-            uuid: utils::new_uuid(),
+            id: utils::new_uuid(),
             author: imported_translation_author,
             creation_timestamp: timestamp,
             modification_timestamp: imported_translation

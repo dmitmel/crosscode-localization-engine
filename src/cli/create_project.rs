@@ -145,7 +145,7 @@ pub fn run(_global_opts: super::GlobalOpts, command_opts: CommandOpts) -> AnyRes
   utils::create_dir_recursively(&project_dir).context("Failed to create the project dir")?;
   let timestamp = utils::get_timestamp();
   let project = project::Project::create(project_dir, project::ProjectMetaInitOpts {
-    uuid: utils::new_uuid(),
+    id: utils::new_uuid(),
     creation_timestamp: timestamp,
     modification_timestamp: timestamp,
     game_version: scan_game_version,
@@ -187,7 +187,7 @@ pub fn run(_global_opts: super::GlobalOpts, command_opts: CommandOpts) -> AnyRes
           project.get_tr_file(&fragment_tr_file_path).unwrap_or_else(|| {
             let timestamp = utils::get_timestamp();
             project.new_tr_file(project::TrFileInitOpts {
-              uuid: utils::new_uuid(),
+              id: utils::new_uuid(),
               creation_timestamp: timestamp,
               modification_timestamp: timestamp,
               relative_path: fragment_tr_file_path.share_rc(),

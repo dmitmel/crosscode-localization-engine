@@ -17,7 +17,8 @@ use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
 pub struct ScanDbSerde {
-  pub uuid: Uuid,
+  pub id: Uuid,
+  #[serde(rename = "ctime")]
   pub creation_timestamp: Timestamp,
   pub game_version: RcString,
   // pub extracted_locales: Vec<RcString>,
@@ -31,7 +32,9 @@ pub struct ScanDbGameFileSerde {
 
 #[derive(Debug, Deserialize)]
 pub struct ScanDbFragmentSerde {
+  #[serde(rename = "luid")]
   pub lang_uid: i32,
+  #[serde(rename = "desc")]
   pub description: Vec<RcString>,
   pub text: HashMap<RcString, RcString>,
   pub flags: HashSet<RcString>,
@@ -46,7 +49,8 @@ pub struct ScanDbCreateOpts {
 
 #[derive(Debug, Serialize)]
 pub struct ScanDbMeta {
-  pub uuid: Uuid,
+  pub id: Uuid,
+  #[serde(rename = "ctime")]
   pub creation_timestamp: Timestamp,
   pub game_version: RcString,
   // TODO: extracted_locales
@@ -86,9 +90,8 @@ impl ScanDb {
 
   pub fn create(db_file_path: PathBuf, opts: ScanDbCreateOpts) -> Rc<Self> {
     let creation_timestamp = utils::get_timestamp();
-    let uuid = utils::new_uuid();
     let myself = Self::new(db_file_path, ScanDbMeta {
-      uuid,
+      id: utils::new_uuid(),
       creation_timestamp,
       game_version: opts.game_version,
     });
@@ -101,7 +104,7 @@ impl ScanDb {
       .with_context(|| format!("Failed to deserialize from JSON file {:?}", db_file_path))?;
 
     let myself = Self::new(db_file_path, ScanDbMeta {
-      uuid: raw_data.uuid,
+      id: raw_data.id,
       creation_timestamp: raw_data.creation_timestamp,
       game_version: raw_data.game_version,
     });
@@ -221,7 +224,9 @@ pub struct ScanDbFragment {
   file_path: RcString,
   #[serde(skip)]
   json_path: RcString,
+  #[serde(rename = "luid")]
   lang_uid: i32,
+  #[serde(rename = "desc")]
   description: Vec<RcString>,
   text: HashMap<RcString, RcString>,
   flags: HashSet<RcString>,
