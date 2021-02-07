@@ -59,7 +59,7 @@ pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>
       let entry =
         entry.with_context(|| format!("Failed to list all files in dir {:?}", data_dir_abs))?;
 
-      if !entry.file_type().is_file() || entry.path().extension() != Some(*JSON_EXTENSION) {
+      if !(entry.file_type().is_file() && entry.path().extension() == Some(*JSON_EXTENSION)) {
         continue;
       }
 

@@ -5,7 +5,9 @@ use crate::rc_string::RcString;
 use crate::utils;
 
 use std::collections::HashSet;
+use std::ffi::OsStr;
 use std::fs;
+use std::io::{self, BufRead};
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -29,11 +31,17 @@ impl super::Command for ImportCommand {
       )
       .arg(
         clap::Arg::with_name("inputs")
-          .value_name("PATH")
+          .value_name("IMPORT_PATH")
           .multiple(true)
           .required(true)
+          .conflicts_with("inputs_file")
           .help("Path to files to import translations from."),
       )
+      .arg(clap::Arg::with_name("inputs_file").value_name("PATH").short("i").help(
+        "Read paths to input files from a file. If there are other paths specified via \
+            command-line arguments, then those will be used instead and the inputs file will be \
+            ignored.",
+      ))
       .arg(
         clap::Arg::with_name("format")
           .value_name("NAME")
@@ -50,7 +58,7 @@ impl super::Command for ImportCommand {
           .default_value("__import")
           .help(
             "The default username to add translations with when the real author can't be \
-          determined, for example if the input format simply doesn't store such data.",
+            determined, for example if the input format simply doesn't store such data.",
           ),
       )
       .arg(
@@ -90,7 +98,10 @@ impl super::Command for ImportCommand {
 
   fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches<'_>) -> AnyResult<()> {
     let opt_project_dir = PathBuf::from(matches.value_of_os("project_dir").unwrap());
-    let opt_inputs: Vec<_> = matches.values_of_os("inputs").unwrap().map(PathBuf::from).collect();
+    let mut opt_inputs: Vec<_> = matches
+      .values_of_os("inputs")
+      .map_or_else(Vec::new, |values| values.map(PathBuf::from).collect());
+    let opt_inputs_file = matches.value_of_os("inputs_file").map(PathBuf::from);
     let opt_format = RcString::from(matches.value_of("format").unwrap());
     let opt_default_author = RcString::from(matches.value_of("default_author").unwrap());
     let opt_marker_flag = RcString::from(matches.value_of("marker_flag").unwrap());
@@ -114,11 +125,34 @@ impl super::Command for ImportCommand {
     let default_author = opt_default_author;
     let marker_flag = opt_marker_flag;
 
-    let inputs_len = opt_inputs.len();
-    for (i, input_path) in opt_inputs.into_iter().enumerate() {
+    if opt_inputs.is_empty() {
+      if let Some(opt_inputs_file) = opt_inputs_file {
+        try_any_result!({
+          let reader = io::BufReader::new(fs::File::open(&opt_inputs_file)?);
+          for line in reader.lines() {
+            opt_inputs.push(PathBuf::from(line?));
+          }
+        })
+        .with_context(|| format_err!("Failed to read inputs from file {:?}", opt_inputs_file))?;
+      }
+    }
+
+    let imported_file_ext = OsStr::new(importer.file_extension());
+    let mut inputs: Vec<PathBuf> = Vec::new();
+    for input_path in opt_inputs {
+      for entry in walkdir::WalkDir::new(&input_path).into_iter() {
+        let entry =
+          entry.with_context(|| format!("Failed to list all files in dir {:?}", input_path))?;
+        if entry.file_type().is_file() && entry.path().extension() == Some(imported_file_ext) {
+          inputs.push(entry.path().to_owned());
+        }
+      }
+    }
+
+    let inputs_len = inputs.len();
+    for (i, input_path) in inputs.into_iter().enumerate() {
       trace!("[{}/{}] {:?}", i + 1, inputs_len, input_path);
 
-      // TODO: handle directories in input_path
       let input = fs::read_to_string(&input_path)
         .with_context(|| format!("Failed to read file {:?}", input_path))?;
       let mut imported_fragments = Vec::new();
