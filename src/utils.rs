@@ -1,8 +1,6 @@
 pub mod json;
 pub mod serde;
 
-use crate::impl_prelude::*;
-
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::fs;
@@ -47,13 +45,6 @@ pub fn fast_concat_cow(strings: &[Cow<str>]) -> String {
   }
   result
 }
-
-// Type hints for the `try { ... }` blocks
-
-#[inline(always)]
-pub fn try_any_result_hint<T>(r: AnyResult<T>) -> AnyResult<T> { r }
-#[inline(always)]
-pub fn try_option_hint<T>(r: Option<T>) -> Option<T> { r }
 
 pub trait RcExt<T: ?Sized>: private::Sealed {
   fn share_rc(&self) -> Rc<T>;

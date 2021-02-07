@@ -25,3 +25,19 @@ macro_rules! hashset {
     }
   };
 }
+
+#[macro_export(local_inner_macros)]
+macro_rules! try_any_result {
+  ($block:block) => {{
+    let result: AnyResult<_> = try { $block };
+    result
+  }};
+}
+
+#[macro_export(local_inner_macros)]
+macro_rules! try_option {
+  ($block:block) => {{
+    let result: Option<_> = try { $block };
+    result
+  }};
+}

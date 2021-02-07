@@ -1,7 +1,7 @@
 use crate::impl_prelude::*;
 use crate::rc_string::RcString;
+use crate::utils;
 use crate::utils::json::{self, Value};
-use crate::utils::{self, try_option_hint};
 
 use std::borrow::Cow;
 use std::str::FromStr;
@@ -61,14 +61,12 @@ fn generate_for_json_object<'json>(
           //
 
           if let Some(entity2) = entities.iter().find(|entity2| {
-            try_option_hint(
-              try {
-                let entity2 = entity2.as_object()?;
-                let entity2_type = entity2.get("type")?.as_str()?;
-                let entity2_name = entity2.get("settings")?.as_object()?.get("name")?.as_str()?;
-                entity2_type == "NPC" && entity2_name == entity_name
-              },
-            )
+            try_option!({
+              let entity2 = entity2.as_object()?;
+              let entity2_type = entity2.get("type")?.as_str()?;
+              let entity2_name = entity2.get("settings")?.as_object()?.get("name")?.as_str()?;
+              entity2_type == "NPC" && entity2_name == entity_name
+            })
             .unwrap_or(false)
           }) {
             if let Some(Value::String(character_name)) =
