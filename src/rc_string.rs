@@ -11,6 +11,9 @@ use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
 
+// TODO: Replace all string Cows with this.
+pub type MaybeStaticStr = Cow<'static, str>;
+
 #[repr(transparent)]
 pub struct RcString(Rc<String>);
 
