@@ -110,7 +110,7 @@ pub enum ResponseMessageType {
 #[derive(Debug)]
 pub struct Backend {
   handshake_received: bool,
-  next_project_id: u32,
+  project_id_alloc: IdAllocator,
   projects: HashMap<u32, Rc<Project>>,
 }
 
@@ -118,7 +118,7 @@ impl Backend {
   pub fn new() -> Self {
     Self {
       handshake_received: false,
-      next_project_id: 1,
+      project_id_alloc: IdAllocator::new(),
       // I assume that at least one project will be opened because otherwise
       // (without opening a project) the backend is pretty much useless
       projects: HashMap::with_capacity(1),
@@ -210,10 +210,6 @@ impl Backend {
 
     match &request_msg.data {
       RequestMessageType::ProjectOpen { dir: project_dir } => {
-        self.next_project_id = self.next_project_id.max(1);
-        let project_id = self.next_project_id;
-        self.next_project_id = self.next_project_id.wrapping_add(1);
-
         let project = match Project::open(project_dir.clone())
           .with_context(|| format!("Failed to open project in {:?}", project_dir))
         {
@@ -223,6 +219,7 @@ impl Backend {
             return Ok(request_msg.error_response("failed to open project").into());
           }
         };
+        let project_id = self.project_id_alloc.next().unwrap();
         self.projects.insert(project_id, project);
         Ok(request_msg.response(ResponseMessageType::ProjectOpen { id: project_id }).into())
       }
@@ -235,6 +232,39 @@ impl Backend {
       }
 
       _ => Ok(request_msg.error_response("unimplemented").into()),
+    }
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct IdAllocator {
+  // `u32`s are used because JS only has 32-bit integers. And 64-bit floats,
+  // but those aren't really convenient for storing IDs.
+  current_id: u32,
+  only_nonzero: bool,
+  wrap_around: bool,
+}
+
+impl IdAllocator {
+  pub fn new() -> Self { Self { current_id: 0, only_nonzero: true, wrap_around: true } }
+  #[inline(always)]
+  pub fn set_only_nonzero(&mut self, only_nonzero: bool) { self.only_nonzero = only_nonzero; }
+  #[inline(always)]
+  pub fn set_wrap_around(&mut self, wrap_around: bool) { self.wrap_around = wrap_around; }
+}
+
+impl Iterator for IdAllocator {
+  type Item = u32;
+  fn next(&mut self) -> Option<Self::Item> {
+    // Clever branchless hack. Will take a max value with 1 when `only_nonzero`
+    // is true, will not affect `self.next_id` otherwise.
+    let id = self.current_id.max(self.only_nonzero as u32);
+    let (next_id, overflow) = id.overflowing_add(1);
+    if overflow && !self.wrap_around {
+      None
+    } else {
+      self.current_id = next_id;
+      Some(id)
     }
   }
 }
