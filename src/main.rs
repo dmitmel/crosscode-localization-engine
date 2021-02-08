@@ -35,11 +35,11 @@ pub fn main() {
   }
 
   if let Err(e) = try_main() {
-    report_error(e);
+    report_critical_error(e);
   }
 }
 
-pub fn report_error(mut error: AnyError) {
+pub fn report_critical_error(mut error: AnyError) {
   error = error.context(format!(
     "CRITICAL ERROR in thread '{}'",
     std::thread::current().name().unwrap_or("<unnamed>"),
@@ -48,6 +48,18 @@ pub fn report_error(mut error: AnyError) {
     error!("{:?}", error);
   } else {
     eprintln!("ERROR: {:?}", error);
+  }
+}
+
+pub fn report_error(mut error: AnyError) {
+  error = error.context(format!(
+    "non-critical error in thread '{}'",
+    std::thread::current().name().unwrap_or("<unnamed>"),
+  ));
+  if log::log_enabled!(log::Level::Error) {
+    warn!("{:?}", error);
+  } else {
+    eprintln!("WARN: {:?}", error);
   }
 }
 
@@ -85,5 +97,7 @@ pub fn try_main() -> AnyResult<()> {
   // Brace for impact.
   info!("{}/{} v{}", CRATE_TITLE, CRATE_NAME, CRATE_VERSION);
 
-  command.run(global_opts, command_matches)
+  command
+    .run(global_opts, command_matches)
+    .with_context(|| format!("Failed to run command {:?}", command_name))
 }

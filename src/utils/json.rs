@@ -1,5 +1,3 @@
-use crate::impl_prelude::*;
-
 use serde_json::ser::{CharEscape, Formatter};
 use std::borrow::Cow;
 use std::fs;
@@ -59,7 +57,7 @@ impl<'a> Iterator for ValueEntriesIter<'a> {
 pub fn read_file<'a, T: serde::Deserialize<'a>>(
   path: &Path,
   out_bytes: &'a mut Vec<u8>,
-) -> AnyResult<T> {
+) -> io::Result<T> {
   *out_bytes = fs::read(path)?;
   let value = serde_json::from_slice(out_bytes)?;
   Ok(value)
@@ -69,7 +67,7 @@ pub fn write_file<T: serde::Serialize>(
   path: &Path,
   value: &T,
   config: UltimateFormatterConfig,
-) -> AnyResult<()> {
+) -> io::Result<()> {
   let mut writer = io::BufWriter::new(fs::File::create(path)?);
   let mut serializer =
     serde_json::Serializer::with_formatter(&mut writer, UltimateFormatter::new(config));

@@ -31,8 +31,8 @@ impl Message {
     }
   }
 
-  pub fn error_response(&self, message: MaybeStaticStr) -> ErrorResponseMessage {
-    ErrorResponseMessage { id: self.id().unwrap_or(0), message }
+  pub fn error_response(&self, message: impl Into<MaybeStaticStr>) -> ErrorResponseMessage {
+    ErrorResponseMessage { id: self.id().unwrap_or(0), message: message.into() }
   }
 }
 
@@ -54,8 +54,8 @@ impl RequestMessage {
   }
 
   #[inline(always)]
-  pub fn error_response(&self, message: MaybeStaticStr) -> ErrorResponseMessage {
-    ErrorResponseMessage { id: self.id, message }
+  pub fn error_response(&self, message: impl Into<MaybeStaticStr>) -> ErrorResponseMessage {
+    ErrorResponseMessage { id: self.id, message: message.into() }
   }
 }
 
@@ -131,22 +131,46 @@ impl Backend {
     let mut message_index: u32 = 0;
     loop {
       try_any_result!({
+        fn handle_broken_pipe<T: Default>(result: io::Result<T>) -> io::Result<T> {
+          match result {
+            Err(e) if e.kind() == io::ErrorKind::BrokenPipe => {
+              warn!("The frontend has disconnected, exiting cleanly. Caused by: {}", e);
+              Ok(T::default())
+            }
+            _ => result,
+          }
+        }
+
         let mut buf = String::new();
-        let read_bytes = stdin.read_line(&mut buf).context("Failed to read from stdin")?;
+        let read_bytes =
+          handle_broken_pipe(stdin.read_line(&mut buf)).context("Failed to read from stdin")?;
         if read_bytes == 0 {
           break;
         }
-        let in_msg = serde_json::from_str::<Message>(&buf)
-          .context("Failed to deserialize a message from stdin")?;
-        let out_msg = self.process_message(in_msg)?;
-        serde_json::to_writer(&mut stdout, &out_msg)
-          .context("Failed to serialize a message to stdout")?;
-        stdout.write_all(b"\n").context("Failed to write to stdout")?;
-        if let Message::ErrorResponse(ErrorResponseMessage { message, .. }) = out_msg {
-          bail!("{}", message);
-        }
+
+        let in_msg: serde_json::Result<Message> = match serde_json::from_str::<Message>(&buf) {
+          Err(e) if !e.is_io() => {
+            warn!("Failed to deserialize message(index={}) from stdin: {}", message_index, e);
+            Err(e)
+          }
+          result => Ok(result.context("Failed to deserialize from stdin")?),
+        };
+
+        let out_msg: Message = match in_msg {
+          Ok(in_msg) => self.process_message(in_msg)?,
+          Err(e) => ErrorResponseMessage { id: 0, message: e.to_string().into() }.into(),
+        };
+
+        handle_broken_pipe(
+          try {
+            serde_json::to_writer(&mut stdout, &out_msg)?;
+            stdout.write_all(b"\n")?;
+          },
+        )
+        .context("Failed to serialize to stdout")?;
       })
-      .with_context(|| format!("Failed to process message with index {}", message_index))?;
+      .with_context(|| format!("Failed to process message(index={})", message_index))?;
+
       message_index = message_index.wrapping_add(1);
     }
     Ok(())
@@ -157,9 +181,7 @@ impl Backend {
     let request_msg = match message {
       Message::Request(v) => v,
       _ => {
-        return Ok(
-          message.error_response("the backend currently can't receive responses".into()).into(),
-        );
+        return Ok(message.error_response("the backend currently can't receive responses").into());
       }
     };
 
@@ -167,10 +189,10 @@ impl Backend {
       match request_msg.data {
         RequestMessageType::Handshake { protocol_version: PROTOCOL_VERSION } => {}
         RequestMessageType::Handshake { protocol_version: _ } => {
-          return Ok(request_msg.error_response("unsupported protocol version".into()).into());
+          return Ok(request_msg.error_response("unsupported protocol version").into());
         }
         _ => {
-          return Ok(request_msg.error_response("expected a handshake message".into()).into());
+          return Ok(request_msg.error_response("expected a handshake message").into());
         }
       };
 
@@ -192,8 +214,15 @@ impl Backend {
         let project_id = self.next_project_id;
         self.next_project_id = self.next_project_id.wrapping_add(1);
 
-        let project = Project::open(project_dir.clone())
-          .with_context(|| format!("Failed to open project in {:?}", project_dir))?;
+        let project = match Project::open(project_dir.clone())
+          .with_context(|| format!("Failed to open project in {:?}", project_dir))
+        {
+          Ok(v) => v,
+          Err(e) => {
+            crate::report_error(e);
+            return Ok(request_msg.error_response("failed to open project").into());
+          }
+        };
         self.projects.insert(project_id, project);
         Ok(request_msg.response(ResponseMessageType::ProjectOpen { id: project_id }).into())
       }
@@ -201,11 +230,11 @@ impl Backend {
       RequestMessageType::ProjectClose { id: project_id } => {
         match self.projects.remove(&project_id) {
           Some(_project) => Ok(request_msg.response(ResponseMessageType::Ok {}).into()),
-          None => Ok(request_msg.error_response("project ID not found".into()).into()),
+          None => Ok(request_msg.error_response("project ID not found").into()),
         }
       }
 
-      _ => Ok(request_msg.error_response("unimplemented".into()).into()),
+      _ => Ok(request_msg.error_response("unimplemented").into()),
     }
   }
 }
