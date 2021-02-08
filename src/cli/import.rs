@@ -194,7 +194,7 @@ impl super::Command for ImportCommand {
         let mut remaining_existing_translations: Option<Vec<Rc<Translation>>> = None;
         for imported_translation in imported_fragment.translations {
           let imported_translation_author =
-            imported_translation.author.unwrap_or_else(|| default_author.share_rc());
+            imported_translation.author_username.unwrap_or_else(|| default_author.share_rc());
 
           let existing_translation = if !opt_always_add_new_translations {
             let remaining_existing_translations = remaining_existing_translations
@@ -203,7 +203,7 @@ impl super::Command for ImportCommand {
             remaining_existing_translations
               .iter()
               .position(|tr| {
-                tr.has_flag(&marker_flag) && *tr.author() == imported_translation_author
+                tr.has_flag(&marker_flag) && *tr.author_username() == imported_translation_author
               })
               .map(|existing_translation_i: usize| -> Rc<Translation> {
                 remaining_existing_translations.remove(existing_translation_i)
@@ -234,7 +234,8 @@ impl super::Command for ImportCommand {
 
             fragment.new_translation(project::TranslationInitOpts {
               id: utils::new_uuid(),
-              author: imported_translation_author,
+              author_username: imported_translation_author.share_rc(),
+              editor_username: imported_translation_author,
               creation_timestamp: timestamp,
               modification_timestamp: imported_translation
                 .modification_timestamp

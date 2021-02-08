@@ -77,7 +77,10 @@ pub struct FragmentSerde {
 #[derive(Debug, Deserialize)]
 pub struct TranslationSerde {
   pub id: Uuid,
-  pub author: RcString,
+  #[serde(rename = "author")]
+  pub author_username: RcString,
+  #[serde(rename = "editor")]
+  pub editor_username: RcString,
   #[serde(rename = "ctime")]
   pub creation_timestamp: Timestamp,
   #[serde(rename = "mtime")]
@@ -91,7 +94,10 @@ pub struct TranslationSerde {
 #[derive(Debug, Deserialize)]
 pub struct CommentSerde {
   pub id: Uuid,
-  pub author: RcString,
+  #[serde(rename = "author")]
+  pub author_username: RcString,
+  #[serde(rename = "editor")]
+  pub editor_username: RcString,
   #[serde(rename = "ctime")]
   pub creation_timestamp: Timestamp,
   #[serde(rename = "mtime")]
@@ -308,7 +314,8 @@ impl Project {
           for translation_raw in fragment_raw.translations {
             fragment.new_translation(TranslationInitOpts {
               id: translation_raw.id,
-              author: translation_raw.author,
+              author_username: translation_raw.author_username,
+              editor_username: translation_raw.editor_username,
               creation_timestamp: translation_raw.creation_timestamp,
               modification_timestamp: translation_raw.modification_timestamp,
               text: translation_raw.text,
@@ -320,7 +327,8 @@ impl Project {
           for comment_raw in fragment_raw.comments {
             fragment.new_comment(CommentInitOpts {
               id: comment_raw.id,
-              author: comment_raw.author,
+              author_username: comment_raw.author_username,
+              editor_username: comment_raw.editor_username,
               creation_timestamp: comment_raw.creation_timestamp,
               modification_timestamp: comment_raw.modification_timestamp,
               text: comment_raw.text,
@@ -727,7 +735,8 @@ impl Fragment {
 #[derive(Debug)]
 pub struct TranslationInitOpts {
   pub id: Uuid,
-  pub author: RcString,
+  pub author_username: RcString,
+  pub editor_username: RcString,
   pub creation_timestamp: Timestamp,
   pub modification_timestamp: Timestamp,
   pub text: RcString,
@@ -742,7 +751,10 @@ pub struct Translation {
   fragment: RcWeak<Fragment>,
 
   id: Uuid,
-  author: RcString,
+  #[serde(rename = "author")]
+  author_username: RcString,
+  #[serde(rename = "editor")]
+  editor_username: RefCell<RcString>,
   #[serde(rename = "ctime")]
   creation_timestamp: Timestamp,
   #[serde(rename = "mtime")]
@@ -761,7 +773,9 @@ impl Translation {
   #[inline(always)]
   pub fn id(&self) -> Uuid { self.id }
   #[inline(always)]
-  pub fn author(&self) -> &RcString { &self.author }
+  pub fn author_username(&self) -> &RcString { &self.author_username }
+  #[inline(always)]
+  pub fn editor_username(&self) -> Ref<RcString> { self.editor_username.borrow() }
   #[inline(always)]
   pub fn creation_timestamp(&self) -> Timestamp { self.creation_timestamp }
   #[inline(always)]
@@ -777,7 +791,8 @@ impl Translation {
       fragment: fragment.share_rc_weak(),
 
       id: opts.id,
-      author: opts.author,
+      author_username: opts.author_username,
+      editor_username: RefCell::new(opts.editor_username),
       creation_timestamp: opts.creation_timestamp,
       modification_timestamp: Cell::new(opts.modification_timestamp),
       text: RefCell::new(opts.text),
@@ -809,7 +824,8 @@ impl Translation {
 #[derive(Debug)]
 pub struct CommentInitOpts {
   pub id: Uuid,
-  pub author: RcString,
+  pub author_username: RcString,
+  pub editor_username: RcString,
   pub creation_timestamp: Timestamp,
   pub modification_timestamp: Timestamp,
   pub text: RcString,
@@ -823,7 +839,10 @@ pub struct Comment {
   fragment: RcWeak<Fragment>,
 
   id: Uuid,
-  author: RcString,
+  #[serde(rename = "author")]
+  author_username: RcString,
+  #[serde(rename = "editor")]
+  editor_username: RefCell<RcString>,
   #[serde(rename = "ctime")]
   creation_timestamp: Timestamp,
   #[serde(rename = "mtime")]
@@ -840,7 +859,9 @@ impl Comment {
   #[inline(always)]
   pub fn id(&self) -> Uuid { self.id }
   #[inline(always)]
-  pub fn author(&self) -> &RcString { &self.author }
+  pub fn author_username(&self) -> &RcString { &self.author_username }
+  #[inline(always)]
+  pub fn editor_username(&self) -> Ref<RcString> { self.editor_username.borrow() }
   #[inline(always)]
   pub fn creation_timestamp(&self) -> Timestamp { self.creation_timestamp }
   #[inline(always)]
@@ -854,7 +875,8 @@ impl Comment {
       fragment: fragment.share_rc_weak(),
 
       id: opts.id,
-      author: opts.author,
+      author_username: opts.author_username,
+      editor_username: RefCell::new(opts.editor_username),
       creation_timestamp: opts.creation_timestamp,
       modification_timestamp: Cell::new(opts.modification_timestamp),
       text: RefCell::new(opts.text),

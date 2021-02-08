@@ -21,7 +21,7 @@ pub struct ImportedFragment {
 
 #[derive(Debug)]
 pub struct ImportedTranslation {
-  pub author: Option<RcString>,
+  pub author_username: Option<RcString>,
   pub creation_timestamp: Option<Timestamp>,
   pub modification_timestamp: Option<Timestamp>,
   pub text: RcString,
@@ -126,7 +126,7 @@ impl Importer for LocalizeMeTrPackImporter {
         json_path: RcString::from(json_path),
         original_text: RcString::from(tr_pack_entry.orig),
         translations: vec![ImportedTranslation {
-          author: None,
+          author_username: None,
           creation_timestamp: None,
           modification_timestamp: None,
           text: RcString::from(tr_pack_entry.text),
@@ -186,7 +186,7 @@ impl Importer for CcRuChapterFragmentsImporter {
           .translations
           .into_iter()
           .map(|t| ImportedTranslation {
-            author: Some(RcString::from(t.author_username)),
+            author_username: Some(RcString::from(t.author_username)),
             creation_timestamp: Some(t.timestamp),
             modification_timestamp: Some(t.timestamp),
             text: RcString::from(t.text),
@@ -277,7 +277,7 @@ impl Importer for GettextPoImporter {
         json_path: RcString::from(json_path),
         original_text: RcString::from(msgid),
         translations: vec![ImportedTranslation {
-          author: None,
+          author_username: None,
           creation_timestamp: None,
           modification_timestamp: None,
           text: RcString::from(msgstr),
