@@ -131,19 +131,8 @@ impl Backend {
     let mut message_index: u32 = 0;
     loop {
       try_any_result!({
-        fn handle_broken_pipe<T>(result: io::Result<T>, default: T) -> io::Result<T> {
-          match result {
-            Err(e) if e.kind() == io::ErrorKind::BrokenPipe => {
-              warn!("The frontend has disconnected, exiting cleanly. Caused by: {}", e);
-              Ok(default)
-            }
-            _ => result,
-          }
-        }
-
         let mut buf = String::new();
-        let read_bytes =
-          handle_broken_pipe(stdin.read_line(&mut buf), 0).context("Failed to read from stdin")?;
+        let read_bytes = stdin.read_line(&mut buf).context("Failed to read from stdin")?;
         if read_bytes == 0 {
           break;
         }
@@ -161,17 +150,15 @@ impl Backend {
           Err(e) => ErrorResponseMessage { id: 0, message: e.to_string().into() }.into(),
         };
 
-        let wrote_successfully = handle_broken_pipe(
-          try {
-            serde_json::to_writer(&mut stdout, &out_msg)?;
-            stdout.write_all(b"\n")?;
-            true
-          },
-          false,
-        )
-        .context("Failed to serialize to stdout")?;
-        if !wrote_successfully {
-          break;
+        match try_io_result!({
+          serde_json::to_writer(&mut stdout, &out_msg)?;
+          stdout.write_all(b"\n")?;
+        }) {
+          Err(e) if e.kind() == io::ErrorKind::BrokenPipe => {
+            warn!("The frontend has disconnected, exiting cleanly. Caused by: {}", e);
+            break;
+          }
+          result => result.context("Failed to serialize to stdout")?,
         }
       })
       .with_context(|| format!("Failed to process message(index={})", message_index))?;

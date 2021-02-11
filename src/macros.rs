@@ -49,6 +49,14 @@ macro_rules! try_any_result {
 }
 
 #[macro_export]
+macro_rules! try_io_result {
+  ($block:block) => {{
+    let result: std::io::Result<_> = try { $block };
+    result
+  }};
+}
+
+#[macro_export]
 macro_rules! try_option {
   ($block:block) => {{
     let result: Option<_> = try { $block };
