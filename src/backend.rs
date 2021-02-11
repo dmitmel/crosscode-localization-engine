@@ -131,11 +131,11 @@ impl Backend {
     let mut message_index: u32 = 0;
     loop {
       try_any_result!({
-        fn handle_broken_pipe<T: Default>(result: io::Result<T>) -> io::Result<T> {
+        fn handle_broken_pipe<T>(result: io::Result<T>, default: T) -> io::Result<T> {
           match result {
             Err(e) if e.kind() == io::ErrorKind::BrokenPipe => {
               warn!("The frontend has disconnected, exiting cleanly. Caused by: {}", e);
-              Ok(T::default())
+              Ok(default)
             }
             _ => result,
           }
@@ -143,7 +143,7 @@ impl Backend {
 
         let mut buf = String::new();
         let read_bytes =
-          handle_broken_pipe(stdin.read_line(&mut buf)).context("Failed to read from stdin")?;
+          handle_broken_pipe(stdin.read_line(&mut buf), 0).context("Failed to read from stdin")?;
         if read_bytes == 0 {
           break;
         }
@@ -161,13 +161,18 @@ impl Backend {
           Err(e) => ErrorResponseMessage { id: 0, message: e.to_string().into() }.into(),
         };
 
-        handle_broken_pipe(
+        let wrote_successfully = handle_broken_pipe(
           try {
             serde_json::to_writer(&mut stdout, &out_msg)?;
             stdout.write_all(b"\n")?;
+            true
           },
+          false,
         )
         .context("Failed to serialize to stdout")?;
+        if !wrote_successfully {
+          break;
+        }
       })
       .with_context(|| format!("Failed to process message(index={})", message_index))?;
 
