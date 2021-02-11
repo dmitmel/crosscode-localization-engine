@@ -188,7 +188,7 @@ impl Importer for CcRuChapterFragmentsImporter {
           .map(|t| ImportedTranslation {
             author_username: Some(RcString::from(t.author_username)),
             creation_timestamp: Some(t.timestamp),
-            modification_timestamp: Some(t.timestamp),
+            modification_timestamp: None,
             text: RcString::from(t.text),
             flags: {
               let mut flags = HashSet::with_capacity(t.flags.len());
