@@ -3,6 +3,7 @@ use crate::project::Project;
 use crate::rc_string::{MaybeStaticStr, RcString};
 use crate::utils::Timestamp;
 
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -14,6 +15,7 @@ use std::rc::Rc;
 use uuid::Uuid;
 
 pub const PROTOCOL_VERSION: u32 = 0;
+pub static PROTOCOL_VERSION_STR: Lazy<String> = Lazy::new(|| PROTOCOL_VERSION.to_string());
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -48,8 +50,8 @@ pub struct ErrorResponseMessage {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type")]
 pub enum RequestMessageType {
-  #[serde(rename = "handshake")]
-  Handshake { protocol_version: u32 },
+  #[serde(rename = "Backend/info")]
+  BackendInfo {},
   #[serde(rename = "Project/open")]
   ProjectOpen { dir: PathBuf },
   #[serde(rename = "Project/close")]
@@ -67,12 +69,8 @@ pub enum RequestMessageType {
 pub enum ResponseMessageType {
   #[serde(rename = "ok")]
   Ok,
-  #[serde(rename = "handshake")]
-  Handshake {
-    protocol_version: u32,
-    implementation_name: MaybeStaticStr,
-    implementation_version: MaybeStaticStr,
-  },
+  #[serde(rename = "Backend/info")]
+  BackendInfo { implementation_name: MaybeStaticStr, implementation_version: MaybeStaticStr },
   #[serde(rename = "Project/open")]
   ProjectOpen { project_id: u32 },
   #[serde(rename = "Project/meta/get")]
@@ -102,7 +100,6 @@ macro_rules! backend_nice_error {
 
 #[derive(Debug)]
 pub struct Backend {
-  handshake_received: bool,
   project_id_alloc: IdAllocator,
   projects: HashMap<u32, Rc<Project>>,
 }
@@ -110,7 +107,6 @@ pub struct Backend {
 impl Backend {
   pub fn new() -> Self {
     Self {
-      handshake_received: false,
       project_id_alloc: IdAllocator::new(),
       // I assume that at least one project will be opened because otherwise
       // (without opening a project) the backend is pretty much useless
@@ -191,27 +187,11 @@ impl Backend {
 
   #[allow(clippy::unnecessary_wraps)]
   fn process_request(&mut self, message: RequestMessageType) -> AnyResult<ResponseMessageType> {
-    if !self.handshake_received {
-      match message {
-        RequestMessageType::Handshake { protocol_version: PROTOCOL_VERSION } => {}
-        RequestMessageType::Handshake { protocol_version: _ } => {
-          backend_nice_error!("unsupported protocol version");
-        }
-        _ => {
-          backend_nice_error!("expected a handshake message");
-        }
-      };
-
-      self.handshake_received = true;
-      return Ok(ResponseMessageType::Handshake {
-        protocol_version: PROTOCOL_VERSION,
-        implementation_name: crate::CRATE_NAME.into(),
-        implementation_version: crate::CRATE_VERSION.into(),
-      });
-    }
-
     match &message {
-      RequestMessageType::Handshake { .. } => unimplemented!(),
+      RequestMessageType::BackendInfo {} => Ok(ResponseMessageType::BackendInfo {
+        implementation_name: Cow::Borrowed(crate::CRATE_NAME),
+        implementation_version: Cow::Borrowed(crate::CRATE_VERSION),
+      }),
 
       RequestMessageType::ProjectOpen { dir: project_dir } => {
         let project = match Project::open(project_dir.clone())
