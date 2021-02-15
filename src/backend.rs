@@ -43,7 +43,7 @@ pub struct ResponseMessage {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ErrorResponseMessage {
-  id: u32,
+  id: Option<u32>,
   message: MaybeStaticStr,
 }
 
@@ -137,9 +137,8 @@ impl Backend {
         let out_msg: Message = match in_msg {
           Ok(in_msg) => {
             let in_msg_id = match &in_msg {
-              Message::Request(RequestMessage { id, .. }) => *id,
-              Message::Response(ResponseMessage { id, .. }) => *id,
-              Message::ErrorResponse(ErrorResponseMessage { id, .. }) => *id,
+              Message::Request(RequestMessage { id, .. }) => Some(*id),
+              _ => None,
             };
             match self.process_message(in_msg) {
               Ok(out_msg) => out_msg,
@@ -149,9 +148,10 @@ impl Backend {
               }),
             }
           }
-          Err(e) => {
-            Message::ErrorResponse(ErrorResponseMessage { id: 0, message: e.to_string().into() })
-          }
+          Err(e) => Message::ErrorResponse(ErrorResponseMessage {
+            id: None,
+            message: Cow::Owned(e.to_string()),
+          }),
         };
 
         match try_io_result!({
