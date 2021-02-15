@@ -106,11 +106,9 @@ impl<'src> Iterator for Lexer<'src> {
 
   fn next(&mut self) -> Option<Self::Item> {
     macro_rules! emit_error {
-      ($($arg:tt)*) => {
-        {
-          return Some(Err(self.emit_error(format!($($arg)*))));
-        }
-      }
+      ($($arg:tt)*) => {{
+        return Some(Err(self.emit_error(format!($($arg)*))));
+      }}
     }
 
     loop {

@@ -50,31 +50,31 @@ pub struct ErrorResponseMessage {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type")]
 pub enum RequestMessageType {
-  #[serde(rename = "Backend/info")]
+  #[serde(rename = "Backend/info", skip_serializing)]
   BackendInfo {},
-  #[serde(rename = "Project/open")]
+  #[serde(rename = "Project/open", skip_serializing)]
   ProjectOpen { dir: PathBuf },
-  #[serde(rename = "Project/close")]
+  #[serde(rename = "Project/close", skip_serializing)]
   ProjectClose { project_id: u32 },
-  #[serde(rename = "Project/meta/get")]
-  ProjectMetaGet { project_id: u32 },
-  #[serde(rename = "Project/tr_files/list")]
-  ProjectTrFilesList { project_id: u32 },
-  #[serde(rename = "Project/virtual_game_files/list")]
-  ProjectVirtualGameFilesList { project_id: u32 },
+  #[serde(rename = "Project/get_meta", skip_serializing)]
+  ProjectGetMeta { project_id: u32 },
+  #[serde(rename = "Project/list_tr_files", skip_serializing)]
+  ProjectListTrFiles { project_id: u32 },
+  #[serde(rename = "Project/list_virtual_game_files", skip_serializing)]
+  ProjectListVirtualGameFiles { project_id: u32 },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type")]
 pub enum ResponseMessageType {
-  #[serde(rename = "ok")]
+  #[serde(rename = "ok", skip_deserializing)]
   Ok,
-  #[serde(rename = "Backend/info")]
+  #[serde(rename = "Backend/info", skip_deserializing)]
   BackendInfo { implementation_name: MaybeStaticStr, implementation_version: MaybeStaticStr },
-  #[serde(rename = "Project/open")]
+  #[serde(rename = "Project/open", skip_deserializing)]
   ProjectOpen { project_id: u32 },
-  #[serde(rename = "Project/meta/get")]
-  ProjectMetaGet {
+  #[serde(rename = "Project/get_meta", skip_deserializing)]
+  ProjectGetMeta {
     root_dir: PathBuf,
     id: Uuid,
     creation_timestamp: Timestamp,
@@ -86,16 +86,16 @@ pub enum ResponseMessageType {
     translations_dir: RcString,
     splitter: MaybeStaticStr,
   },
-  #[serde(rename = "Project/tr_files/list")]
-  ProjectTrFilesList { paths: Vec<RcString> },
-  #[serde(rename = "Project/virtual_game_files/list")]
-  ProjectVirtualGameFilesList { paths: Vec<RcString> },
+  #[serde(rename = "Project/list_tr_files", skip_deserializing)]
+  ProjectListTrFiles { paths: Vec<RcString> },
+  #[serde(rename = "Project/list_virtual_game_files", skip_deserializing)]
+  ProjectListVirtualGameFiles { paths: Vec<RcString> },
 }
 
 macro_rules! backend_nice_error {
-  ($expr:expr $(,)?) => {
+  ($expr:expr $(,)?) => {{
     return Err(AnyError::from(BackendNiceError::from($expr)));
-  };
+  }};
 }
 
 #[derive(Debug)]
@@ -213,13 +213,13 @@ impl Backend {
         None => backend_nice_error!("project ID not found"),
       },
 
-      RequestMessageType::ProjectMetaGet { project_id } => {
+      RequestMessageType::ProjectGetMeta { project_id } => {
         let project = match self.projects.get(&project_id) {
           Some(v) => v,
           None => backend_nice_error!("project ID not found"),
         };
         let meta = project.meta();
-        Ok(ResponseMessageType::ProjectMetaGet {
+        Ok(ResponseMessageType::ProjectGetMeta {
           root_dir: project.root_dir().to_owned(),
           id: meta.id(),
           creation_timestamp: meta.creation_timestamp(),
@@ -233,22 +233,22 @@ impl Backend {
         })
       }
 
-      RequestMessageType::ProjectTrFilesList { project_id } => {
+      RequestMessageType::ProjectListTrFiles { project_id } => {
         let project = match self.projects.get(&project_id) {
           Some(v) => v,
           None => backend_nice_error!("project ID not found"),
         };
         let paths: Vec<RcString> = project.tr_files().keys().cloned().collect();
-        Ok(ResponseMessageType::ProjectTrFilesList { paths })
+        Ok(ResponseMessageType::ProjectListTrFiles { paths })
       }
 
-      RequestMessageType::ProjectVirtualGameFilesList { project_id } => {
+      RequestMessageType::ProjectListVirtualGameFiles { project_id } => {
         let project = match self.projects.get(&project_id) {
           Some(v) => v,
           None => backend_nice_error!("project ID not found"),
         };
         let paths: Vec<RcString> = project.virtual_game_files().keys().cloned().collect();
-        Ok(ResponseMessageType::ProjectVirtualGameFilesList { paths })
+        Ok(ResponseMessageType::ProjectListVirtualGameFiles { paths })
       }
     }
   }
