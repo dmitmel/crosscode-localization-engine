@@ -6,6 +6,8 @@ use crate::utils::Timestamp;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::error::Error as StdError;
+use std::fmt;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -25,41 +27,10 @@ pub enum Message {
   // Notification(NotificationMessage),
 }
 
-impl Message {
-  pub fn id(&self) -> Option<u32> {
-    match self {
-      Self::Request(RequestMessage { id, .. }) => Some(*id),
-      Self::Response(ResponseMessage { id, .. }) => Some(*id),
-      Self::ErrorResponse(ErrorResponseMessage { id, .. }) => Some(*id),
-    }
-  }
-
-  pub fn error_response(&self, message: impl Into<MaybeStaticStr>) -> ErrorResponseMessage {
-    ErrorResponseMessage { id: self.id().unwrap_or(0), message: message.into() }
-  }
-}
-
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RequestMessage {
   id: u32,
   data: RequestMessageType,
-}
-
-impl From<RequestMessage> for Message {
-  #[inline(always)]
-  fn from(v: RequestMessage) -> Self { Self::Request(v) }
-}
-
-impl RequestMessage {
-  #[inline(always)]
-  pub fn response(&self, data: ResponseMessageType) -> ResponseMessage {
-    ResponseMessage { id: self.id, data }
-  }
-
-  #[inline(always)]
-  pub fn error_response(&self, message: impl Into<MaybeStaticStr>) -> ErrorResponseMessage {
-    ErrorResponseMessage { id: self.id, message: message.into() }
-  }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -68,20 +39,10 @@ pub struct ResponseMessage {
   data: ResponseMessageType,
 }
 
-impl From<ResponseMessage> for Message {
-  #[inline(always)]
-  fn from(v: ResponseMessage) -> Self { Self::Response(v) }
-}
-
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ErrorResponseMessage {
   id: u32,
   message: MaybeStaticStr,
-}
-
-impl From<ErrorResponseMessage> for Message {
-  #[inline(always)]
-  fn from(v: ErrorResponseMessage) -> Self { Self::ErrorResponse(v) }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -114,9 +75,7 @@ pub enum ResponseMessageType {
   ProjectMetaGet {
     root_dir: PathBuf,
     id: Uuid,
-    #[serde(rename = "ctime")]
     creation_timestamp: Timestamp,
-    #[serde(rename = "mtime")]
     modification_timestamp: Timestamp,
     game_version: RcString,
     original_locale: RcString,
@@ -125,6 +84,12 @@ pub enum ResponseMessageType {
     translations_dir: RcString,
     splitter: MaybeStaticStr,
   },
+}
+
+macro_rules! backend_nice_error {
+  ($expr:expr $(,)?) => {
+    return Err(AnyError::from(BackendNiceError::from($expr)));
+  };
 }
 
 #[derive(Debug)]
@@ -166,8 +131,23 @@ impl Backend {
         };
 
         let out_msg: Message = match in_msg {
-          Ok(in_msg) => self.process_message(in_msg)?,
-          Err(e) => ErrorResponseMessage { id: 0, message: e.to_string().into() }.into(),
+          Ok(in_msg) => {
+            let in_msg_id = match &in_msg {
+              Message::Request(RequestMessage { id, .. }) => *id,
+              Message::Response(ResponseMessage { id, .. }) => *id,
+              Message::ErrorResponse(ErrorResponseMessage { id, .. }) => *id,
+            };
+            match self.process_message(in_msg) {
+              Ok(out_msg) => out_msg,
+              Err(e) => Message::ErrorResponse(ErrorResponseMessage {
+                id: in_msg_id,
+                message: e.downcast::<BackendNiceError>()?.message,
+              }),
+            }
+          }
+          Err(e) => {
+            Message::ErrorResponse(ErrorResponseMessage { id: 0, message: e.to_string().into() })
+          }
         };
 
         match try_io_result!({
@@ -190,37 +170,39 @@ impl Backend {
 
   #[allow(clippy::unnecessary_wraps)]
   fn process_message(&mut self, message: Message) -> AnyResult<Message> {
-    let request_msg = match message {
-      Message::Request(v) => v,
-      _ => {
-        return Ok(message.error_response("the backend currently can't receive responses").into());
+    Ok(match message {
+      Message::Request(request_msg) => Message::Response(ResponseMessage {
+        id: request_msg.id,
+        data: self.process_request(request_msg.data)?,
+      }),
+      Message::Response(_) | Message::ErrorResponse(_) => {
+        backend_nice_error!("the backend currently can't receive responses");
       }
-    };
+    })
+  }
 
+  #[allow(clippy::unnecessary_wraps)]
+  fn process_request(&mut self, message: RequestMessageType) -> AnyResult<ResponseMessageType> {
     if !self.handshake_received {
-      match request_msg.data {
+      match message {
         RequestMessageType::Handshake { protocol_version: PROTOCOL_VERSION } => {}
         RequestMessageType::Handshake { protocol_version: _ } => {
-          return Ok(request_msg.error_response("unsupported protocol version").into());
+          backend_nice_error!("unsupported protocol version");
         }
         _ => {
-          return Ok(request_msg.error_response("expected a handshake message").into());
+          backend_nice_error!("expected a handshake message");
         }
       };
 
       self.handshake_received = true;
-      return Ok(
-        request_msg
-          .response(ResponseMessageType::Handshake {
-            protocol_version: PROTOCOL_VERSION,
-            implementation_name: crate::CRATE_NAME.into(),
-            implementation_version: crate::CRATE_VERSION.into(),
-          })
-          .into(),
-      );
+      return Ok(ResponseMessageType::Handshake {
+        protocol_version: PROTOCOL_VERSION,
+        implementation_name: crate::CRATE_NAME.into(),
+        implementation_version: crate::CRATE_VERSION.into(),
+      });
     }
 
-    match &request_msg.data {
+    match &message {
       RequestMessageType::Handshake { .. } => unimplemented!(),
 
       RequestMessageType::ProjectOpen { dir: project_dir } => {
@@ -230,59 +212,53 @@ impl Backend {
           Ok(v) => v,
           Err(e) => {
             crate::report_error(e);
-            return Ok(request_msg.error_response("failed to open project").into());
+            backend_nice_error!("failed to open project");
           }
         };
         let project_id = self.project_id_alloc.next().unwrap();
         self.projects.insert(project_id, project);
-        Ok(request_msg.response(ResponseMessageType::ProjectOpen { project_id }).into())
+        Ok(ResponseMessageType::ProjectOpen { project_id })
       }
 
       RequestMessageType::ProjectClose { project_id } => match self.projects.remove(&project_id) {
-        Some(_project) => Ok(request_msg.response(ResponseMessageType::Ok {}).into()),
-        None => Ok(request_msg.error_response("project ID not found").into()),
+        Some(_project) => Ok(ResponseMessageType::Ok),
+        None => backend_nice_error!("project ID not found"),
       },
 
       RequestMessageType::ProjectMetaGet { project_id } => match self.projects.get(&project_id) {
         Some(project) => Ok({
           let meta = project.meta();
-          request_msg
-            .response(ResponseMessageType::ProjectMetaGet {
-              root_dir: project.root_dir().to_owned(),
-              id: meta.id(),
-              creation_timestamp: meta.creation_timestamp(),
-              modification_timestamp: meta.modification_timestamp(),
-              game_version: meta.game_version().share_rc(),
-              original_locale: meta.original_locale().share_rc(),
-              reference_locales: meta.reference_locales().to_owned(),
-              translation_locale: meta.translation_locale().share_rc(),
-              translations_dir: meta.translations_dir().share_rc(),
-              splitter: Cow::Borrowed(meta.splitter().id()),
-            })
-            .into()
+          ResponseMessageType::ProjectMetaGet {
+            root_dir: project.root_dir().to_owned(),
+            id: meta.id(),
+            creation_timestamp: meta.creation_timestamp(),
+            modification_timestamp: meta.modification_timestamp(),
+            game_version: meta.game_version().share_rc(),
+            original_locale: meta.original_locale().share_rc(),
+            reference_locales: meta.reference_locales().to_owned(),
+            translation_locale: meta.translation_locale().share_rc(),
+            translations_dir: meta.translations_dir().share_rc(),
+            splitter: Cow::Borrowed(meta.splitter().id()),
+          }
         }),
-        None => Ok(request_msg.error_response("project ID not found").into()),
+        None => backend_nice_error!("project ID not found"),
       },
-      // _ => Ok(request_msg.error_response("unimplemented").into()),
+      // _ => backend_nice_error!("unimplemented"),
     }
   }
 }
 
 #[derive(Debug, Clone)]
 pub struct IdAllocator {
-  // `u32`s are used because JS only has 32-bit integers. And 64-bit floats,
-  // but those aren't really convenient for storing IDs.
+  /// `u32`s are used because JS only has 32-bit integers. And 64-bit floats,
+  /// but those aren't really convenient for storing IDs.
   current_id: u32,
-  only_nonzero: bool,
-  wrap_around: bool,
+  pub only_nonzero: bool,
+  pub wrap_around: bool,
 }
 
 impl IdAllocator {
   pub fn new() -> Self { Self { current_id: 0, only_nonzero: true, wrap_around: true } }
-  #[inline(always)]
-  pub fn set_only_nonzero(&mut self, only_nonzero: bool) { self.only_nonzero = only_nonzero; }
-  #[inline(always)]
-  pub fn set_wrap_around(&mut self, wrap_around: bool) { self.wrap_around = wrap_around; }
 }
 
 impl Iterator for IdAllocator {
@@ -299,4 +275,33 @@ impl Iterator for IdAllocator {
       Some(id)
     }
   }
+}
+
+#[derive(Debug)]
+pub struct BackendNiceError {
+  pub message: MaybeStaticStr,
+}
+
+impl From<&'static str> for BackendNiceError {
+  fn from(message: &'static str) -> Self { Self { message: Cow::Borrowed(message) } }
+}
+
+impl From<String> for BackendNiceError {
+  fn from(message: String) -> Self { Self { message: Cow::Owned(message) } }
+}
+
+impl fmt::Display for BackendNiceError {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(
+      f,
+      "BackendError (you are most likely seeing this error because of a bug; it should've been \
+      sent over the backend protocol and handled by the frontend): {}",
+      self.message,
+    )
+  }
+}
+
+impl StdError for BackendNiceError {
+  #[inline(always)]
+  fn source(&self) -> Option<&(dyn StdError + 'static)> { None }
 }
