@@ -56,6 +56,10 @@ pub enum RequestMessageType {
   ProjectClose { project_id: u32 },
   #[serde(rename = "Project/meta/get")]
   ProjectMetaGet { project_id: u32 },
+  #[serde(rename = "Project/tr_files/list")]
+  ProjectTrFilesList { project_id: u32 },
+  #[serde(rename = "Project/virtual_game_files/list")]
+  ProjectVirtualGameFilesList { project_id: u32 },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -84,6 +88,10 @@ pub enum ResponseMessageType {
     translations_dir: RcString,
     splitter: MaybeStaticStr,
   },
+  #[serde(rename = "Project/tr_files/list")]
+  ProjectTrFilesList { paths: Vec<RcString> },
+  #[serde(rename = "Project/virtual_game_files/list")]
+  ProjectVirtualGameFilesList { paths: Vec<RcString> },
 }
 
 macro_rules! backend_nice_error {
@@ -225,25 +233,43 @@ impl Backend {
         None => backend_nice_error!("project ID not found"),
       },
 
-      RequestMessageType::ProjectMetaGet { project_id } => match self.projects.get(&project_id) {
-        Some(project) => Ok({
-          let meta = project.meta();
-          ResponseMessageType::ProjectMetaGet {
-            root_dir: project.root_dir().to_owned(),
-            id: meta.id(),
-            creation_timestamp: meta.creation_timestamp(),
-            modification_timestamp: meta.modification_timestamp(),
-            game_version: meta.game_version().share_rc(),
-            original_locale: meta.original_locale().share_rc(),
-            reference_locales: meta.reference_locales().to_owned(),
-            translation_locale: meta.translation_locale().share_rc(),
-            translations_dir: meta.translations_dir().share_rc(),
-            splitter: Cow::Borrowed(meta.splitter().id()),
-          }
-        }),
-        None => backend_nice_error!("project ID not found"),
-      },
-      // _ => backend_nice_error!("unimplemented"),
+      RequestMessageType::ProjectMetaGet { project_id } => {
+        let project = match self.projects.get(&project_id) {
+          Some(v) => v,
+          None => backend_nice_error!("project ID not found"),
+        };
+        let meta = project.meta();
+        Ok(ResponseMessageType::ProjectMetaGet {
+          root_dir: project.root_dir().to_owned(),
+          id: meta.id(),
+          creation_timestamp: meta.creation_timestamp(),
+          modification_timestamp: meta.modification_timestamp(),
+          game_version: meta.game_version().share_rc(),
+          original_locale: meta.original_locale().share_rc(),
+          reference_locales: meta.reference_locales().to_owned(),
+          translation_locale: meta.translation_locale().share_rc(),
+          translations_dir: meta.translations_dir().share_rc(),
+          splitter: Cow::Borrowed(meta.splitter().id()),
+        })
+      }
+
+      RequestMessageType::ProjectTrFilesList { project_id } => {
+        let project = match self.projects.get(&project_id) {
+          Some(v) => v,
+          None => backend_nice_error!("project ID not found"),
+        };
+        let paths: Vec<RcString> = project.tr_files().keys().cloned().collect();
+        Ok(ResponseMessageType::ProjectTrFilesList { paths })
+      }
+
+      RequestMessageType::ProjectVirtualGameFilesList { project_id } => {
+        let project = match self.projects.get(&project_id) {
+          Some(v) => v,
+          None => backend_nice_error!("project ID not found"),
+        };
+        let paths: Vec<RcString> = project.virtual_game_files().keys().cloned().collect();
+        Ok(ResponseMessageType::ProjectVirtualGameFilesList { paths })
+      }
     }
   }
 }
