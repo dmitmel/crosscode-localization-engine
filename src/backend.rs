@@ -1,12 +1,15 @@
 use crate::impl_prelude::*;
 use crate::project::Project;
-use crate::rc_string::MaybeStaticStr;
+use crate::rc_string::{MaybeStaticStr, RcString};
+use crate::utils::Timestamp;
 
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::rc::Rc;
+use uuid::Uuid;
 
 pub const PROTOCOL_VERSION: u32 = 0;
 
@@ -89,7 +92,9 @@ pub enum RequestMessageType {
   #[serde(rename = "Project/open")]
   ProjectOpen { dir: PathBuf },
   #[serde(rename = "Project/close")]
-  ProjectClose { id: u32 },
+  ProjectClose { project_id: u32 },
+  #[serde(rename = "Project/meta/get")]
+  ProjectMetaGet { project_id: u32 },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -104,7 +109,22 @@ pub enum ResponseMessageType {
     implementation_version: MaybeStaticStr,
   },
   #[serde(rename = "Project/open")]
-  ProjectOpen { id: u32 },
+  ProjectOpen { project_id: u32 },
+  #[serde(rename = "Project/meta/get")]
+  ProjectMetaGet {
+    root_dir: PathBuf,
+    id: Uuid,
+    #[serde(rename = "ctime")]
+    creation_timestamp: Timestamp,
+    #[serde(rename = "mtime")]
+    modification_timestamp: Timestamp,
+    game_version: RcString,
+    original_locale: RcString,
+    reference_locales: Vec<RcString>,
+    translation_locale: RcString,
+    translations_dir: RcString,
+    splitter: MaybeStaticStr,
+  },
 }
 
 #[derive(Debug)]
@@ -201,6 +221,8 @@ impl Backend {
     }
 
     match &request_msg.data {
+      RequestMessageType::Handshake { .. } => unimplemented!(),
+
       RequestMessageType::ProjectOpen { dir: project_dir } => {
         let project = match Project::open(project_dir.clone())
           .with_context(|| format!("Failed to open project in {:?}", project_dir))
@@ -213,17 +235,35 @@ impl Backend {
         };
         let project_id = self.project_id_alloc.next().unwrap();
         self.projects.insert(project_id, project);
-        Ok(request_msg.response(ResponseMessageType::ProjectOpen { id: project_id }).into())
+        Ok(request_msg.response(ResponseMessageType::ProjectOpen { project_id }).into())
       }
 
-      RequestMessageType::ProjectClose { id: project_id } => {
-        match self.projects.remove(&project_id) {
-          Some(_project) => Ok(request_msg.response(ResponseMessageType::Ok {}).into()),
-          None => Ok(request_msg.error_response("project ID not found").into()),
-        }
-      }
+      RequestMessageType::ProjectClose { project_id } => match self.projects.remove(&project_id) {
+        Some(_project) => Ok(request_msg.response(ResponseMessageType::Ok {}).into()),
+        None => Ok(request_msg.error_response("project ID not found").into()),
+      },
 
-      _ => Ok(request_msg.error_response("unimplemented").into()),
+      RequestMessageType::ProjectMetaGet { project_id } => match self.projects.get(&project_id) {
+        Some(project) => Ok({
+          let meta = project.meta();
+          request_msg
+            .response(ResponseMessageType::ProjectMetaGet {
+              root_dir: project.root_dir().to_owned(),
+              id: meta.id(),
+              creation_timestamp: meta.creation_timestamp(),
+              modification_timestamp: meta.modification_timestamp(),
+              game_version: meta.game_version().share_rc(),
+              original_locale: meta.original_locale().share_rc(),
+              reference_locales: meta.reference_locales().to_owned(),
+              translation_locale: meta.translation_locale().share_rc(),
+              translations_dir: meta.translations_dir().share_rc(),
+              splitter: Cow::Borrowed(meta.splitter().id()),
+            })
+            .into()
+        }),
+        None => Ok(request_msg.error_response("project ID not found").into()),
+      },
+      // _ => Ok(request_msg.error_response("unimplemented").into()),
     }
   }
 }
