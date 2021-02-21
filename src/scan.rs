@@ -112,8 +112,8 @@ impl ScanDb {
 
     for (game_file_path, game_file_raw) in raw_data.game_files {
       let file = myself.new_game_file(ScanDbGameFileInitOpts {
-        path: game_file_path,
         asset_root: game_file_raw.asset_root,
+        path: game_file_path,
       })?;
 
       for (fragment_json_path, fragment_raw) in game_file_raw.fragments {
@@ -150,10 +150,10 @@ impl ScanDb {
 
   pub fn new_game_file(
     self: &Rc<Self>,
-    path: ScanDbGameFileInitOpts,
+    opts: ScanDbGameFileInitOpts,
   ) -> AnyResult<Rc<ScanDbGameFile>> {
     self.dirty_flag.set(true);
-    let file = ScanDbGameFile::new(path, self)?;
+    let file = ScanDbGameFile::new(self, opts)?;
     let prev_file = self.game_files.borrow_mut().insert(file.path.share_rc(), file.share_rc());
     assert!(prev_file.is_none());
     Ok(file)
@@ -173,8 +173,8 @@ pub struct ScanDbGameFile {
   #[serde(skip)]
   scan_db: RcWeak<ScanDb>,
   #[serde(skip)]
-  path: RcString,
   asset_root: RcString,
+  path: RcString,
   fragments: RefCell<IndexMap<RcString, Rc<ScanDbFragment>>>,
 }
 
@@ -184,24 +184,26 @@ impl ScanDbGameFile {
   #[inline]
   pub fn scan_db(&self) -> Rc<ScanDb> { self.scan_db.upgrade().unwrap() }
   #[inline(always)]
+  pub fn asset_root(&self) -> &RcString { &self.asset_root }
+  #[inline(always)]
   pub fn path(&self) -> &RcString { &self.path }
   #[inline(always)]
   pub fn fragments(&self) -> Ref<IndexMap<RcString, Rc<ScanDbFragment>>> {
     self.fragments.borrow()
   }
 
-  fn new(init_opts: ScanDbGameFileInitOpts, scan_db: &Rc<ScanDb>) -> AnyResult<Rc<Self>> {
+  fn new(scan_db: &Rc<ScanDb>, opts: ScanDbGameFileInitOpts) -> AnyResult<Rc<Self>> {
     ensure!(
-      init_opts.path.starts_with(&*init_opts.asset_root),
+      opts.path.starts_with(&*opts.asset_root),
       "Path to a game file ({:?}) must start with its asset root ({:?})",
-      init_opts.path,
-      init_opts.asset_root,
+      opts.path,
+      opts.asset_root,
     );
     Ok(Rc::new(Self {
       dirty_flag: scan_db.dirty_flag.share_rc(),
       scan_db: Rc::downgrade(scan_db),
-      path: init_opts.path,
-      asset_root: init_opts.asset_root,
+      asset_root: opts.asset_root,
+      path: opts.path,
       fragments: RefCell::new(IndexMap::new()),
     }))
   }
@@ -210,13 +212,10 @@ impl ScanDbGameFile {
     self.fragments.borrow_mut().reserve(additional_capacity);
   }
 
-  pub fn new_fragment(
-    self: &Rc<Self>,
-    fragment_init_opts: ScanDbFragmentInitOpts,
-  ) -> Rc<ScanDbFragment> {
+  pub fn new_fragment(self: &Rc<Self>, opts: ScanDbFragmentInitOpts) -> Rc<ScanDbFragment> {
     self.dirty_flag.set(true);
     let scan_db = self.scan_db();
-    let fragment = ScanDbFragment::new(fragment_init_opts, &scan_db, self);
+    let fragment = ScanDbFragment::new(&scan_db, self, opts);
     let prev_fragment =
       self.fragments.borrow_mut().insert(fragment.json_path.share_rc(), fragment.share_rc());
     assert!(prev_fragment.is_none());
@@ -242,6 +241,8 @@ pub struct ScanDbFragment {
   #[serde(skip)]
   file: RcWeak<ScanDbGameFile>,
   #[serde(skip)]
+  file_asset_root: RcString,
+  #[serde(skip)]
   file_path: RcString,
   #[serde(skip)]
   json_path: RcString,
@@ -261,6 +262,8 @@ impl ScanDbFragment {
   #[inline]
   pub fn file(&self) -> Rc<ScanDbGameFile> { self.file.upgrade().unwrap() }
   #[inline(always)]
+  pub fn file_asset_root(&self) -> &RcString { &self.file_asset_root }
+  #[inline(always)]
   pub fn file_path(&self) -> &RcString { &self.file_path }
   #[inline(always)]
   pub fn json_path(&self) -> &RcString { &self.json_path }
@@ -276,20 +279,21 @@ impl ScanDbFragment {
   pub fn flags(&self) -> &HashSet<RcString> { &self.flags }
 
   fn new(
-    fragment_init_opts: ScanDbFragmentInitOpts,
     scan_db: &Rc<ScanDb>,
     file: &Rc<ScanDbGameFile>,
+    opts: ScanDbFragmentInitOpts,
   ) -> Rc<Self> {
     Rc::new(Self {
       dirty_flag: scan_db.dirty_flag.share_rc(),
       scan_db: Rc::downgrade(scan_db),
       file: file.share_rc_weak(),
+      file_asset_root: file.asset_root.share_rc(),
       file_path: file.path.share_rc(),
-      json_path: fragment_init_opts.json_path,
-      lang_uid: fragment_init_opts.lang_uid,
-      description: fragment_init_opts.description,
-      text: fragment_init_opts.text,
-      flags: fragment_init_opts.flags,
+      json_path: opts.json_path,
+      lang_uid: opts.lang_uid,
+      description: opts.description,
+      text: opts.text,
+      flags: opts.flags,
     })
   }
 }
