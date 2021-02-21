@@ -27,6 +27,7 @@ pub struct ScanDbSerde {
 
 #[derive(Debug, Deserialize)]
 pub struct ScanDbGameFileSerde {
+  pub asset_root: RcString,
   pub fragments: IndexMap<RcString, ScanDbFragmentSerde>,
 }
 
@@ -110,7 +111,10 @@ impl ScanDb {
     });
 
     for (game_file_path, game_file_raw) in raw_data.game_files {
-      let file = myself.new_game_file(game_file_path);
+      let file = myself.new_game_file(ScanDbGameFileInitOpts {
+        path: game_file_path,
+        asset_root: game_file_raw.asset_root,
+      })?;
 
       for (fragment_json_path, fragment_raw) in game_file_raw.fragments {
         file.new_fragment(ScanDbFragmentInitOpts {
@@ -144,13 +148,22 @@ impl ScanDb {
     self.game_files.borrow_mut().reserve(additional_capacity);
   }
 
-  pub fn new_game_file(self: &Rc<Self>, path: RcString) -> Rc<ScanDbGameFile> {
+  pub fn new_game_file(
+    self: &Rc<Self>,
+    path: ScanDbGameFileInitOpts,
+  ) -> AnyResult<Rc<ScanDbGameFile>> {
     self.dirty_flag.set(true);
-    let file = ScanDbGameFile::new(path, self);
+    let file = ScanDbGameFile::new(path, self)?;
     let prev_file = self.game_files.borrow_mut().insert(file.path.share_rc(), file.share_rc());
     assert!(prev_file.is_none());
-    file
+    Ok(file)
   }
+}
+
+#[derive(Debug)]
+pub struct ScanDbGameFileInitOpts {
+  pub path: RcString,
+  pub asset_root: RcString,
 }
 
 #[derive(Debug, Serialize)]
@@ -161,6 +174,7 @@ pub struct ScanDbGameFile {
   scan_db: RcWeak<ScanDb>,
   #[serde(skip)]
   path: RcString,
+  asset_root: RcString,
   fragments: RefCell<IndexMap<RcString, Rc<ScanDbFragment>>>,
 }
 
@@ -176,13 +190,20 @@ impl ScanDbGameFile {
     self.fragments.borrow()
   }
 
-  fn new(path: RcString, scan_db: &Rc<ScanDb>) -> Rc<Self> {
-    Rc::new(Self {
+  fn new(init_opts: ScanDbGameFileInitOpts, scan_db: &Rc<ScanDb>) -> AnyResult<Rc<Self>> {
+    ensure!(
+      init_opts.path.starts_with(&*init_opts.asset_root),
+      "Path to a game file ({:?}) must start with its asset root ({:?})",
+      init_opts.path,
+      init_opts.asset_root,
+    );
+    Ok(Rc::new(Self {
       dirty_flag: scan_db.dirty_flag.share_rc(),
       scan_db: Rc::downgrade(scan_db),
-      path,
+      path: init_opts.path,
+      asset_root: init_opts.asset_root,
       fragments: RefCell::new(IndexMap::new()),
-    })
+    }))
   }
 
   pub fn reserve_additional_fragments(&self, additional_capacity: usize) {

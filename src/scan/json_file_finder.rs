@@ -1,5 +1,6 @@
 use crate::impl_prelude::*;
 use crate::rc_string::RcString;
+use crate::utils;
 
 use once_cell::sync::Lazy;
 use std::ffi::OsStr;
@@ -13,8 +14,9 @@ static JSON_EXTENSION: Lazy<&'static OsStr> = Lazy::new(|| OsStr::new("json"));
 
 #[derive(Debug)]
 pub struct FoundJsonFile {
-  // TODO: split `path` into `asset_root` and `relative_path`
   pub path: RcString,
+  pub asset_root: RcString,
+  // TODO: remove
   pub is_lang_file: bool,
 }
 
@@ -35,12 +37,12 @@ pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>
     2400,
   );
 
-  let mut asset_roots: Vec<PathBuf> = Vec::with_capacity(
+  let mut asset_roots: Vec<RcString> = Vec::with_capacity(
     // The JSON directories are usually going to be just the main data dir plus
     // the data dir of the scorpion-robo extension.
     2,
   );
-  asset_roots.push(PathBuf::new());
+  asset_roots.push(RcString::from(""));
 
   info!("Listing the extensions");
   let extension_count = read_extensions_dir(assets_dir, &mut asset_roots, &mut found_files)
@@ -49,11 +51,11 @@ pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>
 
   let asset_roots_len = asset_roots.len();
   for (i, asset_root) in asset_roots.into_iter().enumerate() {
-    let data_dir = asset_root.join(*DATA_DIR);
+    let data_dir = Path::new(&asset_root).join(*DATA_DIR);
+    let lang_dir = data_dir.join(*LANG_DIR);
     info!("[{}/{}] Listing all JSON files in {:?}", i + 1, asset_roots_len, data_dir);
 
     let data_dir_abs = assets_dir.join(&data_dir);
-
     let mut file_count: usize = 0;
     for entry in walkdir::WalkDir::new(&data_dir_abs).into_iter() {
       let entry =
@@ -63,21 +65,24 @@ pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>
         continue;
       }
 
-      let relative_path = match entry.path().strip_prefix(&data_dir_abs) {
+      let path = match entry.path().strip_prefix(&assets_dir) {
         Ok(p) => p,
         _ => continue,
       };
-      let path = data_dir.join(relative_path);
       let path_str = path_to_str_with_error(&path)?;
 
-      let is_lang_file = relative_path.starts_with(*LANG_DIR);
+      let is_lang_file = path.starts_with(&lang_dir);
       // Hacky, but good enough for CC.
       if is_lang_file && !path_str.ends_with(".en_US.json") {
         continue;
       }
 
       file_count += 1;
-      found_files.push(FoundJsonFile { path: RcString::from(path_str), is_lang_file });
+      found_files.push(FoundJsonFile {
+        path: RcString::from(path_str),
+        asset_root: asset_root.share_rc(),
+        is_lang_file,
+      });
     }
     trace!("Found {} JSON files", file_count);
   }
@@ -88,7 +93,7 @@ pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>
 
 fn read_extensions_dir(
   assets_dir: &Path,
-  asset_roots: &mut Vec<PathBuf>,
+  asset_roots: &mut Vec<RcString>,
   found_files: &mut Vec<FoundJsonFile>,
 ) -> AnyResult<usize> {
   let mut extension_count = 0;
@@ -122,6 +127,10 @@ fn read_extensions_dir(
         continue;
       }
 
+      let asset_root =
+        RcString::from(utils::fast_concat(&[path_to_str_with_error(&extension_dir)?, "/"]));
+      let path = RcString::from(path_to_str_with_error(&metadata_file)?);
+
       extension_count += 1;
       trace!(
         "Found extension {:?} with the metadata file {:?}",
@@ -129,10 +138,11 @@ fn read_extensions_dir(
         metadata_file,
       );
       found_files.push(FoundJsonFile {
-        path: RcString::from(path_to_str_with_error(&metadata_file)?),
+        path,
+        asset_root: asset_root.share_rc(),
         is_lang_file: false,
       });
-      asset_roots.push(extension_dir);
+      asset_roots.push(asset_root);
     }
   }
 

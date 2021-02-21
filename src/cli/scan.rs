@@ -105,8 +105,13 @@ impl super::Command for ScanCommand {
           Vec::new()
         };
 
-        let scan_db_file =
-          scan_db_file.get_or_insert_with(|| scan_db.new_game_file(found_file.path.share_rc()));
+        if scan_db_file.is_none() {
+          scan_db_file = Some(scan_db.new_game_file(scan::ScanDbGameFileInitOpts {
+            path: found_file.path.share_rc(),
+            asset_root: found_file.asset_root.share_rc(),
+          })?);
+        }
+        let scan_db_file = scan_db_file.as_mut().unwrap();
 
         tmp_fragment_text.insert(tmp_extracted_locale.share_rc(), text);
         scan_db_file.new_fragment(scan::ScanDbFragmentInitOpts {
