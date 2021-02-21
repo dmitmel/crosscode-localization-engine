@@ -172,7 +172,6 @@ pub struct ScanDbGameFile {
   dirty_flag: Rc<Cell<bool>>,
   #[serde(skip)]
   scan_db: RcWeak<ScanDb>,
-  #[serde(skip)]
   asset_root: RcString,
   path: RcString,
   fragments: RefCell<IndexMap<RcString, Rc<ScanDbFragment>>>,

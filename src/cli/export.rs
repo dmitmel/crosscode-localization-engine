@@ -119,17 +119,18 @@ impl super::Command for ExportCommand {
       let game_file_path = game_file.path();
       let mut fragments_in_export_file: Option<&mut Vec<_>> = if let Some(splitter) = &mut splitter
       {
-        let export_file_path: Cow<'static, str> =
-          if let Some(path) = splitter.get_tr_file_for_entire_game_file(game_file_path) {
-            path
-          } else {
-            bail!(
-            "The selected splitter can't be used for export because it has requested per-fragment \
-            splitting on the game file {:?}. An entire game file can be assigned to one and only \
-            one export file.",
+        let export_file_path: Cow<'static, str> = if let Some(path) =
+          splitter.get_tr_file_for_entire_game_file(game_file.asset_root(), game_file_path)
+        {
+          path
+        } else {
+          bail!(
+            "The selected splitter can't be used for export because it has requested \
+            per-fragment splitting on the game file {:?}. An entire game file can be assigned \
+            to one and only one export file.",
             game_file_path,
           )
-          };
+        };
 
         let export_file_path =
           RcString::from(utils::fast_concat(&[&export_file_path, ".", export_file_extension]));

@@ -52,6 +52,7 @@ pub struct TrFileSerde {
 
 #[derive(Debug, Deserialize)]
 pub struct GameFileChunkSerde {
+  pub asset_root: RcString,
   pub fragments: IndexMap<RcString, FragmentSerde>,
 }
 
@@ -296,8 +297,10 @@ impl Project {
 
       tr_file.reserve_additional_game_file_chunks(tr_file_raw.game_file_chunks.len());
       for (game_file_path, game_file_chunk_raw) in tr_file_raw.game_file_chunks {
-        let game_file_chunk =
-          tr_file.new_game_file_chunk(GameFileChunkInitOpts { path: game_file_path.share_rc() });
+        let game_file_chunk = tr_file.new_game_file_chunk(GameFileChunkInitOpts {
+          asset_root: game_file_chunk_raw.asset_root,
+          path: game_file_path.share_rc(),
+        })?;
 
         game_file_chunk.reserve_additional_fragments(game_file_chunk_raw.fragments.len());
         for (fragment_json_path, fragment_raw) in game_file_chunk_raw.fragments {
@@ -363,12 +366,15 @@ impl Project {
     self.virtual_game_files.borrow().get(path).cloned()
   }
 
-  fn new_virtual_game_file(self: &Rc<Self>, path: RcString) -> Rc<VirtualGameFile> {
-    let file = VirtualGameFile::new(self, path);
+  fn new_virtual_game_file(
+    self: &Rc<Self>,
+    opts: VirtualGameFileInitOpts,
+  ) -> AnyResult<Rc<VirtualGameFile>> {
+    let file = VirtualGameFile::new(self, opts)?;
     let prev_file =
       self.virtual_game_files.borrow_mut().insert(file.path.share_rc(), file.share_rc());
     assert!(prev_file.is_none());
-    file
+    Ok(file)
   }
 
   pub fn reserve_additional_virtual_game_files(&self, additional_capacity: usize) {
@@ -463,17 +469,34 @@ impl TrFile {
     self.game_file_chunks.borrow().get(path).cloned()
   }
 
-  pub fn new_game_file_chunk(self: &Rc<Self>, opts: GameFileChunkInitOpts) -> Rc<GameFileChunk> {
+  pub fn new_game_file_chunk(
+    self: &Rc<Self>,
+    opts: GameFileChunkInitOpts,
+  ) -> AnyResult<Rc<GameFileChunk>> {
     self.dirty_flag.set(true);
     let project = self.project();
-    let virt_file = project
-      .get_virtual_game_file(&opts.path)
-      .unwrap_or_else(|| project.new_virtual_game_file(opts.path.share_rc()));
-    let chunk = GameFileChunk::new(&self.project(), self, virt_file, opts);
+    let virt_file = match project.get_virtual_game_file(&opts.path) {
+      Some(virt_file) => {
+        ensure!(
+          virt_file.asset_root == opts.asset_root,
+          "A virtual game file has already been created for this path ({:?}), but its asset \
+          root ({:?}) differs from what has been supplied ({:?}) for this game file chunk",
+          virt_file.path,
+          virt_file.asset_root,
+          opts.asset_root,
+        );
+        virt_file
+      }
+      None => project.new_virtual_game_file(VirtualGameFileInitOpts {
+        asset_root: opts.asset_root.share_rc(),
+        path: opts.path.share_rc(),
+      })?,
+    };
+    let chunk = GameFileChunk::new(&self.project(), self, virt_file, opts)?;
     let prev_chunk =
       self.game_file_chunks.borrow_mut().insert(chunk.path.share_rc(), chunk.share_rc());
     assert!(prev_chunk.is_none());
-    chunk
+    Ok(chunk)
   }
 
   pub fn reserve_additional_game_file_chunks(&self, additional_capacity: usize) {
@@ -508,6 +531,7 @@ impl TrFile {
 
 #[derive(Debug)]
 pub struct GameFileChunkInitOpts {
+  pub asset_root: RcString,
   pub path: RcString,
 }
 
@@ -522,6 +546,7 @@ pub struct GameFileChunk {
   #[serde(skip)]
   virtual_game_file: Rc<VirtualGameFile>,
 
+  asset_root: RcString,
   #[serde(skip)]
   path: RcString,
 
@@ -535,8 +560,10 @@ impl GameFileChunk {
   pub fn project(&self) -> Rc<Project> { self.project.upgrade().unwrap() }
   #[inline]
   pub fn tr_file(&self) -> Rc<TrFile> { self.tr_file.upgrade().unwrap() }
-  #[inline]
+  #[inline(always)]
   pub fn virtual_game_file(&self) -> &Rc<VirtualGameFile> { &self.virtual_game_file }
+  #[inline(always)]
+  pub fn asset_root(&self) -> &RcString { &self.asset_root }
   #[inline(always)]
   pub fn path(&self) -> &RcString { &self.path }
   #[inline(always)]
@@ -547,17 +574,25 @@ impl GameFileChunk {
     tr_file: &Rc<TrFile>,
     virtual_game_file: Rc<VirtualGameFile>,
     opts: GameFileChunkInitOpts,
-  ) -> Rc<Self> {
-    Rc::new(Self {
+  ) -> AnyResult<Rc<Self>> {
+    ensure!(
+      opts.path.starts_with(&*opts.asset_root),
+      "Path to a game file ({:?}) must start with its asset root ({:?})",
+      opts.path,
+      opts.asset_root,
+    );
+
+    Ok(Rc::new(Self {
       dirty_flag: tr_file.dirty_flag.share_rc(),
       project: project.share_rc_weak(),
       tr_file: tr_file.share_rc_weak(),
       virtual_game_file,
 
+      asset_root: opts.asset_root,
       path: opts.path,
 
       fragments: RefCell::new(IndexMap::new()),
-    })
+    }))
   }
 
   pub fn get_fragment(&self, json_path: &str) -> Option<Rc<Fragment>> {
@@ -885,9 +920,16 @@ impl Comment {
 }
 
 #[derive(Debug)]
+pub struct VirtualGameFileInitOpts {
+  asset_root: RcString,
+  path: RcString,
+}
+
+#[derive(Debug)]
 pub struct VirtualGameFile {
   project: RcWeak<Project>,
 
+  asset_root: RcString,
   path: RcString,
 
   fragments: RefCell<IndexMap<RcString, Rc<Fragment>>>,
@@ -897,18 +939,28 @@ impl VirtualGameFile {
   #[inline]
   pub fn project(&self) -> Rc<Project> { self.project.upgrade().unwrap() }
   #[inline(always)]
+  pub fn asset_root(&self) -> &RcString { &self.asset_root }
+  #[inline(always)]
   pub fn path(&self) -> &RcString { &self.path }
   #[inline(always)]
   pub fn fragments(&self) -> Ref<IndexMap<RcString, Rc<Fragment>>> { self.fragments.borrow() }
 
-  fn new(project: &Rc<Project>, path: RcString) -> Rc<Self> {
-    Rc::new(Self {
+  fn new(project: &Rc<Project>, opts: VirtualGameFileInitOpts) -> AnyResult<Rc<Self>> {
+    ensure!(
+      opts.path.starts_with(&*opts.asset_root),
+      "Path to a game file ({:?}) must start with its asset root ({:?})",
+      opts.path,
+      opts.asset_root,
+    );
+
+    Ok(Rc::new(Self {
       project: project.share_rc_weak(),
 
-      path,
+      asset_root: opts.asset_root,
+      path: opts.path,
 
       fragments: RefCell::new(IndexMap::new()),
-    })
+    }))
   }
 
   pub fn get_fragment(&self, path: &str) -> Option<Rc<Fragment>> {

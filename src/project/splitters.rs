@@ -19,10 +19,19 @@ pub trait Splitter: fmt::Debug {
 
   fn id(&self) -> &'static str;
 
-  fn get_tr_file_for_entire_game_file(&mut self, file_path: &str) -> Option<Cow<'static, str>>;
+  fn get_tr_file_for_entire_game_file(
+    &mut self,
+    asset_root: &str,
+    file_path: &str,
+  ) -> Option<Cow<'static, str>>;
 
-  fn get_tr_file_for_fragment(&mut self, file_path: &str, _json_path: &str) -> Cow<'static, str> {
-    self.get_tr_file_for_entire_game_file(file_path).unwrap()
+  fn get_tr_file_for_fragment(
+    &mut self,
+    asset_root: &str,
+    file_path: &str,
+    _json_path: &str,
+  ) -> Cow<'static, str> {
+    self.get_tr_file_for_entire_game_file(asset_root, file_path).unwrap()
   }
 }
 
@@ -102,7 +111,11 @@ impl Splitter for MonolithicFileSplitter {
   #[inline(always)]
   fn id(&self) -> &'static str { Self::ID }
 
-  fn get_tr_file_for_entire_game_file(&mut self, _file_path: &str) -> Option<Cow<'static, str>> {
+  fn get_tr_file_for_entire_game_file(
+    &mut self,
+    _asset_root: &str,
+    _file_path: &str,
+  ) -> Option<Cow<'static, str>> {
     Some("translation".into())
   }
 }
@@ -134,7 +147,11 @@ impl Splitter for SameFileTreeSplitter {
   #[inline(always)]
   fn id(&self) -> &'static str { Self::ID }
 
-  fn get_tr_file_for_entire_game_file(&mut self, file_path: &str) -> Option<Cow<'static, str>> {
+  fn get_tr_file_for_entire_game_file(
+    &mut self,
+    _asset_root: &str,
+    file_path: &str,
+  ) -> Option<Cow<'static, str>> {
     let (file_path, _) = utils::split_filename_extension(file_path);
     Some(file_path.to_owned().into())
   }
@@ -167,7 +184,11 @@ impl Splitter for LocalizeMeFileTreeSplitter {
   #[inline(always)]
   fn id(&self) -> &'static str { Self::ID }
 
-  fn get_tr_file_for_entire_game_file(&mut self, file_path: &str) -> Option<Cow<'static, str>> {
+  fn get_tr_file_for_entire_game_file(
+    &mut self,
+    _asset_root: &str,
+    file_path: &str,
+  ) -> Option<Cow<'static, str>> {
     let file_path = localize_me::serialize_file_path(file_path);
     let (file_path, _) = utils::split_filename_extension(file_path);
     Some(file_path.to_owned().into())
@@ -203,7 +224,11 @@ impl Splitter for NotabenoidChaptersSplitter {
 
   // Rewritten from <https://github.com/CCDirectLink/crosscode-ru/blob/93415096b4f01ed4a7f50a20e642e0c9ae07dade/tool/src/Notabenoid.ts#L418-L459>
   #[allow(clippy::single_match)]
-  fn get_tr_file_for_entire_game_file(&mut self, file_path: &str) -> Option<Cow<'static, str>> {
+  fn get_tr_file_for_entire_game_file(
+    &mut self,
+    _asset_root: &str,
+    file_path: &str,
+  ) -> Option<Cow<'static, str>> {
     return Some(inner(file_path).into());
 
     fn inner(file_path: &str) -> &'static str {
@@ -300,8 +325,12 @@ impl Splitter for NextGenerationSplitter {
   #[inline(always)]
   fn id(&self) -> &'static str { Self::ID }
 
-  fn get_tr_file_for_entire_game_file(&mut self, file_path: &str) -> Option<Cow<'static, str>> {
-    let components: Vec<_> = file_path.split('/').collect();
+  fn get_tr_file_for_entire_game_file(
+    &mut self,
+    asset_root: &str,
+    file_path: &str,
+  ) -> Option<Cow<'static, str>> {
+    let components: Vec<_> = file_path.strip_prefix(asset_root).unwrap().split('/').collect();
 
     match components[0] {
       "data" => match components[1] {
@@ -323,13 +352,19 @@ impl Splitter for NextGenerationSplitter {
       _ => {}
     }
 
-    Some(SameFileTreeSplitter.get_tr_file_for_entire_game_file(file_path).unwrap())
+    Some(SameFileTreeSplitter.get_tr_file_for_entire_game_file(asset_root, file_path).unwrap())
   }
 
-  fn get_tr_file_for_fragment(&mut self, file_path: &str, json_path: &str) -> Cow<'static, str> {
-    let components: Vec<_> = file_path.split('/').collect();
+  fn get_tr_file_for_fragment(
+    &mut self,
+    asset_root: &str,
+    file_path: &str,
+    json_path: &str,
+  ) -> Cow<'static, str> {
+    let components: Vec<_> = file_path.strip_prefix(asset_root).unwrap().split('/').collect();
     let json_components: Vec<_> = json_path.split('/').collect();
-    let tr_file_path = SameFileTreeSplitter.get_tr_file_for_entire_game_file(file_path).unwrap();
+    let tr_file_path =
+      SameFileTreeSplitter.get_tr_file_for_entire_game_file(asset_root, file_path).unwrap();
 
     match components[0] {
       "data" if components.len() > 1 => match components[1] {

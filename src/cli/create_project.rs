@@ -148,7 +148,7 @@ impl super::Command for CreateProjectCommand {
         let global_tr_file_path: Option<RcString> = project
           .meta()
           .splitter_mut()
-          .get_tr_file_for_entire_game_file(scan_game_file.path())
+          .get_tr_file_for_entire_game_file(scan_game_file.asset_root(), scan_game_file.path())
           .map(RcString::from);
 
         for scan_fragment in scan_game_file.fragments().values() {
@@ -159,16 +159,16 @@ impl super::Command for CreateProjectCommand {
 
           let fragment_tr_file_path: RcString = match &global_tr_file_path {
             Some(v) => v.share_rc(),
-            None => RcString::from(
-              project
-                .meta()
-                .splitter_mut()
-                .get_tr_file_for_fragment(scan_fragment.file_path(), scan_fragment.json_path()),
-            ),
+            None => RcString::from(project.meta().splitter_mut().get_tr_file_for_fragment(
+              scan_fragment.file_asset_root(),
+              scan_fragment.file_path(),
+              scan_fragment.json_path(),
+            )),
           };
 
-          let tr_file = {
-            project.get_tr_file(&fragment_tr_file_path).unwrap_or_else(|| {
+          let tr_file = match project.get_tr_file(&fragment_tr_file_path) {
+            Some(v) => v,
+            None => {
               let timestamp = utils::get_timestamp();
               project.new_tr_file(project::TrFileInitOpts {
                 id: utils::new_uuid(),
@@ -176,14 +176,15 @@ impl super::Command for CreateProjectCommand {
                 modification_timestamp: timestamp,
                 relative_path: fragment_tr_file_path.share_rc(),
               })
-            })
+            }
           };
 
-          let game_file_chunk = {
-            let path = scan_game_file.path();
-            tr_file.get_game_file_chunk(path).unwrap_or_else(|| {
-              tr_file.new_game_file_chunk(project::GameFileChunkInitOpts { path: path.share_rc() })
-            })
+          let game_file_chunk = match tr_file.get_game_file_chunk(scan_game_file.path()) {
+            Some(v) => v,
+            None => tr_file.new_game_file_chunk(project::GameFileChunkInitOpts {
+              asset_root: scan_game_file.asset_root().share_rc(),
+              path: scan_game_file.path().share_rc(),
+            })?,
           };
 
           game_file_chunk.new_fragment(project::FragmentInitOpts {
