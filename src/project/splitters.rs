@@ -330,6 +330,19 @@ impl Splitter for NextGenerationSplitter {
     asset_root: &str,
     file_path: &str,
   ) -> Option<Cow<'static, str>> {
+    let full_components: Vec<_> = file_path.split('/').collect();
+    match *full_components.as_slice() {
+      ["extension", extension_dir_name, maybe_extension_manifest] => {
+        if maybe_extension_manifest
+          .strip_suffix(".json")
+          .map_or(false, |file_name| file_name == extension_dir_name)
+        {
+          return Some("extensions".into());
+        }
+      }
+      _ => {}
+    }
+
     let components: Vec<_> = file_path.strip_prefix(asset_root).unwrap().split('/').collect();
 
     match components[0] {
