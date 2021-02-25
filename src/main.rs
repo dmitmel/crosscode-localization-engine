@@ -3,19 +3,12 @@
 #![feature(try_blocks)]
 // TODO: consider using feature(hash_raw_entry)
 
+pub use crosslocale::*;
+
 #[macro_use]
 pub mod macros;
 
-pub mod backend;
-pub mod cc_ru_compat;
 pub mod cli;
-pub mod gettext_po;
-pub mod impl_prelude;
-pub mod localize_me;
-pub mod project;
-pub mod rc_string;
-pub mod scan;
-pub mod utils;
 
 use crate::cli::Command;
 use crate::impl_prelude::*;
@@ -23,10 +16,6 @@ use crate::impl_prelude::*;
 use std::collections::HashMap;
 use std::env;
 use std::ffi::OsStr;
-
-pub const CRATE_TITLE: &str = "CrossLocalE";
-pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
-pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub fn main() {
   let backtrace_var_name = OsStr::new("RUST_BACKTRACE");
@@ -39,38 +28,8 @@ pub fn main() {
   }
 }
 
-pub fn report_critical_error(mut error: AnyError) {
-  error = error.context(format!(
-    "CRITICAL ERROR in thread '{}'",
-    std::thread::current().name().unwrap_or("<unnamed>"),
-  ));
-  if log::log_enabled!(log::Level::Error) {
-    error!("{:?}", error);
-  } else {
-    eprintln!("ERROR: {:?}", error);
-  }
-}
-
-pub fn report_error(mut error: AnyError) {
-  error = error.context(format!(
-    "non-critical error in thread '{}'",
-    std::thread::current().name().unwrap_or("<unnamed>"),
-  ));
-  if log::log_enabled!(log::Level::Error) {
-    warn!("{:?}", error);
-  } else {
-    eprintln!("WARN: {:?}", error);
-  }
-}
-
 pub fn try_main() -> AnyResult<()> {
-  env_logger::init_from_env(env_logger::Env::default().default_filter_or(
-    // The logging level of `env_logger` can't be changed once the logger has
-    // been installed, so instead let's by default allow all logging levels on
-    // the `env_logger` side, we will lower the logging level later on
-    // ourselves on the `log` side.
-    "trace",
-  ));
+  crate::init_logging();
 
   let mut arg_parser = cli::GlobalOpts::create_arg_parser();
 

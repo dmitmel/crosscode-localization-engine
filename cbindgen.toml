@@ -1,0 +1,4 @@
+language = "C"
+include_guard = "_CROSSLOCALE_H"
+include_version = true
+cpp_compat = true

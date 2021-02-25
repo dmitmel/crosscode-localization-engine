@@ -12,6 +12,11 @@ homepage = "https://github.com/dmitmel/crosscode-localization-engine"
 name = "crosslocale"
 path = "src/main.rs"
 
+[lib]
+name = "crosslocale"
+crate-type = ["rlib", "cdylib", "staticlib"]
+path = "src/lib.rs"
+
 [dependencies]
 serde = { version = "1.0.118", features = ["derive", "rc"] }
 serde_json = { version = "1.0.61", features = ["preserve_order"] }

@@ -59,6 +59,12 @@ jobs:
           command: clippy
           args: --verbose --workspace
 
-      - name: build Node.js bindings
+      - name: check FFI headers
+        run: |
+          mv -f ffi/crosslocale.h{,.bak}
+          scripts/generate-ffi-headers.sh
+          diff --unified --color=always ffi/crosslocale.h{.bak,}
+
+      - name: Build Node.js bindings
         working-directory: node-bindings
         run: npm install
