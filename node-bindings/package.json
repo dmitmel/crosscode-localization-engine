@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "name": "crosscode-localization-engine",
+  "version": "0.0.0",
+  "scripts": {
+    "install": "node-gyp rebuild -- -f make -f compile_commands_json"
+  },
+  "devDependencies": {
+    "node-addon-api": "^3.1.0"
+  }
+}

@@ -58,3 +58,7 @@ jobs:
         with:
           command: clippy
           args: --verbose --workspace
+
+      - name: build Node.js bindings
+        working-directory: node-bindings
+        run: npm install

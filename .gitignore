@@ -1,3 +1,6 @@
 target/
+node_modules/
+compile_commands.json
+/node-bindings/build/
 /perf.data*
 /perf-flamegraph.svg*
