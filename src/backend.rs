@@ -1,3 +1,6 @@
+pub mod transports;
+
+use self::transports::Transport;
 use crate::impl_prelude::*;
 use crate::project::Project;
 use crate::rc_string::{MaybeStaticStr, RcString};
@@ -9,7 +12,6 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::fmt;
-use std::io::{self, Write};
 use std::path::PathBuf;
 use std::rc::Rc;
 use uuid::Uuid;
@@ -100,13 +102,15 @@ macro_rules! backend_nice_error {
 
 #[derive(Debug)]
 pub struct Backend {
+  transport: Box<dyn Transport>,
   project_id_alloc: IdAllocator,
   projects: HashMap<u32, Rc<Project>>,
 }
 
 impl Backend {
-  pub fn new() -> Self {
+  pub fn new(transport: Box<dyn Transport>) -> Self {
     Self {
+      transport,
       project_id_alloc: IdAllocator::new(),
       // I assume that at least one project will be opened because otherwise
       // (without opening a project) the backend is pretty much useless
@@ -115,24 +119,23 @@ impl Backend {
   }
 
   pub fn start(&mut self) -> AnyResult<()> {
-    let stdin = io::stdin();
-    let mut stdout = io::stdout();
     let mut message_index: u32 = 0;
     loop {
       try_any_result!({
-        let mut buf = String::new();
-        let read_bytes = stdin.read_line(&mut buf).context("Failed to read from stdin")?;
-        if read_bytes == 0 {
-          break;
-        }
+        let recv_result =
+          match self.transport.recv().context("Failed to receive message from the transport")? {
+            Some(v) => v,
+            None => break,
+          };
 
-        let in_msg: serde_json::Result<Message> = match serde_json::from_str::<Message>(&buf) {
-          Err(e) if !e.is_io() => {
-            warn!("Failed to deserialize message(index={}) from stdin: {}", message_index, e);
-            Err(e)
-          }
-          result => Ok(result.context("Failed to deserialize from stdin")?),
-        };
+        let in_msg: serde_json::Result<Message> =
+          match serde_json::from_str::<Message>(&recv_result) {
+            Err(e) if !e.is_io() => {
+              warn!("Failed to deserialize message(index={}): {}", message_index, e);
+              Err(e)
+            }
+            result => Ok(result.context("Failed to deserialize message")?),
+          };
 
         let out_msg: Message = match in_msg {
           Ok(in_msg) => {
@@ -154,15 +157,14 @@ impl Backend {
           }),
         };
 
-        match try_io_result!({
-          serde_json::to_writer(&mut stdout, &out_msg)?;
-          stdout.write_all(b"\n")?;
-        }) {
-          Err(e) if e.kind() == io::ErrorKind::BrokenPipe => {
-            warn!("The frontend has disconnected, exiting cleanly. Caused by: {}", e);
-            break;
-          }
-          result => result.context("Failed to serialize to stdout")?,
+        let mut buf = Vec::new();
+        serde_json::to_writer(&mut buf, &out_msg).context("Failed to serialize")?;
+
+        let send_result: Option<()> =
+          self.transport.send(&buf).context("Failed to send message to the transport")?;
+        if send_result.is_none() {
+          warn!("The frontend has disconnected, exiting cleanly");
+          break;
         }
       })
       .with_context(|| format!("Failed to process message(index={})", message_index))?;

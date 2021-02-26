@@ -1,3 +1,4 @@
+use crate::backend::transports::StdioTransport;
 use crate::backend::{self, Backend};
 use crate::impl_prelude::*;
 
@@ -34,6 +35,6 @@ impl super::Command for BackendCommand {
     _global_opts: super::GlobalOpts,
     _matches: &clap::ArgMatches<'_>,
   ) -> AnyResult<()> {
-    Backend::new().start()
+    Backend::new(Box::new(StdioTransport)).start()
   }
 }
