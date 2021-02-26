@@ -10,7 +10,6 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::error::Error as StdError;
 use std::fmt;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -121,12 +120,9 @@ impl Backend {
   pub fn start(&mut self) -> AnyResult<()> {
     let mut message_index: u32 = 0;
     loop {
-      try_any_result!({
+      let result = try_any_result!({
         let recv_result =
-          match self.transport.recv().context("Failed to receive message from the transport")? {
-            Some(v) => v,
-            None => break,
-          };
+          self.transport.recv().context("Failed to receive message from the transport")?;
 
         let in_msg: serde_json::Result<Message> =
           match serde_json::from_str::<Message>(&recv_result) {
@@ -160,17 +156,21 @@ impl Backend {
         let mut buf = Vec::new();
         serde_json::to_writer(&mut buf, &out_msg).context("Failed to serialize")?;
 
-        let send_result: Option<()> =
-          self.transport.send(&buf).context("Failed to send message to the transport")?;
-        if send_result.is_none() {
+        self.transport.send(&buf).context("Failed to send message to the transport")?;
+      })
+      .with_context(|| format!("Failed to process message(index={})", message_index));
+
+      match result {
+        Err(e) if e.is::<transports::TransportDisconnectionError>() => {
           warn!("The frontend has disconnected, exiting cleanly");
           break;
         }
-      })
-      .with_context(|| format!("Failed to process message(index={})", message_index))?;
+        _ => {}
+      }
 
       message_index = message_index.wrapping_add(1);
     }
+
     Ok(())
   }
 
