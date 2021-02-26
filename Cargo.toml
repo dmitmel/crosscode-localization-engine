@@ -14,7 +14,7 @@ path = "src/main.rs"
 
 [lib]
 name = "crosslocale"
-crate-type = ["rlib", "cdylib", "staticlib"]
+crate-type = ["rlib", "cdylib"]
 path = "src/lib.rs"
 
 [dependencies]
