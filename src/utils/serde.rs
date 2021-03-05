@@ -10,6 +10,8 @@ pub fn is_refcell_hashmap_empty<K, V>(v: &RefCell<HashMap<K, V>>) -> bool { v.bo
 #[inline]
 pub fn is_refcell_hashset_empty<K, V>(v: &RefCell<HashSet<K, V>>) -> bool { v.borrow().is_empty() }
 
+pub const MULTILINE_STRING_WRAP_WIDTH: usize = 80;
+
 #[derive(Debug)]
 pub struct MultilineStringHelper;
 
@@ -19,7 +21,12 @@ impl MultilineStringHelper {
     S: Serializer,
     T: AsRef<str>,
   {
-    let lines: Vec<&str> = super::LinesWithEndings::new(value.as_ref()).collect();
+    let wrapper =
+      textwrap::Wrapper::with_splitter(MULTILINE_STRING_WRAP_WIDTH, textwrap::NoHyphenation)
+        .break_words(false);
+    let lines: Vec<Cow<str>> = super::LinesWithEndings::new(value.as_ref())
+      .flat_map(|line| wrapper.wrap_iter(line))
+      .collect();
     lines.serialize(serializer)
   }
 
