@@ -2,11 +2,12 @@ use crate::impl_prelude::*;
 
 use std::fmt;
 use std::io::{self, Write};
+use std::sync::mpsc;
 
 assert_trait_is_object_safe!(Transport);
 pub trait Transport: fmt::Debug {
   fn recv(&mut self) -> AnyResult<String>;
-  fn send(&mut self, bytes: &[u8]) -> AnyResult<()>;
+  fn send(&mut self, text: String) -> AnyResult<()>;
 }
 
 #[derive(Debug)]
@@ -35,14 +36,30 @@ impl Transport for StdioTransport {
     }
   }
 
-  fn send(&mut self, bytes: &[u8]) -> AnyResult<()> {
+  fn send(&mut self, text: String) -> AnyResult<()> {
     let mut stdout = io::stdout();
     match try_io_result!({
-      stdout.write_all(bytes)?;
+      stdout.write_all(text.as_bytes())?;
       stdout.write_all(b"\n")?;
     }) {
       Err(e) if e.kind() == io::ErrorKind::BrokenPipe => Err(TransportDisconnectionError.into()),
       result => Ok(result.context("Failed to serialize to stdout")?),
     }
+  }
+}
+
+#[derive(Debug)]
+pub struct MpscChannelTransport {
+  pub receiver: mpsc::Receiver<String>,
+  pub sender: mpsc::Sender<String>,
+}
+
+impl Transport for MpscChannelTransport {
+  fn recv(&mut self) -> AnyResult<String> {
+    self.receiver.recv().map_err(|mpsc::RecvError| TransportDisconnectionError.into())
+  }
+
+  fn send(&mut self, text: String) -> AnyResult<()> {
+    self.sender.send(text).map_err(|mpsc::SendError(_)| TransportDisconnectionError.into())
   }
 }

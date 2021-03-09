@@ -14,7 +14,10 @@ path = "src/main.rs"
 
 [lib]
 name = "crosslocale"
-crate-type = ["rlib", "cdylib"]
+# To compile the project in such a way that the main executable is linked
+# dynamically to the library use RUSTFLAGS="-C prefer-dynamic". Note that the
+# resulting dylib can still be linked to from C.
+crate-type = ["rlib", "dylib"]
 path = "src/lib.rs"
 
 [dependencies]

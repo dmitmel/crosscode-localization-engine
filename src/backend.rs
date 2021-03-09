@@ -121,17 +121,15 @@ impl Backend {
     let mut message_index: u32 = 0;
     loop {
       let result = try_any_result!({
-        let recv_result =
-          self.transport.recv().context("Failed to receive message from the transport")?;
+        let buf = self.transport.recv().context("Failed to receive message from the transport")?;
 
-        let in_msg: serde_json::Result<Message> =
-          match serde_json::from_str::<Message>(&recv_result) {
-            Err(e) if !e.is_io() => {
-              warn!("Failed to deserialize message(index={}): {}", message_index, e);
-              Err(e)
-            }
-            result => Ok(result.context("Failed to deserialize message")?),
-          };
+        let in_msg: serde_json::Result<Message> = match serde_json::from_str::<Message>(&buf) {
+          Err(e) if !e.is_io() => {
+            warn!("Failed to deserialize message(index={}): {}", message_index, e);
+            Err(e)
+          }
+          result => Ok(result.context("Failed to deserialize message")?),
+        };
 
         let out_msg: Message = match in_msg {
           Ok(in_msg) => {
@@ -155,8 +153,12 @@ impl Backend {
 
         let mut buf = Vec::new();
         serde_json::to_writer(&mut buf, &out_msg).context("Failed to serialize")?;
+        // Safe because serde_json doesn't emit invalid UTF-8, and besides JSON
+        // files are required to be encoded as UTF-8 by the specification. See
+        // <https://tools.ietf.org/html/rfc8259#section-8.1>.
+        let buf = unsafe { String::from_utf8_unchecked(buf) };
 
-        self.transport.send(&buf).context("Failed to send message to the transport")?;
+        self.transport.send(buf).context("Failed to send message to the transport")?;
       })
       .with_context(|| format!("Failed to process message(index={})", message_index));
 

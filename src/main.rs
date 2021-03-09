@@ -54,7 +54,6 @@ pub fn try_main() -> AnyResult<()> {
   let command_matches = command_matches.unwrap();
 
   // Brace for impact.
-  info!("{}/{} v{}", CRATE_TITLE, CRATE_NAME, CRATE_VERSION);
 
   command
     .run(global_opts, command_matches)

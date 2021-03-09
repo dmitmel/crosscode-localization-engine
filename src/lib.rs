@@ -31,6 +31,7 @@ pub fn init_logging() {
     // ourselves on the `log` side.
     "trace",
   ));
+  info!("{}/{} v{}", CRATE_TITLE, CRATE_NAME, CRATE_VERSION);
 }
 
 pub fn report_critical_error(mut error: AnyError) {

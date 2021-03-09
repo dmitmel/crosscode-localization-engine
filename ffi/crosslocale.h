@@ -5,12 +5,11 @@
 
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 
 typedef struct crosslocale_backend_t crosslocale_backend_t;
-
-typedef uint32_t crosslocale_message_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,17 +17,24 @@ extern "C" {
 
 void crosslocale_init_logging(void);
 
+void crosslocale_message_free(uint8_t *buf, size_t len, size_t cap);
+
 struct crosslocale_backend_t *crosslocale_backend_new(void);
 
 void crosslocale_backend_free(struct crosslocale_backend_t *myself);
 
 void crosslocale_backend_set_message_callback(struct crosslocale_backend_t *myself,
-                                              void (*callback)(void *user_data, crosslocale_message_t message),
+                                              void (*callback)(void *user_data, uint8_t *message, size_t message_len, size_t message_cap),
                                               void *user_data);
 
-crosslocale_message_t *crosslocale_backend_recv_message(struct crosslocale_backend_t *_myself);
+void crosslocale_backend_recv_message(struct crosslocale_backend_t *myself,
+                                      uint8_t **out_message,
+                                      size_t *out_message_len,
+                                      size_t *out_message_cap);
 
-void crosslocale_backend_send_message(struct crosslocale_backend_t *myself, uint32_t message);
+void crosslocale_backend_send_message(struct crosslocale_backend_t *myself,
+                                      const uint8_t *message,
+                                      size_t message_len);
 
 #ifdef __cplusplus
 } // extern "C"
