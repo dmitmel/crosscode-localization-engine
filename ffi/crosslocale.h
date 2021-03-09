@@ -1,7 +1,7 @@
 #ifndef _CROSSLOCALE_H
 #define _CROSSLOCALE_H
 
-/* Generated with cbindgen:0.17.0 */
+/* Generated with cbindgen:0.18.0 */
 
 #include <stdarg.h>
 #include <stdbool.h>

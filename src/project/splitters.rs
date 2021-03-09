@@ -234,7 +234,6 @@ impl Splitter for NotabenoidChaptersSplitter {
     fn inner(file_path: &str) -> &'static str {
       let components: Vec<_> = file_path.split('/').collect();
       match components[0] {
-        "extension" => return "extension",
         "data" if components.len() > 1 => match components[1] {
           "lang" => return "lang",
           "arena" => return "arena",
@@ -268,29 +267,29 @@ impl Splitter for NotabenoidChaptersSplitter {
       static AREAS_WITH_CHAPTERS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
         hashset![
           "arena",
-          "arid-dng",
           "arid",
-          "autumn-fall",
+          "arid-dng",
           "autumn",
-          "bergen-trail",
+          "autumn-fall",
+          "beach",
           "bergen",
+          "bergen-trail",
           "cargo-ship",
           "cold-dng",
           "dreams",
+          "evo-village",
+          "final-dng",
           "flashback",
           "forest",
+          "heat",
           "heat-dng",
           "heat-village",
-          "heat",
           "hideout",
-          "jungle-city",
           "jungle",
+          "jungle-city",
           "rhombus-dng",
           "rhombus-sqr",
           "rookie-harbor",
-          "shock-dng",
-          "tree-dng",
-          "wave-dng",
         ]
       });
     }
