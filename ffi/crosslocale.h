@@ -11,30 +11,44 @@
 
 typedef struct crosslocale_backend_t crosslocale_backend_t;
 
+typedef uint32_t crosslocale_error_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
 
-void crosslocale_init_logging(void);
+extern const crosslocale_error_t CROSSLOCALE_SUCCESS;
 
-void crosslocale_message_free(uint8_t *buf, size_t len, size_t cap);
+extern const crosslocale_error_t CROSSLOCALE_GENERIC_RUST_PANIC;
 
-struct crosslocale_backend_t *crosslocale_backend_new(void);
+extern const crosslocale_error_t CROSSLOCALE_ERROR_MESSAGE_SENDER_DISCONNECTED;
 
-void crosslocale_backend_free(struct crosslocale_backend_t *myself);
+extern const crosslocale_error_t CROSSLOCALE_ERROR_MESSAGE_RECEIVER_DISCONNECTED;
 
-void crosslocale_backend_set_message_callback(struct crosslocale_backend_t *myself,
-                                              void (*callback)(void *user_data, uint8_t *message, size_t message_len, size_t message_cap),
-                                              void *user_data);
+extern const crosslocale_error_t CROSSLOCALE_NON_UTF8_STRING;
 
-void crosslocale_backend_recv_message(struct crosslocale_backend_t *myself,
-                                      uint8_t **out_message,
-                                      size_t *out_message_len,
-                                      size_t *out_message_cap);
+extern const crosslocale_error_t CROSSLOCALE_SPAWN_THREAD_ERROR;
 
-void crosslocale_backend_send_message(struct crosslocale_backend_t *myself,
-                                      const uint8_t *message,
-                                      size_t message_len);
+crosslocale_error_t crosslocale_init_logging(void);
+
+crosslocale_error_t crosslocale_message_free(uint8_t *buf, size_t len, size_t cap);
+
+crosslocale_error_t crosslocale_backend_new(struct crosslocale_backend_t **out);
+
+crosslocale_error_t crosslocale_backend_free(struct crosslocale_backend_t *myself);
+
+crosslocale_error_t crosslocale_backend_set_message_callback(struct crosslocale_backend_t *myself,
+                                                             void (*callback)(void *user_data, uint8_t *message, size_t message_len, size_t message_cap),
+                                                             void *user_data);
+
+crosslocale_error_t crosslocale_backend_recv_message(struct crosslocale_backend_t *myself,
+                                                     uint8_t **out_message,
+                                                     size_t *out_message_len,
+                                                     size_t *out_message_cap);
+
+crosslocale_error_t crosslocale_backend_send_message(struct crosslocale_backend_t *myself,
+                                                     const uint8_t *message,
+                                                     size_t message_len);
 
 #ifdef __cplusplus
 } // extern "C"
