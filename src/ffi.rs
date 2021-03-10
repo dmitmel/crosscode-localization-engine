@@ -3,7 +3,6 @@
 
 use crate::backend::transports::MpscChannelTransport;
 use crate::backend::Backend;
-use crate::impl_prelude::*;
 
 use std::mem::ManuallyDrop;
 use std::panic::{self, AssertUnwindSafe};
@@ -42,7 +41,7 @@ pub extern "C" fn crosslocale_message_free(
 pub struct crosslocale_backend_t {
   message_sender: mpsc::Sender<String>,
   message_receiver: mpsc::Receiver<String>,
-  backend_thread: thread::JoinHandle<AnyResult<()>>,
+  backend_thread: thread::JoinHandle<()>,
 }
 
 pub type crosslocale_error_t = u32;
@@ -67,18 +66,25 @@ pub extern "C" fn crosslocale_backend_new(
     let (incoming_send, incoming_recv) = mpsc::channel::<String>();
     let (outgoing_send, outgoing_recv) = mpsc::channel::<String>();
 
-    let backend_thread = match thread::Builder::new()
-      .name(std::any::type_name::<Backend>().to_owned())
-      .spawn(move || {
-        let mut backend = Backend::new(Box::new(MpscChannelTransport {
-          receiver: incoming_recv,
-          sender: outgoing_send,
-        }));
-        backend.start()
-      }) {
-      Ok(v) => v,
-      Err(_) => return CROSSLOCALE_SPAWN_THREAD_ERROR,
-    };
+    let backend_thread =
+      match thread::Builder::new().name(std::any::type_name::<Backend>().to_owned()).spawn(
+        move || match panic::catch_unwind(AssertUnwindSafe(move || {
+          let mut backend = Backend::new(Box::new(MpscChannelTransport {
+            receiver: incoming_recv,
+            sender: outgoing_send,
+          }));
+          if let Err(e) = backend.start() {
+            crate::report_critical_error(e);
+            process::abort();
+          }
+        })) {
+          Ok(v) => v,
+          Err(_) => process::abort(),
+        },
+      ) {
+        Ok(v) => v,
+        Err(_) => return CROSSLOCALE_SPAWN_THREAD_ERROR,
+      };
 
     let ffi_backend = Box::into_raw(Box::new(crosslocale_backend_t {
       message_sender: incoming_send,
