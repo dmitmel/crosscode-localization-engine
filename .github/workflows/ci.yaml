@@ -67,4 +67,4 @@ jobs:
 
       - name: Build Node.js bindings
         working-directory: node-bindings
-        run: npm install
+        run: npm install --ignore-scripts && npm run build:debug
