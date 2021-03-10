@@ -3,7 +3,9 @@
   "name": "crosscode-localization-engine",
   "version": "0.0.0",
   "scripts": {
-    "install": "node-gyp rebuild -- -f make -f compile_commands_json"
+    "install": "\"$npm_execpath\" run build:release",
+    "build:release": "node-gyp rebuild -- -f make -f compile_commands_json",
+    "build:debug": "node-gyp rebuild --debug -- -f make -f compile_commands_json"
   },
   "devDependencies": {
     "node-addon-api": "^3.1.0"

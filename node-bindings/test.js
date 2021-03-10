@@ -1,2 +1,3 @@
-var addon = require('./build/Release/crosscode_localization_engine.node');
+var addon = require('./build/Debug/crosslocale.node');
+console.log(addon);
 console.log(addon.hello()); // 'world'

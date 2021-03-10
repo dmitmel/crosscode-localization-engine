@@ -17,6 +17,10 @@ typedef uint32_t crosslocale_error_t;
 extern "C" {
 #endif // __cplusplus
 
+extern const uint8_t *CROSSLOCALE_VERSION_PTR;
+
+extern const size_t CROSSLOCALE_VERSION_LEN;
+
 extern const crosslocale_error_t CROSSLOCALE_SUCCESS;
 
 extern const crosslocale_error_t CROSSLOCALE_GENERIC_RUST_PANIC;

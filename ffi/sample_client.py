@@ -45,6 +45,14 @@ lib.crosslocale_backend_free.argtypes = [ctypes.POINTER(crosslocale_backend_t)]
 lib.crosslocale_backend_free.restype = crosslocale_error_t
 
 
+CROSSLOCALE_VERSION_PTR = ctypes.POINTER(ctypes.c_uint8).in_dll(
+    lib, "CROSSLOCALE_VERSION_PTR"
+)
+CROSSLOCALE_VERSION_LEN = ctypes.c_size_t.in_dll(lib, "CROSSLOCALE_VERSION_LEN")
+CROSSLOCALE_VERSION = ctypes.string_at(
+    CROSSLOCALE_VERSION_PTR, CROSSLOCALE_VERSION_LEN.value
+).decode("utf8")
+
 lib.crosslocale_init_logging()
 
 
