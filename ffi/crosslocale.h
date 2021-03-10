@@ -37,10 +37,6 @@ crosslocale_error_t crosslocale_backend_new(struct crosslocale_backend_t **out);
 
 crosslocale_error_t crosslocale_backend_free(struct crosslocale_backend_t *myself);
 
-crosslocale_error_t crosslocale_backend_set_message_callback(struct crosslocale_backend_t *myself,
-                                                             void (*callback)(void *user_data, uint8_t *message, size_t message_len, size_t message_cap),
-                                                             void *user_data);
-
 crosslocale_error_t crosslocale_backend_recv_message(struct crosslocale_backend_t *myself,
                                                      uint8_t **out_message,
                                                      size_t *out_message_len,

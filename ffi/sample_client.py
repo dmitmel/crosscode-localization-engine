@@ -11,8 +11,6 @@ class crosslocale_backend_t(ctypes.Structure):
 
 crosslocale_error_t = ctypes.c_uint32
 
-message_callback_t = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_uint32)
-
 lib.crosslocale_message_free.argtypes = [
     ctypes.POINTER(ctypes.c_uint8),
     ctypes.c_size_t,
@@ -27,13 +25,6 @@ lib.crosslocale_backend_new.argtypes = [
     ctypes.POINTER(ctypes.POINTER(crosslocale_backend_t))
 ]
 lib.crosslocale_backend_new.restype = crosslocale_error_t
-
-lib.crosslocale_backend_set_message_callback.argtypes = [
-    ctypes.POINTER(crosslocale_backend_t),
-    message_callback_t,
-    ctypes.c_void_p,
-]
-lib.crosslocale_backend_set_message_callback.restype = crosslocale_error_t
 
 lib.crosslocale_backend_recv_message.argtypes = [
     ctypes.POINTER(crosslocale_backend_t),
@@ -57,16 +48,8 @@ lib.crosslocale_backend_free.restype = crosslocale_error_t
 lib.crosslocale_init_logging()
 
 
-def message_callback(user_data, msg):
-    print("recv(cb)", msg)
-    pass
-
-
 backend = ctypes.POINTER(crosslocale_backend_t)()
 lib.crosslocale_backend_new(ctypes.byref(backend))
-lib.crosslocale_backend_set_message_callback(
-    backend, message_callback_t(message_callback), None
-)
 
 for request_index, request in enumerate(
     [

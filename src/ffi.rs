@@ -6,10 +6,8 @@ use crate::backend::Backend;
 use crate::impl_prelude::*;
 
 use std::mem::ManuallyDrop;
-use std::os::raw::c_void;
 use std::panic::{self, AssertUnwindSafe};
 use std::process;
-use std::ptr;
 use std::slice;
 use std::sync::mpsc;
 use std::thread;
@@ -45,22 +43,6 @@ pub struct crosslocale_backend_t {
   message_sender: mpsc::Sender<String>,
   message_receiver: mpsc::Receiver<String>,
   backend_thread: thread::JoinHandle<AnyResult<()>>,
-  message_callback: unsafe extern "C" fn(
-    user_data: *mut c_void,
-    message: *mut u8,
-    message_len: usize,
-    message_cap: usize,
-  ),
-  message_callback_user_data: *mut c_void,
-}
-
-/// cbindgen:ignore
-extern "C" fn message_callback_nop(
-  _user_data: *mut c_void,
-  _message: *mut u8,
-  _message_len: usize,
-  _message_cap: usize,
-) {
 }
 
 pub type crosslocale_error_t = u32;
@@ -102,8 +84,6 @@ pub extern "C" fn crosslocale_backend_new(
       message_sender: incoming_send,
       message_receiver: outgoing_recv,
       backend_thread,
-      message_callback: message_callback_nop,
-      message_callback_user_data: ptr::null_mut(),
     }));
     unsafe { *out = ffi_backend };
 
@@ -120,35 +100,6 @@ pub extern "C" fn crosslocale_backend_free(
 ) -> crosslocale_error_t {
   match panic::catch_unwind(AssertUnwindSafe(move || {
     drop(unsafe { Box::from_raw(myself) });
-    CROSSLOCALE_SUCCESS
-  })) {
-    Ok(v) => v,
-    Err(_) => process::abort(),
-  }
-}
-
-#[no_mangle]
-pub extern "C" fn crosslocale_backend_set_message_callback(
-  myself: *mut crosslocale_backend_t,
-  callback: Option<
-    unsafe extern "C" fn(
-      user_data: *mut c_void,
-      message: *mut u8,
-      message_len: usize,
-      message_cap: usize,
-    ),
-  >,
-  user_data: *mut c_void,
-) -> crosslocale_error_t {
-  match panic::catch_unwind(AssertUnwindSafe(move || {
-    let mut myself = unsafe { &mut *myself };
-    if let Some(callback) = callback {
-      myself.message_callback = callback;
-      myself.message_callback_user_data = user_data;
-    } else {
-      myself.message_callback = message_callback_nop;
-      myself.message_callback_user_data = ptr::null_mut();
-    }
     CROSSLOCALE_SUCCESS
   })) {
     Ok(v) => v,
