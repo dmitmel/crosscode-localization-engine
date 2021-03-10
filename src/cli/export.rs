@@ -103,10 +103,10 @@ impl super::Command for ExportCommand {
       exporters::create(&opt_format, exporters::ExporterConfig { compact: opt_compact })
         .context("Failed to create the exporter")?;
 
-    let mut splitter = if let Some(id) = opt_splitter {
-      Some(splitters::create_by_id(&id).context("Failed to create the splitter")?)
-    } else {
-      None
+    #[allow(clippy::manual_map)]
+    let mut splitter = match opt_splitter {
+      Some(id) => Some(splitters::create_by_id(&id).context("Failed to create the splitter")?),
+      _ => None,
     };
 
     let mut all_exported_fragments = Vec::<Rc<Fragment>>::new();
