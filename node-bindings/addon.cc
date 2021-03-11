@@ -1,25 +1,26 @@
+// This is the version supported by nwjs 0.35.5 which comes with nodejs 11.6.0.
+#define NAPI_VERSION 3
 #include <napi.h>
 
 #include <crosslocale.h>
 
 // TODO: Check error codes, throw errors as JS exceptions.
 
-void init_logging(const Napi::CallbackInfo &info) { crosslocale_init_logging(); }
+Napi::Value init_logging(const Napi::CallbackInfo &info) {
+  crosslocale_init_logging();
+  return Napi::Value();
+}
 
 class Backend : public Napi::ObjectWrap<Backend> {
 public:
   static Napi::Object Init(Napi::Env env, Napi::Object exports) {
-    Napi::Function func = DefineClass(env, "Backend",
+    Napi::Function ctor = DefineClass(env, "Backend",
                                       {
                                           InstanceMethod("send_message", &Backend::send_message),
                                           InstanceMethod("recv_message", &Backend::recv_message),
                                       });
 
-    Napi::FunctionReference *constructor = new Napi::FunctionReference();
-    *constructor = Napi::Persistent(func);
-    env.SetInstanceData(constructor);
-
-    exports.Set("Backend", func);
+    exports.Set("Backend", ctor);
     return exports;
   }
 
