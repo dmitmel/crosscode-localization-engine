@@ -45,7 +45,7 @@ private:
   Napi::Value send_message(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
     if (!(info.Length() == 1 && info[0].IsString())) {
-      Napi::TypeError::New(env, "send_message(message: string): void").ThrowAsJavaScriptException();
+      Napi::TypeError::New(env, "send_message(text: string): void").ThrowAsJavaScriptException();
       return Napi::Value();
     }
 

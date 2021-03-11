@@ -2,6 +2,8 @@
   "private": true,
   "name": "crosscode-localization-engine",
   "version": "0.0.0",
+  "main": "lib.js",
+  "types": "lib.d.ts",
   "scripts": {
     "install": "\"$npm_execpath\" run build:release",
     "build:release": "node-gyp rebuild -- -f make -f compile_commands_json",
