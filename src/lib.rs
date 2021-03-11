@@ -24,13 +24,14 @@ pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub fn init_logging() {
-  env_logger::init_from_env(env_logger::Env::default().default_filter_or(
-    // The logging level of `env_logger` can't be changed once the logger has
-    // been installed, so instead let's by default allow all logging levels on
-    // the `env_logger` side, we will lower the logging level later on
-    // ourselves on the `log` side.
-    "trace",
-  ));
+  let _: Result<(), log::SetLoggerError> =
+    env_logger::try_init_from_env(env_logger::Env::default().default_filter_or(
+      // The logging level of `env_logger` can't be changed once the logger has
+      // been installed, so instead let's by default allow all logging levels
+      // on the `env_logger` side, we will lower the logging level later on
+      // ourselves on the `log` side.
+      "trace",
+    ));
   info!("{}/{} v{}", CRATE_TITLE, CRATE_NAME, CRATE_VERSION);
 }
 
