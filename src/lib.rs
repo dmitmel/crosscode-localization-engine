@@ -23,8 +23,8 @@ pub const CRATE_TITLE: &str = "CrossLocalE";
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub fn init_logging() {
-  let _: Result<(), log::SetLoggerError> =
+pub fn init_logging() -> bool {
+  let set_logger_result: Result<(), log::SetLoggerError> =
     env_logger::try_init_from_env(env_logger::Env::default().default_filter_or(
       // The logging level of `env_logger` can't be changed once the logger has
       // been installed, so instead let's by default allow all logging levels
@@ -32,7 +32,9 @@ pub fn init_logging() {
       // ourselves on the `log` side.
       "trace",
     ));
+  let other_logger_already_installed = set_logger_result.is_err();
   info!("{}/{} v{}", CRATE_TITLE, CRATE_NAME, CRATE_VERSION);
+  !other_logger_already_installed
 }
 
 pub fn report_critical_error(mut error: AnyError) {

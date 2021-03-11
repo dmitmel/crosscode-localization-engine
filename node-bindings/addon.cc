@@ -4,10 +4,32 @@
 
 #include <crosslocale.h>
 
-// TODO: Check error codes, throw errors as JS exceptions.
+bool check_ffi_result(crosslocale_result_t res, Napi::Env env) {
+  if (res == CROSSLOCALE_OK) {
+    return true;
+  }
+
+  const char *descr = "unkown error";
+  if (res == CROSSLOCALE_ERR_GENERIC_RUST_PANIC) {
+    descr = "generic Rust panic";
+  } else if (res == CROSSLOCALE_ERR_MESSAGE_SENDER_DISCONNECTED) {
+    descr = "the message sender channel has disconnected";
+  } else if (res == CROSSLOCALE_ERR_MESSAGE_RECEIVER_DISCONNECTED) {
+    descr = "the message receiver channel has disconnected";
+  } else if (res == CROSSLOCALE_ERR_NON_UTF8_STRING) {
+    descr = "a provided string wasn't properly utf8-encoded";
+  } else if (res == CROSSLOCALE_ERR_SPAWN_THREAD_FAILED) {
+    descr = "failed to spawn the backend thread";
+  }
+
+  std::string full_message = std::string("FFI bridge error: ") + descr;
+  NAPI_THROW(Napi::Error::New(env, full_message), false);
+}
 
 Napi::Value init_logging(const Napi::CallbackInfo &info) {
-  crosslocale_init_logging();
+  Napi::Env env = info.Env();
+  crosslocale_result_t res = crosslocale_init_logging();
+  check_ffi_result(res, env);
   return Napi::Value();
 }
 
@@ -27,16 +49,18 @@ public:
   Backend(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Backend>(info), raw(nullptr) {
     Napi::Env env = info.Env();
     if (!(info.Length() == 0)) {
-      Napi::TypeError::New(env, "constructor()").ThrowAsJavaScriptException();
+      NAPI_THROW_VOID(Napi::TypeError::New(env, "constructor()"));
       return;
     }
 
-    crosslocale_backend_new(&this->raw);
+    crosslocale_result_t res = crosslocale_backend_new(&this->raw);
+    check_ffi_result(res, env);
   }
 
   ~Backend() {
     if (this->raw != nullptr) {
-      crosslocale_backend_free(this->raw);
+      crosslocale_result_t res = crosslocale_backend_free(this->raw);
+      (void)res;
       this->raw = nullptr;
     }
   }
@@ -45,33 +69,35 @@ private:
   Napi::Value send_message(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
     if (!(info.Length() == 1 && info[0].IsString())) {
-      Napi::TypeError::New(env, "send_message(text: string): void").ThrowAsJavaScriptException();
-      return Napi::Value();
+      NAPI_THROW(Napi::TypeError::New(env, "send_message(text: string): void"), Napi::Value());
     }
 
     Napi::String message = info[0].As<Napi::String>();
     std::string message_str = message.Utf8Value();
-    crosslocale_backend_send_message(this->raw, (const uint8_t *)message_str.data(),
-                                     message_str.length());
+    crosslocale_result_t res = crosslocale_backend_send_message(
+        this->raw, (const uint8_t *)message_str.data(), message_str.length());
+    check_ffi_result(res, env);
     return Napi::Value();
   }
 
   Napi::Value recv_message(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
     if (!(info.Length() == 0)) {
-      Napi::TypeError::New(env, "recv_message(): string").ThrowAsJavaScriptException();
-      return Napi::Value();
+      NAPI_THROW(Napi::TypeError::New(env, "recv_message(): string"), Napi::Value());
     }
 
     uint8_t *message_buf = nullptr;
     size_t message_len = 0;
     size_t message_cap = 0;
-    crosslocale_backend_recv_message(this->raw, &message_buf, &message_len, &message_cap);
+    crosslocale_result_t res =
+        crosslocale_backend_recv_message(this->raw, &message_buf, &message_len, &message_cap);
+    check_ffi_result(res, env);
 
     // Note that this copies the original string.
     Napi::String message = Napi::String::New(env, (char *)message_buf, message_len);
 
-    crosslocale_message_free(message_buf, message_len, message_cap);
+    crosslocale_result_t res2 = crosslocale_message_free(message_buf, message_len, message_cap);
+    (void)res2;
 
     return message;
   }

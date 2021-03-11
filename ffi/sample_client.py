@@ -9,22 +9,22 @@ class crosslocale_backend_t(ctypes.Structure):
     pass
 
 
-crosslocale_error_t = ctypes.c_uint32
+crosslocale_result_t = ctypes.c_uint32
 
 lib.crosslocale_message_free.argtypes = [
     ctypes.POINTER(ctypes.c_uint8),
     ctypes.c_size_t,
     ctypes.c_size_t,
 ]
-lib.crosslocale_message_free.restype = crosslocale_error_t
+lib.crosslocale_message_free.restype = crosslocale_result_t
 
 lib.crosslocale_init_logging.argtypes = []
-lib.crosslocale_init_logging.restype = crosslocale_error_t
+lib.crosslocale_init_logging.restype = crosslocale_result_t
 
 lib.crosslocale_backend_new.argtypes = [
     ctypes.POINTER(ctypes.POINTER(crosslocale_backend_t))
 ]
-lib.crosslocale_backend_new.restype = crosslocale_error_t
+lib.crosslocale_backend_new.restype = crosslocale_result_t
 
 lib.crosslocale_backend_recv_message.argtypes = [
     ctypes.POINTER(crosslocale_backend_t),
@@ -32,17 +32,17 @@ lib.crosslocale_backend_recv_message.argtypes = [
     ctypes.POINTER(ctypes.c_size_t),
     ctypes.POINTER(ctypes.c_size_t),
 ]
-lib.crosslocale_backend_recv_message.restype = crosslocale_error_t
+lib.crosslocale_backend_recv_message.restype = crosslocale_result_t
 
 lib.crosslocale_backend_send_message.argtypes = [
     ctypes.POINTER(crosslocale_backend_t),
     ctypes.POINTER(ctypes.c_uint8),
     ctypes.c_size_t,
 ]
-lib.crosslocale_backend_send_message.restype = crosslocale_error_t
+lib.crosslocale_backend_send_message.restype = crosslocale_result_t
 
 lib.crosslocale_backend_free.argtypes = [ctypes.POINTER(crosslocale_backend_t)]
-lib.crosslocale_backend_free.restype = crosslocale_error_t
+lib.crosslocale_backend_free.restype = crosslocale_result_t
 
 
 CROSSLOCALE_VERSION_PTR = ctypes.POINTER(ctypes.c_uint8).in_dll(
