@@ -59,13 +59,14 @@ public:
 
   ~Backend() {
     if (this->raw != nullptr) {
-      crosslocale_result_t res = crosslocale_backend_free(this->raw);
-      (void)res;
+      crosslocale_backend_free(this->raw);
       this->raw = nullptr;
     }
   }
 
 private:
+  crosslocale_backend_t *raw;
+
   Napi::Value send_message(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
     if (!(info.Length() == 1 && info[0].IsString())) {
@@ -96,13 +97,10 @@ private:
     // Note that this copies the original string.
     Napi::String message = Napi::String::New(env, (char *)message_buf, message_len);
 
-    crosslocale_result_t res2 = crosslocale_message_free(message_buf, message_len, message_cap);
-    (void)res2;
+    crosslocale_message_free(message_buf, message_len, message_cap);
 
     return message;
   }
-
-  crosslocale_backend_t *raw;
 };
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
