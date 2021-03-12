@@ -21,12 +21,15 @@ impl MultilineStringHelper {
     S: Serializer,
     T: AsRef<str>,
   {
-    let wrapper =
-      textwrap::Wrapper::with_splitter(MULTILINE_STRING_WRAP_WIDTH, textwrap::NoHyphenation)
-        .break_words(false);
-    let lines: Vec<Cow<str>> = super::LinesWithEndings::new(value.as_ref())
-      .flat_map(|line| wrapper.wrap_iter(line))
-      .collect();
+    // TODO: find how to wrap text with preserving all whitespace, so that
+    // original strings aren't corrupted.
+    // let wrapper =
+    //   textwrap::Wrapper::with_splitter(MULTILINE_STRING_WRAP_WIDTH, textwrap::NoHyphenation)
+    //     .break_words(false);
+    // let lines: Vec<Cow<str>> = super::LinesWithEndings::new(value.as_ref())
+    //   .flat_map(|line| wrapper.wrap_iter(line))
+    //   .collect();
+    let lines: Vec<&str> = super::LinesWithEndings::new(value.as_ref()).collect();
     lines.serialize(serializer)
   }
 

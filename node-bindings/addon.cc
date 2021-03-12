@@ -50,7 +50,6 @@ public:
     Napi::Env env = info.Env();
     if (!(info.Length() == 0)) {
       NAPI_THROW_VOID(Napi::TypeError::New(env, "constructor()"));
-      return;
     }
 
     crosslocale_result_t res = crosslocale_backend_new(&this->raw);
