@@ -290,6 +290,9 @@ impl Splitter for NotabenoidChaptersSplitter {
           "rhombus-dng",
           "rhombus-sqr",
           "rookie-harbor",
+          "shock-dng",
+          "tree-dng",
+          "wave-dng",
         ]
       });
     }
