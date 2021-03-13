@@ -57,7 +57,7 @@ impl serde::Serialize for Box<dyn Splitter> {
 macro_rules! splitters_map {
   ($($imp:ident,)+) => { splitters_map![$($imp),+]; };
   ($($imp:ident),*) => {
-    pub const SPLITTERS_IDS: &'static [&'static str] = &[$($imp::ID),+];
+    pub static SPLITTERS_IDS: &'static [&'static str] = &[$($imp::ID),+];
     pub static SPLITTERS_MAPS: Lazy<HashMap<&'static str, fn() -> Box<dyn Splitter>>> =
       Lazy::new(|| {
         let _cap = count_exprs!($($imp),*);

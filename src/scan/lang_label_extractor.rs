@@ -6,9 +6,10 @@ use crate::utils::json;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 
-pub const MAIN_LOCALE: &str = "en_US";
-pub const KNOWN_BUILTIN_LOCALES: &[&str] = &["en_US", "de_DE", "zh_CN", "zh_TW", "ja_JP", "ko_KR"];
-pub const LANG_UID_PROPERTY_NAME: &str = "langUid";
+pub static MAIN_LOCALE: &str = "en_US";
+pub static KNOWN_BUILTIN_LOCALES: &[&str] =
+  &["en_US", "de_DE", "zh_CN", "zh_TW", "ja_JP", "ko_KR"];
+pub static LANG_UID_PROPERTY_NAME: &str = "langUid";
 
 #[allow(missing_debug_implementations)]
 pub struct ExtractionOptions {

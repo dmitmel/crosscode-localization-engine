@@ -180,7 +180,7 @@ pub fn escape_str(text: &str, out: &mut String) {
     literal_text_start = i + 1;
 
     if escape_type == XX {
-      const HEX_DIGITS: [u8; 16] = *b"0123456789abcdef";
+      static HEX_DIGITS: [u8; 16] = *b"0123456789abcdef";
       out.push_str("\\x");
       out.push(HEX_DIGITS[(b >> 4) as usize] as char);
       out.push(HEX_DIGITS[(b & 0xf) as usize] as char);
@@ -204,7 +204,7 @@ pub fn escape_str(text: &str, out: &mut String) {
   const __: u8 = 0;
 
   /// See <https://github.com/serde-rs/json/blob/9b64e0b17ca73e7fbecace37758ff19bc35dea05/src/ser.rs#L2123-L2125>.
-  const ESCAPE_TYPE_TABLE: [u8; 1 << 8] = [
+  static ESCAPE_TYPE_TABLE: [u8; 1 << 8] = [
     //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
     XX, XX, XX, XX, XX, XX, XX, XX, BB, TT, NN, XX, FF, RR, XX, XX, // 0
     XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, // 1
@@ -243,7 +243,7 @@ pub fn encode_reference_comment_as_uri_for_weblate(text: &str, out: &mut String)
       if b == b' ' {
         out.push('+');
       } else {
-        const HEX_DIGITS: [u8; 16] = *b"0123456789ABCDEF";
+        static HEX_DIGITS: [u8; 16] = *b"0123456789ABCDEF";
         out.push('%');
         out.push(HEX_DIGITS[(b >> 4) as usize] as char);
         out.push(HEX_DIGITS[(b & 0xf) as usize] as char);
@@ -257,7 +257,7 @@ pub fn encode_reference_comment_as_uri_for_weblate(text: &str, out: &mut String)
   const AA: bool = true;
   const __: bool = false;
 
-  const ALLOWED_CHARS_TABLE: [bool; 1 << 8] = [
+  static ALLOWED_CHARS_TABLE: [bool; 1 << 8] = [
     //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
     __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 0
     __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 1

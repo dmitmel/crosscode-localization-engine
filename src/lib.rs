@@ -19,9 +19,9 @@ pub mod utils;
 
 use crate::impl_prelude::*;
 
-pub const CRATE_TITLE: &str = "CrossLocalE";
-pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
-pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
+pub static CRATE_TITLE: &str = "CrossLocalE";
+pub static CRATE_NAME: &str = env!("CARGO_PKG_NAME");
+pub static CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub fn init_logging() -> bool {
   let set_logger_result: Result<(), log::SetLoggerError> =

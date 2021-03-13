@@ -53,7 +53,7 @@ pub trait Importer: fmt::Debug {
 macro_rules! importers_map {
   ($($imp:ident,)+) => { importers_map![$($imp),+]; };
   ($($imp:ident),*) => {
-    pub const IMPORTERS_IDS: &'static [&'static str] = &[$($imp::ID),+];
+    pub static IMPORTERS_IDS: &'static [&'static str] = &[$($imp::ID),+];
     pub static IMPORTERS_MAP: Lazy<HashMap<&'static str, fn() -> Box<dyn Importer>>> =
       Lazy::new(|| {
         let _cap = count_exprs!($($imp),*);

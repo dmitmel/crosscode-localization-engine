@@ -43,7 +43,7 @@ pub trait Exporter: fmt::Debug {
 macro_rules! exporters_map {
   ($($imp:ident,)+) => { exporters_map![$($imp),+]; };
   ($($imp:ident),*) => {
-    pub const EXPORTERS_IDS: &'static [&'static str] = &[$($imp::ID),+];
+    pub static EXPORTERS_IDS: &'static [&'static str] = &[$($imp::ID),+];
     pub static EXPORTERS_MAP: Lazy<
       HashMap<&'static str, fn(config: ExporterConfig) -> Box<dyn Exporter>>,
     > = Lazy::new(|| {
