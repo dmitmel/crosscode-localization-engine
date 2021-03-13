@@ -11,16 +11,16 @@ pub struct StatusCommand;
 impl super::Command for StatusCommand {
   fn name(&self) -> &'static str { "status" }
 
-  fn create_arg_parser<'a, 'b>(&self, app: clap::App<'a, 'b>) -> clap::App<'a, 'b> {
+  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
     app.about("Displays general information about the project, such as translation progress.").arg(
-      clap::Arg::with_name("project_dir")
+      clap::Arg::new("project_dir")
         .value_name("PROJECT")
         .required(true)
-        .help("Path to the project directory."),
+        .about("Path to the project directory."),
     )
   }
 
-  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches<'_>) -> AnyResult<()> {
+  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
     let opt_project_dir = PathBuf::from(matches.value_of_os("project_dir").unwrap());
 
     let project = Project::open(opt_project_dir).context("Failed to open the project")?;

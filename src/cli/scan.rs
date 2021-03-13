@@ -22,29 +22,29 @@ pub struct ScanCommand;
 impl super::Command for ScanCommand {
   fn name(&self) -> &'static str { "scan" }
 
-  fn create_arg_parser<'a, 'b>(&self, app: clap::App<'a, 'b>) -> clap::App<'a, 'b> {
+  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
     app
       .about(
         "Scans the assets directory of the game and extracts the localizable strings and other \
         interesting data.",
       )
       .arg(
-        clap::Arg::with_name("assets_dir")
+        clap::Arg::new("assets_dir")
           .value_name("ASSETS")
           .required(true)
-          .help("Path to the assets directory."),
+          .about("Path to the assets directory."),
       )
       .arg(
-        clap::Arg::with_name("output")
+        clap::Arg::new("output")
           .value_name("PATH")
-          .short("o")
+          .short('o')
           .long("output")
           .required(true)
-          .help("Path to the output JSON file."),
+          .about("Path to the output JSON file."),
       )
   }
 
-  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches<'_>) -> AnyResult<()> {
+  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
     let opt_assets_dir = PathBuf::from(matches.value_of_os("assets_dir").unwrap());
     let opt_output = PathBuf::from(matches.value_of_os("output").unwrap());
 

@@ -17,86 +17,93 @@ pub struct ImportCommand;
 impl super::Command for ImportCommand {
   fn name(&self) -> &'static str { "import" }
 
-  fn create_arg_parser<'a, 'b>(&self, app: clap::App<'a, 'b>) -> clap::App<'a, 'b> {
+  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
     app
       .about(
         "Imports translations from a different format into a project, for example for migrating \
         projects created with the old translation tools.",
       )
       .arg(
-        clap::Arg::with_name("project_dir")
+        clap::Arg::new("project_dir")
           .value_name("PROJECT")
           .required(true)
-          .help("Path to the project directory."),
+          .about("Path to the project directory."),
       )
       .arg(
-        clap::Arg::with_name("inputs")
+        clap::Arg::new("inputs")
           .value_name("IMPORT_PATH")
           .multiple(true)
           .required(true)
           .conflicts_with("inputs_file")
-          .help("Path to files to import translations from."),
+          .about("Path to files to import translations from."),
       )
-      .arg(clap::Arg::with_name("inputs_file").value_name("PATH").short("i").help(
-        "Read paths to input files from a file. If there are other paths specified via \
+      .arg(
+        clap::Arg::new("inputs_file")
+          .value_name("PATH")
+          .short('i')
+          //
+          .about(
+            "Read paths to input files from a file. If there are other paths specified via \
             command-line arguments, then those will be used instead and the inputs file will be \
             ignored.",
-      ))
+          ),
+      )
       .arg(
-        clap::Arg::with_name("format")
+        clap::Arg::new("format")
           .value_name("NAME")
-          .short("f")
+          .short('f')
           .long("format")
           .possible_values(importers::IMPORTERS_IDS)
           .required(true)
-          .help("Format to import from."),
+          .about("Format to import from."),
       )
       .arg(
-        clap::Arg::with_name("default_author")
+        clap::Arg::new("default_author")
           .value_name("USERNAME")
           .long("default-author")
           .default_value("__import")
-          .help(
+          .about(
             "The default username to add translations with when the real author can't be \
             determined, for example if the input format simply doesn't store such data.",
           ),
       )
       .arg(
-        clap::Arg::with_name("marker_flag")
+        clap::Arg::new("marker_flag")
           .value_name("FLAG")
           .long("marker-flag")
           .default_value("imported")
-          .help("Name of the flag used for marking automatically imported translations."),
+          .about("Name of the flag used for marking automatically imported translations."),
       )
       .arg(
-        clap::Arg::with_name("delete_other_translations")
+        clap::Arg::new("delete_other_translations")
           .long("delete-other-translations")
           //
-          .help(
+          .about(
             "Delete other translations (by other users) on fragments before adding the imported \
             translation.",
           ),
       )
       .arg(
-        clap::Arg::with_name("always_add_new_translations")
+        clap::Arg::new("always_add_new_translations")
           .long("always-add-new-translations")
-          .help(
+          //
+          .about(
             "Always add new translations instead of editing the translations created from \
             previous imports. The import marker flag is used for determining if a translation \
             was imported.",
           ),
       )
       .arg(
-        clap::Arg::with_name("add_flags")
+        clap::Arg::new("add_flags")
           .value_name("FLAG")
           .long("add-flag")
           .multiple(true)
           .number_of_values(1)
-          .help("Add flags to the imported translations."),
+          .about("Add flags to the imported translations."),
       )
   }
 
-  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches<'_>) -> AnyResult<()> {
+  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
     let opt_project_dir = PathBuf::from(matches.value_of_os("project_dir").unwrap());
     let mut opt_inputs: Vec<_> = matches
       .values_of_os("inputs")

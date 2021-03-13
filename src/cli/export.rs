@@ -19,72 +19,72 @@ pub struct ExportCommand;
 impl super::Command for ExportCommand {
   fn name(&self) -> &'static str { "export" }
 
-  fn create_arg_parser<'a, 'b>(&self, app: clap::App<'a, 'b>) -> clap::App<'a, 'b> {
+  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
     app
       .about(
         "Exports translations from a project into a different format, for example for compiling \
         into Localize Me translation packs for use in CrossCode mods.",
       )
       .arg(
-        clap::Arg::with_name("project_dir")
+        clap::Arg::new("project_dir")
           .value_name("PROJECT")
           .required(true)
-          .help("Path to the project directory."),
+          .about("Path to the project directory."),
       )
       .arg(
-        clap::Arg::with_name("output")
+        clap::Arg::new("output")
           .value_name("PATH")
-          .short("o")
+          .short('o')
           .long("output")
           .required(true)
-          .help(
+          .about(
             "Path to the destination file or directory for exporting. A directory is used when \
             a splitter is specified.",
           ),
       )
       .arg(
-        clap::Arg::with_name("format")
+        clap::Arg::new("format")
           .value_name("NAME")
-          .short("f")
+          .short('f')
           .long("format")
           .possible_values(exporters::EXPORTERS_IDS)
           .required(true)
-          .help("Format to export to."),
+          .about("Format to export to."),
       )
       .arg(
-        clap::Arg::with_name("splitter")
+        clap::Arg::new("splitter")
           .value_name("NAME")
           .long("splitter")
           .possible_values(splitters::SPLITTERS_IDS)
-          .help("Strategy used for splitting the exported files."),
+          .about("Strategy used for splitting the exported files."),
       )
       .arg(
-        clap::Arg::with_name("remove_untranslated")
+        clap::Arg::new("remove_untranslated")
           .long("remove-untranslated")
           //
-          .help(
+          .about(
             "Whether to remove untranslated strings from the exported files. Note that some \
             formats and/or tasks may still need the empty translations.",
           ),
       )
       .arg(
-        clap::Arg::with_name("mapping_file_output")
+        clap::Arg::new("mapping_file_output")
           .value_name("PATH")
           .long("mapping-file-output")
-          .help("File to write a Localize Me-style mapping table to."),
+          .about("File to write a Localize Me-style mapping table to."),
       )
       .arg(
-        clap::Arg::with_name("compact")
+        clap::Arg::new("compact")
           .long("compact")
           //
-          .help(
+          .about(
             "Write exported files compactly, for example before packaging them for distribution. \
             Note that this will mean different things depending on the output format.",
           ),
       )
   }
 
-  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches<'_>) -> AnyResult<()> {
+  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
     let opt_project_dir = PathBuf::from(matches.value_of_os("project_dir").unwrap());
     let opt_output = PathBuf::from(matches.value_of_os("output").unwrap());
     let opt_format = RcString::from(matches.value_of("format").unwrap());

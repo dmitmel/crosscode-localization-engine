@@ -14,26 +14,24 @@ pub struct GlobalOpts {
 }
 
 impl GlobalOpts {
-  pub fn create_arg_parser<'a, 'b>() -> clap::App<'a, 'b> {
+  pub fn create_arg_parser<'help>() -> clap::App<'help> {
     clap::App::new(crate::CRATE_TITLE)
       .version(crate::CRATE_VERSION)
       .about("CrossCode Localization Engine command-line tool")
-      .global_settings(&[
-        clap::AppSettings::ColoredHelp,
-        clap::AppSettings::VersionlessSubcommands,
-        clap::AppSettings::AllowLeadingHyphen,
-      ])
-      .settings(&[clap::AppSettings::SubcommandRequiredElseHelp])
+      .global_setting(clap::AppSettings::ColoredHelp)
+      .global_setting(clap::AppSettings::VersionlessSubcommands)
+      .global_setting(clap::AppSettings::AllowLeadingHyphen)
+      .setting(clap::AppSettings::SubcommandRequiredElseHelp)
       .arg(
-        clap::Arg::with_name("verbose")
-          .short("v")
+        clap::Arg::new("verbose")
+          .short('v')
           .long("verbose")
-          .help("Print more logs, may be helpful for troubleshooting.")
+          .about("Print more logs, may be helpful for troubleshooting.")
           .global(true),
       )
   }
 
-  pub fn from_matches(matches: &clap::ArgMatches<'_>) -> Self {
+  pub fn from_matches(matches: &clap::ArgMatches) -> Self {
     Self { verbose: matches.is_present("verbose") }
   }
 }
@@ -41,8 +39,8 @@ impl GlobalOpts {
 assert_trait_is_object_safe!(Command);
 pub trait Command {
   fn name(&self) -> &'static str;
-  fn create_arg_parser<'a, 'b>(&self, app: clap::App<'a, 'b>) -> clap::App<'a, 'b>;
-  fn run(&self, global_opts: GlobalOpts, matches: &clap::ArgMatches<'_>) -> AnyResult<()>;
+  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help>;
+  fn run(&self, global_opts: GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()>;
 }
 
 pub fn all_commands() -> Vec<Box<dyn Command>> {

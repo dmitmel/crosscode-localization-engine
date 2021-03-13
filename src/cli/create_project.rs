@@ -5,7 +5,6 @@ use crate::rc_string::RcString;
 use crate::scan;
 use crate::utils;
 
-use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
@@ -14,79 +13,80 @@ pub struct CreateProjectCommand;
 impl super::Command for CreateProjectCommand {
   fn name(&self) -> &'static str { "create-project" }
 
-  fn create_arg_parser<'a, 'b>(&self, app: clap::App<'a, 'b>) -> clap::App<'a, 'b> {
+  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
     app
       .about("Creates an empty translation project using the data obtained by scanning the game.")
       .arg(
-        clap::Arg::with_name("project_dir")
+        clap::Arg::new("project_dir")
           .value_name("PROJECT")
           .required(true)
-          .help("Path to the project directory."),
+          .about("Path to the project directory."),
       )
       .arg(
-        clap::Arg::with_name("main_scan_db")
+        clap::Arg::new("main_scan_db")
           .value_name("MAIN_SCAN_DB_PATH")
           .required(true)
-          .help("Path to the main scan database from which the project will be generated."),
+          .about("Path to the main scan database from which the project will be generated."),
       )
       .arg(
-        clap::Arg::with_name("extra_scan_dbs")
+        clap::Arg::new("extra_scan_dbs")
           .value_name("EXTRA_SCAN_DB_PATHS")
           .multiple(true)
-          .help(
+          //
+          .about(
             "Paths to extra scan databases from which additional fragments will be read. Keep \
             in mind that the metadata only of the main database will be used.",
           ),
       )
       .arg(
-        clap::Arg::with_name("original_locale")
+        clap::Arg::new("original_locale")
           .value_name("LOCALE")
           .long("original-locale")
           .default_value("en_US")
-          .help("Locale to translate from."),
+          .about("Locale to translate from."),
       )
       .arg(
-        clap::Arg::with_name("reference_locales")
+        clap::Arg::new("reference_locales")
           .value_name("LOCALE")
           .multiple(true)
           .number_of_values(1)
           .long("reference-locales")
-          .help("Other original locales to include for reference."),
+          .about("Other original locales to include for reference."),
       )
       .arg(
-        clap::Arg::with_name("translation_locale")
+        clap::Arg::new("translation_locale")
           .value_name("LOCALE")
           .long("translation-locale")
           .required(true)
-          .help("Locale of the translation."),
+          .about("Locale of the translation."),
       )
       .arg(
-        clap::Arg::with_name("splitter")
+        clap::Arg::new("splitter")
           .value_name("NAME")
           .long("splitter")
           .possible_values(splitters::SPLITTERS_IDS)
           .default_value(splitters::NextGenerationSplitter::ID)
-          .help(
+          .about(
             "Strategy used for assigning game files (and individual fragments in them) to \
             translation storage files.",
           ),
       )
       .arg(
-        clap::Arg::with_name("translations_dir")
+        clap::Arg::new("translations_dir")
           .value_name("PATH")
           .long("translations-dir")
           .validator_os(|s| {
             if !Path::new(s).is_relative() {
-              return Err(OsString::from("Path must be relative"));
+              return Err("Path must be relative".to_owned());
             }
             Ok(())
           })
           .default_value("tr")
-          .help("Path to project's translation storage files, relative to project's directory."),
+          .about("Path to project's translation storage files, relative to project's directory."),
       )
   }
 
-  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches<'_>) -> AnyResult<()> {
+  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
     let opt_project_dir = PathBuf::from(matches.value_of_os("project_dir").unwrap());
     let opt_main_scan_db = PathBuf::from(matches.value_of_os("main_scan_db").unwrap());
     let opt_extra_scan_dbs: Vec<_> = matches

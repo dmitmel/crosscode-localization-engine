@@ -36,7 +36,7 @@ pub fn try_main() -> AnyResult<()> {
   let all_commands: Vec<Box<dyn Command>> = cli::all_commands();
   let mut all_commands_map = HashMap::with_capacity(all_commands.len());
   for command in all_commands {
-    arg_parser.p.add_subcommand(command.create_arg_parser(clap::App::new(command.name())));
+    arg_parser = arg_parser.subcommand(command.create_arg_parser(clap::App::new(command.name())));
     all_commands_map.insert(command.name(), command);
   }
 
@@ -49,9 +49,8 @@ pub fn try_main() -> AnyResult<()> {
     log::max_level().min(log_level_from_options)
   });
 
-  let (command_name, command_matches) = matches.subcommand();
+  let (command_name, command_matches) = matches.subcommand().unwrap();
   let command = all_commands_map.remove(command_name).unwrap();
-  let command_matches = command_matches.unwrap();
 
   // Brace for impact.
 

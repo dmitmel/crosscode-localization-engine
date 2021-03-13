@@ -14,13 +14,13 @@ pub struct ParsePoCommand;
 impl super::Command for ParsePoCommand {
   fn name(&self) -> &'static str { "parse-po" }
 
-  fn create_arg_parser<'a, 'b>(&self, app: clap::App<'a, 'b>) -> clap::App<'a, 'b> {
+  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
     app
-      .arg(clap::Arg::with_name("file").value_name("FILE"))
-      .arg(clap::Arg::with_name("json").short("J").long("json"))
+      .arg(clap::Arg::new("file").value_name("FILE"))
+      .arg(clap::Arg::new("json").short('J').long("json"))
   }
 
-  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches<'_>) -> AnyResult<()> {
+  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
     let opt_file = matches.value_of("file").map(PathBuf::from);
     let opt_json = matches.is_present("json");
 
