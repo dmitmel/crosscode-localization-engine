@@ -42,11 +42,31 @@ impl super::Command for ScanCommand {
           .required(true)
           .about("Path to the output JSON file."),
       )
+      .arg(
+        clap::Arg::new("locales")
+          .value_name("LOCALE")
+          .multiple(true)
+          .number_of_values(1)
+          .short('l')
+          .long("locales")
+          .about("Locales to extract. By default only the main locale is extracted.")
+          .default_values(&[lang_label_extractor::MAIN_LOCALE]),
+      )
+      .arg(
+        clap::Arg::new("all_locales")
+          .long("all-locales")
+          .conflicts_with("locales")
+          .about("Extact absolutely all locales."),
+      )
   }
 
   fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
     let opt_assets_dir = PathBuf::from(matches.value_of_os("assets_dir").unwrap());
     let opt_output = PathBuf::from(matches.value_of_os("output").unwrap());
+    let opt_extra_locales: HashSet<_> = matches
+      .values_of("locales")
+      .map_or_else(HashSet::new, |values| values.map(RcString::from).collect());
+    let opt_all_locales = matches.is_present("all_locales");
 
     info!("Performing a scan of game files in the assets dir {:?}", opt_assets_dir);
 
@@ -64,6 +84,9 @@ impl super::Command for ScanCommand {
     info!("Extracting localizable strings");
     let mut total_fragments_count = 0;
     let mut ignored_lang_labels_count = 0;
+    let extractor_opts = lang_label_extractor::ExtractionOptions {
+      locales_filter: if opt_all_locales { None } else { Some(opt_extra_locales) },
+    };
 
     let all_json_files_len = all_json_files.len();
     for (i, found_file) in all_json_files.into_iter().enumerate() {
@@ -74,18 +97,18 @@ impl super::Command for ScanCommand {
       let json_data: json::Value = utils::json::read_file(&abs_path, &mut Vec::new())
         .with_context(|| format!("Failed to deserialize from JSON file {:?}", abs_path))?;
 
-      let lang_labels_iter = match lang_label_extractor::extract_from_file(&found_file, &json_data)
-      {
-        Some(v) => v,
-        _ => continue,
-      };
+      let lang_labels_iter =
+        match lang_label_extractor::extract_from_file(&found_file, &json_data, &extractor_opts) {
+          Some(v) => v,
+          _ => continue,
+        };
 
       for lang_label in lang_labels_iter {
         if is_lang_label_ignored(&lang_label, &found_file) {
           ignored_lang_labels_count += 1;
           continue;
         }
-        let LangLabel { json_path, lang_uid, text } = lang_label;
+        let LangLabel { json_path, lang_uid, text, .. } = lang_label;
 
         let description = if !found_file.is_lang_file {
           match fragment_descriptions::generate(&json_data, &json_path) {
@@ -212,14 +235,7 @@ static IGNORED_STRINGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 
 #[allow(clippy::iter_nth_zero)]
 fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &FoundJsonFile) -> bool {
-  let text = match lang_label.text.get(lang_label_extractor::MAIN_LOCALE) {
-    Some(v) => v,
-    // Ignoring LangLabels without the main locale is probably a good idea
-    // since such labels can potentially break some of our algorithms.
-    None => return true,
-  };
-
-  if IGNORED_STRINGS.contains(text.as_str()) {
+  if IGNORED_STRINGS.contains(lang_label.main_locale_text.as_str()) {
     return true;
   }
 

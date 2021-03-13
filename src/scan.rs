@@ -21,7 +21,6 @@ pub struct ScanDbSerde {
   #[serde(rename = "ctime")]
   pub creation_timestamp: Timestamp,
   pub game_version: RcString,
-  // pub extracted_locales: Vec<RcString>,
   pub game_files: IndexMap<RcString, ScanDbGameFileSerde>,
 }
 
@@ -54,7 +53,6 @@ pub struct ScanDbMeta {
   #[serde(rename = "ctime")]
   pub creation_timestamp: Timestamp,
   pub game_version: RcString,
-  // TODO: extracted_locales
 }
 
 #[derive(Debug, Serialize)]
