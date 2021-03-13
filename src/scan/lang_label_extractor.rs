@@ -3,9 +3,12 @@ use crate::impl_prelude::*;
 use crate::rc_string::RcString;
 use crate::utils::json;
 
+use std::collections::HashMap;
 use std::convert::TryFrom;
 
-pub const EXTRACTED_LOCALE: &str = "en_US";
+pub const MAIN_LOCALE: &str = "en_US";
+pub const KNOWN_BUILTIN_LOCALES: &[&str] = &["en_US", "de_DE", "zh_CN", "zh_TW", "ja_JP", "ko_KR"];
+pub const LANG_UID_PROPERTY_NAME: &str = "langUid";
 
 pub fn extract_from_file<'json>(
   found_file: &'json FoundJsonFile,
@@ -27,7 +30,7 @@ pub fn extract_from_file<'json>(
 pub struct LangLabel {
   pub json_path: RcString,
   pub lang_uid: i32, // 0 represents the lack of a lang UID
-  pub text: RcString,
+  pub text: HashMap<RcString, RcString>,
 }
 
 fn try_extract_lang_label<'json>(
@@ -36,43 +39,52 @@ fn try_extract_lang_label<'json>(
   value: &'json json::Value,
 ) -> Option<LangLabel> {
   let object = value.as_object()?;
+  if object.is_empty() || !object.contains_key(MAIN_LOCALE) {
+    return None;
+  }
 
-  let text = object.get(EXTRACTED_LOCALE)?.as_str().or_else(|| {
-    warn!(
-      "{:?}: lang label {:?} is invalid: property {:?} is not a string",
-      file_path,
-      json_path.join("/"),
-      EXTRACTED_LOCALE,
-    );
-    None
-  })?;
+  let json_path = RcString::from(json_path.join("/"));
+  let mut lang_uid = 0;
+  let mut text = HashMap::with_capacity(KNOWN_BUILTIN_LOCALES.len().min(object.len()));
 
-  let lang_uid = match object.get("langUid").unwrap_or(&json::Value::Null) {
-    json::Value::Null => 0,
-    json::Value::Number(n) => n.as_i64().and_then(|n| i32::try_from(n).ok()).or_else(|| {
-      warn!(
-        "{:?}: lang label {:?} is invalid: lang UID {:?} can't be converted to i32",
-        file_path,
-        json_path.join("/"),
-        n,
-      );
-      None
-    })?,
-    _ => {
-      warn!(
-        "{:?}: lang label {:?} is invalid: optional property 'langUid' is not a number",
-        file_path,
-        json_path.join("/"),
-      );
-      return None;
+  for (k, v) in object {
+    if k == LANG_UID_PROPERTY_NAME {
+      lang_uid = match v {
+        json::Value::Null => 0,
+        json::Value::Number(n) => match try_option!({ i32::try_from(n.as_i64()?).ok()? }) {
+          Some(n) => n,
+          None => {
+            warn!(
+              "{:?}: lang label {:?} is invalid: lang UID {:?} can't be converted to i32",
+              file_path, json_path, n,
+            );
+            return None;
+          }
+        },
+        _ => {
+          warn!(
+            "{:?}: lang label {:?} is invalid: optional property {:?} is not a number",
+            file_path, json_path, LANG_UID_PROPERTY_NAME,
+          );
+          return None;
+        }
+      };
+    } else {
+      let locale_text = match v.as_str() {
+        Some(s) => s,
+        None => {
+          warn!(
+            "{:?}: lang label {:?} is invalid: property {:?} is not a string",
+            file_path, json_path, k,
+          );
+          return None;
+        }
+      };
+      text.insert(RcString::from(k), RcString::from(locale_text));
     }
-  };
+  }
 
-  Some(LangLabel {
-    json_path: RcString::from(json_path.join("/")),
-    lang_uid,
-    text: RcString::from(text),
-  })
+  Some(LangLabel { json_path, lang_uid, text })
 }
 
 fn try_extract_lang_label_from_lang_file<'json>(
@@ -84,11 +96,9 @@ fn try_extract_lang_label_from_lang_file<'json>(
     return None;
   }
   let text = value.as_str()?;
-  Some(LangLabel {
-    json_path: RcString::from(json_path.join("/")),
-    lang_uid: 0,
-    text: RcString::from(text),
-  })
+  let mut text_map = HashMap::with_capacity(1);
+  text_map.insert(RcString::from(MAIN_LOCALE), RcString::from(text));
+  Some(LangLabel { json_path: RcString::from(json_path.join("/")), lang_uid: 0, text: text_map })
 }
 
 type TryExtractLangLabelFn<'json> =

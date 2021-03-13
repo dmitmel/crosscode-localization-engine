@@ -11,7 +11,6 @@ use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::char;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -62,11 +61,6 @@ impl super::Command for ScanCommand {
 
     let scan_db = scan::ScanDb::create(opt_output, scan::ScanDbCreateOpts { game_version });
 
-    // Currently all fragments are generated with the one and only `en_US` locale
-    // anyway, so let's reuse the hashmap and just clone it.
-    let mut tmp_fragment_text = HashMap::<RcString, RcString>::with_capacity(1);
-    let tmp_extracted_locale = RcString::from(lang_label_extractor::EXTRACTED_LOCALE);
-
     info!("Extracting localizable strings");
     let mut total_fragments_count = 0;
     let mut ignored_lang_labels_count = 0;
@@ -113,12 +107,11 @@ impl super::Command for ScanCommand {
         }
         let scan_db_file = scan_db_file.as_mut().unwrap();
 
-        tmp_fragment_text.insert(tmp_extracted_locale.share_rc(), text);
         scan_db_file.new_fragment(scan::ScanDbFragmentInitOpts {
           json_path,
           lang_uid,
           description,
-          text: tmp_fragment_text.clone(),
+          text,
           flags: HashSet::new(),
         });
         total_fragments_count += 1;
@@ -219,7 +212,14 @@ static IGNORED_STRINGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 
 #[allow(clippy::iter_nth_zero)]
 fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &FoundJsonFile) -> bool {
-  if IGNORED_STRINGS.contains(lang_label.text.trim()) {
+  let text = match lang_label.text.get(lang_label_extractor::MAIN_LOCALE) {
+    Some(v) => v,
+    // Ignoring LangLabels without the main locale is probably a good idea
+    // since such labels can potentially break some of our algorithms.
+    None => return true,
+  };
+
+  if IGNORED_STRINGS.contains(text.as_str()) {
     return true;
   }
 
