@@ -115,6 +115,9 @@ public:
 
   ~NodeRecvMessageWorker() {}
 
+  void operator=(const NodeRecvMessageWorker &) = delete;
+  NodeRecvMessageWorker(const NodeRecvMessageWorker &) = delete;
+
   void Execute() override { this->message_str = this->inner->recv_message(); }
 
   std::vector<napi_value> GetResult(Napi::Env env) override {
