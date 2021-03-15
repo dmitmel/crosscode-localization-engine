@@ -31,6 +31,15 @@
                     "library_dirs": ["<(rust_target_dir)/release"],
                 },
             },
+            "conditions": [
+                [
+                    'OS=="linux"',
+                    {
+                        # Taken from <https://github.com/greenheartgames/greenworks/blob/a7a698203b7fc43d156d83a66789c465fb4ae3e2/binding.gyp#L136-L141>
+                        "ldflags": ["-Wl,-rpath,\\$$ORIGIN"],
+                    },
+                ]
+            ],
         },
-    ],
+    ]
 }

@@ -35,6 +35,9 @@ const uint32_t SUPPORTED_FFI_BRIDGE_VERSION = 0;
 
 std::string get_error_message_for_ffi_result(crosslocale_result_t res) {
   const char *descr = "unkown error";
+  // The switch statement can't be used here because the following constants
+  // are extern, but C++ requires the values used for case branches to be
+  // strictly known at compile-time.
   if (res == CROSSLOCALE_ERR_GENERIC_RUST_PANIC) {
     descr = "generic Rust panic";
   } else if (res == CROSSLOCALE_ERR_BACKEND_DISCONNECTED) {
