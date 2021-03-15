@@ -29,9 +29,7 @@ extern const crosslocale_result_t CROSSLOCALE_OK;
 
 extern const crosslocale_result_t CROSSLOCALE_ERR_GENERIC_RUST_PANIC;
 
-extern const crosslocale_result_t CROSSLOCALE_ERR_MESSAGE_SENDER_DISCONNECTED;
-
-extern const crosslocale_result_t CROSSLOCALE_ERR_MESSAGE_RECEIVER_DISCONNECTED;
+extern const crosslocale_result_t CROSSLOCALE_ERR_BACKEND_DISCONNECTED;
 
 extern const crosslocale_result_t CROSSLOCALE_ERR_NON_UTF8_STRING;
 

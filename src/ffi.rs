@@ -60,13 +60,11 @@ pub static CROSSLOCALE_OK: crosslocale_result_t = 0;
 #[no_mangle]
 pub static CROSSLOCALE_ERR_GENERIC_RUST_PANIC: crosslocale_result_t = 1;
 #[no_mangle]
-pub static CROSSLOCALE_ERR_MESSAGE_SENDER_DISCONNECTED: crosslocale_result_t = 2;
+pub static CROSSLOCALE_ERR_BACKEND_DISCONNECTED: crosslocale_result_t = 2;
 #[no_mangle]
-pub static CROSSLOCALE_ERR_MESSAGE_RECEIVER_DISCONNECTED: crosslocale_result_t = 3;
+pub static CROSSLOCALE_ERR_NON_UTF8_STRING: crosslocale_result_t = 3;
 #[no_mangle]
-pub static CROSSLOCALE_ERR_NON_UTF8_STRING: crosslocale_result_t = 4;
-#[no_mangle]
-pub static CROSSLOCALE_ERR_SPAWN_THREAD_FAILED: crosslocale_result_t = 5;
+pub static CROSSLOCALE_ERR_SPAWN_THREAD_FAILED: crosslocale_result_t = 4;
 
 #[no_mangle]
 pub extern "C" fn crosslocale_backend_new(
@@ -134,7 +132,7 @@ pub extern "C" fn crosslocale_backend_recv_message(
     let myself = unsafe { &*myself };
     let message_string = match myself.message_receiver.recv() {
       Ok(v) => v,
-      Err(mpsc::RecvError) => return CROSSLOCALE_ERR_MESSAGE_RECEIVER_DISCONNECTED,
+      Err(mpsc::RecvError) => return CROSSLOCALE_ERR_BACKEND_DISCONNECTED,
     };
     let (message, message_len, message_cap) = {
       let mut string = ManuallyDrop::new(message_string);
@@ -168,7 +166,7 @@ pub extern "C" fn crosslocale_backend_send_message(
     };
     match myself.message_sender.send(message_string) {
       Ok(()) => {}
-      Err(mpsc::SendError(_)) => return CROSSLOCALE_ERR_MESSAGE_SENDER_DISCONNECTED,
+      Err(mpsc::SendError(_)) => return CROSSLOCALE_ERR_BACKEND_DISCONNECTED,
     }
     CROSSLOCALE_OK
   })) {
