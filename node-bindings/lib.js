@@ -1,8 +1,9 @@
 var fs = require('fs');
+var paths = require('path');
 var PROFILES = ['Debug', 'Release'];
 var existing_addon_path = null;
 for (var i = 0; i < PROFILES.length; i++) {
-  var addon_path = './build/' + PROFILES[i] + '/crosslocale.node';
+  var addon_path = paths.join(__dirname, 'build', PROFILES[i], 'crosslocale.node');
   try {
     fs.accessSync(addon_path, fs.constants.F_OK);
   } catch (e) {

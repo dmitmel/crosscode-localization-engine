@@ -121,7 +121,7 @@ public:
   void Execute() override { this->message_str = this->inner->recv_message(); }
 
   std::vector<napi_value> GetResult(Napi::Env env) override {
-    return {Napi::String::New(env, this->message_str)};
+    return {env.Null(), Napi::String::New(env, this->message_str)};
   }
 
 private:
