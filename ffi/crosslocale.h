@@ -17,9 +17,13 @@ typedef uint32_t crosslocale_result_t;
 extern "C" {
 #endif // __cplusplus
 
+extern const uint32_t CROSSLOCALE_FFI_BRIDGE_VERSION;
+
 extern const uint8_t *CROSSLOCALE_VERSION_PTR;
 
 extern const size_t CROSSLOCALE_VERSION_LEN;
+
+extern const uint32_t CROSSLOCALE_PROTOCOL_VERSION;
 
 extern const crosslocale_result_t CROSSLOCALE_OK;
 

@@ -4,6 +4,8 @@
 
 #include <crosslocale.h>
 
+const uint32_t SUPPORTED_FFI_BRIDGE_VERSION = 0;
+
 bool check_ffi_result(crosslocale_result_t res, Napi::Env env) {
   if (res == CROSSLOCALE_OK) {
     return true;
@@ -103,8 +105,18 @@ private:
 };
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
+  if (CROSSLOCALE_FFI_BRIDGE_VERSION != SUPPORTED_FFI_BRIDGE_VERSION) {
+    NAPI_THROW(Napi::Error::New(env, "Incompatible FFI bridge version! Check if a correct "
+                                     "crosslocale dynamic library is installed!"),
+               Napi::Object());
+  }
+
+  exports.Set(Napi::String::New(env, "FFI_BRIDGE_VERSION"),
+              Napi::Number::New(env, CROSSLOCALE_FFI_BRIDGE_VERSION));
   exports.Set(Napi::String::New(env, "VERSION"),
               Napi::String::New(env, (char *)CROSSLOCALE_VERSION_PTR, CROSSLOCALE_VERSION_LEN));
+  exports.Set(Napi::String::New(env, "PROTOCOL_VERSION"),
+              Napi::Number::New(env, CROSSLOCALE_PROTOCOL_VERSION));
   exports.Set(Napi::String::New(env, "init_logging"), Napi::Function::New(env, init_logging));
   return Backend::Init(env, exports);
 }
