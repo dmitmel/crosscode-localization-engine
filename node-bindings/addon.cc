@@ -1,5 +1,6 @@
 // This is the version supported by nwjs 0.35.5 which comes with nodejs 11.6.0.
 #define NAPI_VERSION 3
+#define NODE_ADDON_API_DISABLE_DEPRECATED
 #include <napi.h>
 
 #include <crosslocale.h>
@@ -34,7 +35,7 @@ const uint32_t SUPPORTED_FFI_BRIDGE_VERSION = 0;
 // well, I'll do this in C++ then.
 
 std::string get_error_message_for_ffi_result(crosslocale_result_t res) {
-  const char *descr = "unkown error";
+  const char* descr = "unkown error";
   // The switch statement can't be used here because the following constants
   // are extern, but C++ requires the values used for case branches to be
   // strictly known at compile-time.
@@ -73,50 +74,50 @@ public:
     }
   }
 
-  void operator=(const FfiBackend &) = delete;
-  FfiBackend(const FfiBackend &) = delete;
+  void operator=(const FfiBackend&) = delete;
+  FfiBackend(const FfiBackend&) = delete;
 
   std::string recv_message() {
     std::lock_guard<std::mutex> guard(this->recv_mutex);
-    uint8_t *message_buf = nullptr;
+    uint8_t* message_buf = nullptr;
     size_t message_len = 0;
     size_t message_cap = 0;
     throw_ffi_result(
         crosslocale_backend_recv_message(this->raw, &message_buf, &message_len, &message_cap));
     // Note that this copies the original string.
-    std::string str((char *)message_buf, message_len);
+    std::string str((char*)message_buf, message_len);
     throw_ffi_result(crosslocale_message_free(message_buf, message_len, message_cap));
     return str;
   }
 
   void send_message(std::string message_str) {
     std::lock_guard<std::mutex> guard(this->send_mutex);
-    throw_ffi_result(crosslocale_backend_send_message(this->raw, (uint8_t *)message_str.data(),
+    throw_ffi_result(crosslocale_backend_send_message(this->raw, (uint8_t*)message_str.data(),
                                                       message_str.length()));
   }
 
   static void init_logging() { throw_ffi_result(crosslocale_init_logging()); }
 
 private:
-  crosslocale_backend_t *raw = nullptr;
+  crosslocale_backend_t* raw = nullptr;
   std::mutex send_mutex;
   std::mutex recv_mutex;
 };
 
-Napi::Value init_logging(const Napi::CallbackInfo &info) {
+Napi::Value init_logging(const Napi::CallbackInfo& info) {
   FfiBackend::init_logging();
   return Napi::Value();
 }
 
 class NodeRecvMessageWorker : public Napi::AsyncWorker {
 public:
-  NodeRecvMessageWorker(Napi::Function &callback, std::shared_ptr<FfiBackend> inner)
+  NodeRecvMessageWorker(Napi::Function& callback, std::shared_ptr<FfiBackend> inner)
       : Napi::AsyncWorker(callback), inner(inner) {}
 
   ~NodeRecvMessageWorker() {}
 
-  void operator=(const NodeRecvMessageWorker &) = delete;
-  NodeRecvMessageWorker(const NodeRecvMessageWorker &) = delete;
+  void operator=(const NodeRecvMessageWorker&) = delete;
+  NodeRecvMessageWorker(const NodeRecvMessageWorker&) = delete;
 
   void Execute() override { this->message_str = this->inner->recv_message(); }
 
@@ -143,7 +144,7 @@ public:
     return exports;
   }
 
-  NodeBackend(const Napi::CallbackInfo &info) : Napi::ObjectWrap<NodeBackend>(info) {
+  NodeBackend(const Napi::CallbackInfo& info) : Napi::ObjectWrap<NodeBackend>(info) {
     Napi::Env env = info.Env();
     if (!(info.Length() == 0)) {
       NAPI_THROW_VOID(Napi::TypeError::New(env, "constructor()"));
@@ -151,13 +152,15 @@ public:
     this->inner = std::make_shared<FfiBackend>();
   }
 
-  void operator=(const NodeBackend &) = delete;
-  NodeBackend(const NodeBackend &) = delete;
+  void operator=(const NodeBackend&) = delete;
+  NodeBackend(const NodeBackend&) = delete;
+
+  ~NodeBackend() {}
 
 private:
   std::shared_ptr<FfiBackend> inner;
 
-  Napi::Value send_message(const Napi::CallbackInfo &info) {
+  Napi::Value send_message(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     if (!(info.Length() == 1 && info[0].IsString())) {
       NAPI_THROW(Napi::TypeError::New(env, "send_message(text: string): void"), Napi::Value());
@@ -168,7 +171,7 @@ private:
     return Napi::Value();
   }
 
-  Napi::Value recv_message(const Napi::CallbackInfo &info) {
+  Napi::Value recv_message(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     if (!(info.Length() == 1 && info[0].IsFunction())) {
       NAPI_THROW(Napi::TypeError::New(env, "recv_message(callback: Function): void"),
@@ -176,7 +179,7 @@ private:
     }
 
     Napi::Function callback = info[0].As<Napi::Function>();
-    NodeRecvMessageWorker *worker = new NodeRecvMessageWorker(callback, this->inner);
+    NodeRecvMessageWorker* worker = new NodeRecvMessageWorker(callback, this->inner);
     worker->Queue();
 
     return Napi::Value();
@@ -193,7 +196,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set(Napi::String::New(env, "FFI_BRIDGE_VERSION"),
               Napi::Number::New(env, CROSSLOCALE_FFI_BRIDGE_VERSION));
   exports.Set(Napi::String::New(env, "VERSION"),
-              Napi::String::New(env, (char *)CROSSLOCALE_VERSION_PTR, CROSSLOCALE_VERSION_LEN));
+              Napi::String::New(env, (char*)CROSSLOCALE_VERSION_PTR, CROSSLOCALE_VERSION_LEN));
   exports.Set(Napi::String::New(env, "PROTOCOL_VERSION"),
               Napi::Number::New(env, CROSSLOCALE_PROTOCOL_VERSION));
   exports.Set(Napi::String::New(env, "init_logging"), Napi::Function::New(env, init_logging));

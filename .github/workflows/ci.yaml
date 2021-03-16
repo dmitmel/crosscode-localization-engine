@@ -18,6 +18,8 @@ jobs:
           toolchain: nightly
           components: rustfmt, clippy
           override: true
+      - name: Install needed apt packages
+        run: sudo apt-get install clang-format
 
       - uses: actions/cache@v2
         with:
@@ -59,7 +61,7 @@ jobs:
           command: clippy
           args: --verbose --workspace
 
-      - name: check FFI headers
+      - name: Check FFI headers
         run: |
           mv -f ffi/crosslocale.h{,.bak}
           scripts/generate-ffi-headers.sh
@@ -68,3 +70,6 @@ jobs:
       - name: Build Node.js bindings
         working-directory: node-bindings
         run: npm install --ignore-scripts && npm run build:debug
+
+      - name: clang-format
+        run: clang-format --verbose --dry-run ffi/crosslocale.h node-bindings/addon.cc
