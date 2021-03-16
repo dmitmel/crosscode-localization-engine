@@ -154,7 +154,7 @@ Napi::Value init_logging(const Napi::CallbackInfo& info) {
 class NodeRecvMessageWorker : public Napi::AsyncWorker {
 public:
   NodeRecvMessageWorker(Napi::Function& callback, std::shared_ptr<FfiBackend> inner)
-      : Napi::AsyncWorker(callback), inner(inner), error(CROSSLOCALE_OK) {}
+      : Napi::AsyncWorker(callback), inner(inner), error(CROSSLOCALE_OK), has_error(false) {}
 
   ~NodeRecvMessageWorker() {}
 
@@ -162,15 +162,17 @@ public:
   NodeRecvMessageWorker(const NodeRecvMessageWorker&) = delete;
 
   void Execute() override {
+    this->has_error = false;
     try {
       this->message_str = this->inner->recv_message();
     } catch (const FfiBackendException& e) {
       this->error = e;
+      this->has_error = true;
     }
   }
 
   std::vector<napi_value> GetResult(Napi::Env env) override {
-    if (this->error.is_ok()) {
+    if (!this->has_error) {
       return {env.Null(), Napi::String::New(env, this->message_str)};
     } else {
       Napi::Error obj = error.ToNodeError(env);
@@ -182,6 +184,7 @@ private:
   std::shared_ptr<FfiBackend> inner;
   std::string message_str;
   FfiBackendException error;
+  bool has_error;
 };
 
 class NodeBackend : public Napi::ObjectWrap<NodeBackend> {
