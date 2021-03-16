@@ -5,7 +5,7 @@
 
 #include <crosslocale.h>
 
-const uint32_t SUPPORTED_FFI_BRIDGE_VERSION = 0;
+const uint32_t SUPPORTED_FFI_BRIDGE_VERSION = 1;
 
 // NOTE: About the radical usage of crosslocale_backend_t which may seem
 // thread-unsafe on the first glance: the implementation details are employed
@@ -96,6 +96,18 @@ public:
                                                       message_str.length()));
   }
 
+  void close() {
+    std::lock_guard<std::mutex> guard(this->send_mutex);
+    throw_ffi_result(crosslocale_backend_close(this->raw));
+  }
+
+  bool is_closed() {
+    std::lock_guard<std::mutex> guard(this->send_mutex);
+    bool result = false;
+    throw_ffi_result(crosslocale_backend_is_closed(this->raw, &result));
+    return result;
+  }
+
   static void init_logging() { throw_ffi_result(crosslocale_init_logging()); }
 
 private:
@@ -138,6 +150,7 @@ public:
                     {
                         InstanceMethod("send_message", &NodeBackend::send_message),
                         InstanceMethod("recv_message", &NodeBackend::recv_message),
+                        InstanceMethod("close", &NodeBackend::close),
                     });
 
     exports.Set("Backend", ctor);
@@ -183,6 +196,25 @@ private:
     worker->Queue();
 
     return Napi::Value();
+  }
+
+  Napi::Value close(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (!(info.Length() == 0)) {
+      NAPI_THROW_VOID(Napi::TypeError::New(env, "close(): void"));
+    }
+
+    this->inner->close();
+    return Napi::Value();
+  }
+
+  Napi::Value is_closed(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (!(info.Length() == 0)) {
+      NAPI_THROW_VOID(Napi::TypeError::New(env, "close(): void"));
+    }
+
+    return Napi::Boolean::New(env, this->inner->is_closed());
   }
 };
 

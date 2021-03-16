@@ -12,7 +12,7 @@ use std::sync::mpsc;
 use std::thread;
 
 #[no_mangle]
-pub static CROSSLOCALE_FFI_BRIDGE_VERSION: u32 = 0;
+pub static CROSSLOCALE_FFI_BRIDGE_VERSION: u32 = 1;
 
 #[no_mangle]
 pub static CROSSLOCALE_VERSION_PTR: &u8 = &crate::CRATE_VERSION.as_bytes()[0];
@@ -49,7 +49,7 @@ pub extern "C" fn crosslocale_message_free(
 
 #[derive(Debug)]
 pub struct crosslocale_backend_t {
-  message_sender: mpsc::Sender<String>,
+  message_sender: Option<mpsc::Sender<String>>,
   message_receiver: mpsc::Receiver<String>,
   backend_thread: thread::JoinHandle<()>,
 }
@@ -95,7 +95,7 @@ pub extern "C" fn crosslocale_backend_new(
       };
 
     let ffi_backend = Box::into_raw(Box::new(crosslocale_backend_t {
-      message_sender: incoming_send,
+      message_sender: Some(incoming_send),
       message_receiver: outgoing_recv,
       backend_thread,
     }));
@@ -123,7 +123,7 @@ pub extern "C" fn crosslocale_backend_free(
 
 #[no_mangle]
 pub extern "C" fn crosslocale_backend_recv_message(
-  myself: *mut crosslocale_backend_t,
+  myself: *const crosslocale_backend_t,
   out_message: *mut *mut u8,
   out_message_len: *mut usize,
   out_message_cap: *mut usize,
@@ -152,7 +152,7 @@ pub extern "C" fn crosslocale_backend_recv_message(
 
 #[no_mangle]
 pub extern "C" fn crosslocale_backend_send_message(
-  myself: *mut crosslocale_backend_t,
+  myself: *const crosslocale_backend_t,
   message: *const u8,
   message_len: usize,
 ) -> crosslocale_result_t {
@@ -164,9 +164,40 @@ pub extern "C" fn crosslocale_backend_send_message(
       Ok(s) => s,
       Err(_) => return CROSSLOCALE_ERR_NON_UTF8_STRING,
     };
-    match myself.message_sender.send(message_string) {
-      Ok(()) => {}
-      Err(mpsc::SendError(_)) => return CROSSLOCALE_ERR_BACKEND_DISCONNECTED,
+    match try_option!({ myself.message_sender.as_ref()?.send(message_string).ok()? }) {
+      Some(()) => {}
+      None => return CROSSLOCALE_ERR_BACKEND_DISCONNECTED,
+    }
+    CROSSLOCALE_OK
+  })) {
+    Ok(v) => v,
+    Err(_) => process::abort(),
+  }
+}
+
+#[no_mangle]
+pub extern "C" fn crosslocale_backend_close(
+  myself: *mut crosslocale_backend_t,
+) -> crosslocale_result_t {
+  match panic::catch_unwind(AssertUnwindSafe(move || {
+    let myself = unsafe { &mut *myself };
+    myself.message_sender = None;
+    CROSSLOCALE_OK
+  })) {
+    Ok(v) => v,
+    Err(_) => process::abort(),
+  }
+}
+
+#[no_mangle]
+pub extern "C" fn crosslocale_backend_is_closed(
+  myself: *mut crosslocale_backend_t,
+  out: *mut bool,
+) -> crosslocale_result_t {
+  match panic::catch_unwind(AssertUnwindSafe(move || {
+    let myself = unsafe { &mut *myself };
+    unsafe {
+      *out = myself.message_sender.is_none();
     }
     CROSSLOCALE_OK
   })) {

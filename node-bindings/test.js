@@ -5,15 +5,22 @@ addon.init_logging();
 let backend = new addon.Backend();
 
 (async () => {
-  while (true) {
-    let message_str = await new Promise((resolve, reject) => {
-      backend.recv_message((err, message) => {
-        if (err != null) reject(err);
-        else resolve(message);
+  try {
+    while (true) {
+      let message_str = await new Promise((resolve, reject) => {
+        backend.recv_message((err, message) => {
+          if (err != null) reject(err);
+          else resolve(message);
+        });
       });
-    });
-    let message = JSON.parse(message_str);
-    console.log('recv', message);
+      let message = JSON.parse(message_str);
+      console.log('recv', message);
+    }
+  } catch (err) {
+    if (err.message === 'FFI bridge error: the backend thread has disconnected') {
+      return;
+    }
+    throw err;
   }
 })();
 
@@ -32,3 +39,5 @@ for (let [request_index, request] of [
   let message_str = JSON.stringify(message);
   backend.send_message(message_str);
 }
+
+backend.close();

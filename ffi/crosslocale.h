@@ -43,13 +43,17 @@ crosslocale_result_t crosslocale_backend_new(struct crosslocale_backend_t** out)
 
 crosslocale_result_t crosslocale_backend_free(struct crosslocale_backend_t* myself);
 
-crosslocale_result_t crosslocale_backend_recv_message(struct crosslocale_backend_t* myself,
+crosslocale_result_t crosslocale_backend_recv_message(const struct crosslocale_backend_t* myself,
                                                       uint8_t** out_message,
                                                       size_t* out_message_len,
                                                       size_t* out_message_cap);
 
-crosslocale_result_t crosslocale_backend_send_message(struct crosslocale_backend_t* myself,
+crosslocale_result_t crosslocale_backend_send_message(const struct crosslocale_backend_t* myself,
                                                       const uint8_t* message, size_t message_len);
+
+crosslocale_result_t crosslocale_backend_close(struct crosslocale_backend_t* myself);
+
+crosslocale_result_t crosslocale_backend_is_closed(struct crosslocale_backend_t* myself, bool* out);
 
 #ifdef __cplusplus
 } // extern "C"
