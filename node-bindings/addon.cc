@@ -196,6 +196,7 @@ public:
                         InstanceMethod("send_message", &NodeBackend::send_message),
                         InstanceMethod("recv_message", &NodeBackend::recv_message),
                         InstanceMethod("close", &NodeBackend::close),
+                        InstanceMethod("is_closed", &NodeBackend::is_closed),
                     });
 
     exports.Set("Backend", ctor);
