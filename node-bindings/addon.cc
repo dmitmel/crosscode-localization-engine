@@ -34,32 +34,62 @@ const uint32_t SUPPORTED_FFI_BRIDGE_VERSION = 1;
 // multiple threads and normally needs a wrapper such as std::sync::Arc. Very
 // well, I'll do this in C++ then.
 
-std::string get_error_message_for_ffi_result(crosslocale_result_t res) {
-  const char* descr = "unkown error";
-  // The switch statement can't be used here because the following constants
-  // are extern, but C++ requires the values used for case branches to be
-  // strictly known at compile-time.
-  if (res == CROSSLOCALE_ERR_GENERIC_RUST_PANIC) {
-    descr = "generic Rust panic";
-  } else if (res == CROSSLOCALE_ERR_BACKEND_DISCONNECTED) {
-    descr = "the backend thread has disconnected";
-  } else if (res == CROSSLOCALE_ERR_NON_UTF8_STRING) {
-    descr = "a provided string wasn't properly utf8-encoded";
-  } else if (res == CROSSLOCALE_ERR_SPAWN_THREAD_FAILED) {
-    descr = "failed to spawn the backend thread";
-  }
-  return std::string("FFI bridge error: ") + descr;
-}
+class FfiBackendException : public std::exception {
+public:
+  crosslocale_result_t code;
 
-void node_throw_ffi_result(crosslocale_result_t res, Napi::Env env) {
-  if (res != CROSSLOCALE_OK) {
-    NAPI_THROW_VOID(Napi::Error::New(env, get_error_message_for_ffi_result(res)));
+  FfiBackendException(crosslocale_result_t code) : code(code) {}
+
+  bool is_ok() const noexcept { return this->code == CROSSLOCALE_OK; };
+
+  const char* what() const noexcept override {
+    // The switch statement can't be used here because the following constants
+    // are extern, but C++ requires the values used for case branches to be
+    // strictly known at compile-time.
+    if (this->code == CROSSLOCALE_OK) {
+      return "this isn't actually an error";
+    } else if (this->code == CROSSLOCALE_ERR_GENERIC_RUST_PANIC) {
+      return "generic Rust panic";
+    } else if (this->code == CROSSLOCALE_ERR_BACKEND_DISCONNECTED) {
+      return "the backend thread has disconnected";
+    } else if (this->code == CROSSLOCALE_ERR_NON_UTF8_STRING) {
+      return "a provided string wasn't properly utf8-encoded";
+    } else if (this->code == CROSSLOCALE_ERR_SPAWN_THREAD_FAILED) {
+      return "failed to spawn the backend thread";
+    } else {
+      return "unkown error";
+    }
   }
-}
+
+  const char* id() const noexcept {
+#define BackendException_check_id(id)                                                              \
+  if (this->code == id) {                                                                          \
+    return #id;                                                                                    \
+  }
+
+    BackendException_check_id(CROSSLOCALE_OK);
+    BackendException_check_id(CROSSLOCALE_ERR_GENERIC_RUST_PANIC);
+    BackendException_check_id(CROSSLOCALE_ERR_BACKEND_DISCONNECTED);
+    BackendException_check_id(CROSSLOCALE_ERR_NON_UTF8_STRING);
+    BackendException_check_id(CROSSLOCALE_ERR_SPAWN_THREAD_FAILED);
+    return nullptr;
+
+#undef BackendException_check_id
+  }
+
+  Napi::Error ToNodeError(Napi::Env env) const {
+    Napi::Error obj = Napi::Error::New(env, this->what());
+    obj.Set("errno", Napi::Number::New(env, this->code));
+    if (const char* id_str = this->id()) {
+      obj.Set("code", Napi::String::New(env, id_str));
+    }
+    return obj;
+  }
+};
 
 void throw_ffi_result(crosslocale_result_t res) {
   if (res != CROSSLOCALE_OK) {
-    throw std::runtime_error(get_error_message_for_ffi_result(res));
+    throw FfiBackendException(res);
   }
 }
 
@@ -124,22 +154,34 @@ Napi::Value init_logging(const Napi::CallbackInfo& info) {
 class NodeRecvMessageWorker : public Napi::AsyncWorker {
 public:
   NodeRecvMessageWorker(Napi::Function& callback, std::shared_ptr<FfiBackend> inner)
-      : Napi::AsyncWorker(callback), inner(inner) {}
+      : Napi::AsyncWorker(callback), inner(inner), error(CROSSLOCALE_OK) {}
 
   ~NodeRecvMessageWorker() {}
 
   void operator=(const NodeRecvMessageWorker&) = delete;
   NodeRecvMessageWorker(const NodeRecvMessageWorker&) = delete;
 
-  void Execute() override { this->message_str = this->inner->recv_message(); }
+  void Execute() override {
+    try {
+      this->message_str = this->inner->recv_message();
+    } catch (const FfiBackendException& e) {
+      this->error = e;
+    }
+  }
 
   std::vector<napi_value> GetResult(Napi::Env env) override {
-    return {env.Null(), Napi::String::New(env, this->message_str)};
+    if (this->error.is_ok()) {
+      return {env.Null(), Napi::String::New(env, this->message_str)};
+    } else {
+      Napi::Error obj = error.ToNodeError(env);
+      return {obj.Value()};
+    }
   }
 
 private:
   std::shared_ptr<FfiBackend> inner;
   std::string message_str;
+  FfiBackendException error;
 };
 
 class NodeBackend : public Napi::ObjectWrap<NodeBackend> {
@@ -180,7 +222,11 @@ private:
     }
 
     Napi::String message = info[0].As<Napi::String>();
-    this->inner->send_message(message.Utf8Value());
+    try {
+      this->inner->send_message(message.Utf8Value());
+    } catch (const FfiBackendException& e) {
+      throw e.ToNodeError(env);
+    }
     return Napi::Value();
   }
 
@@ -204,7 +250,11 @@ private:
       NAPI_THROW_VOID(Napi::TypeError::New(env, "close(): void"));
     }
 
-    this->inner->close();
+    try {
+      this->inner->close();
+    } catch (const FfiBackendException& e) {
+      throw e.ToNodeError(env);
+    }
     return Napi::Value();
   }
 
@@ -214,7 +264,13 @@ private:
       NAPI_THROW_VOID(Napi::TypeError::New(env, "close(): void"));
     }
 
-    return Napi::Boolean::New(env, this->inner->is_closed());
+    bool is_closed = false;
+    try {
+      is_closed = this->inner->is_closed();
+    } catch (const FfiBackendException& e) {
+      throw e.ToNodeError(env);
+    }
+    return Napi::Boolean::New(env, is_closed);
   }
 };
 
