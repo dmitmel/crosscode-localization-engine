@@ -188,6 +188,7 @@ impl super::Command for CreateProjectCommand {
           };
 
           game_file_chunk.new_fragment(project::FragmentInitOpts {
+            id: utils::new_uuid(),
             file_path: scan_fragment.file_path().share_rc(),
             json_path: scan_fragment.json_path().share_rc(),
             lang_uid: scan_fragment.lang_uid(),

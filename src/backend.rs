@@ -105,6 +105,7 @@ pub enum ResponseMessageType {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ListedFragment {
+  pub id: Uuid,
   #[serde(rename = "json")]
   pub json_path: RcString,
   #[serde(skip_serializing_if = "utils::is_default", rename = "luid")]
@@ -297,6 +298,7 @@ impl Backend {
         for i in start..end {
           let (_, f) = all_fragments.get_index(i).unwrap();
           listed_fragments.push(ListedFragment {
+            id: f.id(),
             json_path: f.json_path().share_rc(),
             lang_uid: f.lang_uid(),
             description: f.description().share_rc(),

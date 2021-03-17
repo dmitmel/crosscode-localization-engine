@@ -58,6 +58,7 @@ pub struct GameFileChunkSerde {
 
 #[derive(Debug, Deserialize)]
 pub struct FragmentSerde {
+  pub id: Uuid,
   #[serde(default, rename = "luid")]
   pub lang_uid: i32,
   #[serde(default, rename = "desc")]
@@ -305,6 +306,7 @@ impl Project {
         game_file_chunk.reserve_additional_fragments(game_file_chunk_raw.fragments.len());
         for (fragment_json_path, fragment_raw) in game_file_chunk_raw.fragments {
           let fragment = game_file_chunk.new_fragment(FragmentInitOpts {
+            id: fragment_raw.id,
             file_path: game_file_path.share_rc(),
             json_path: fragment_json_path,
             lang_uid: fragment_raw.lang_uid,
@@ -621,6 +623,7 @@ impl GameFileChunk {
 
 #[derive(Debug)]
 pub struct FragmentInitOpts {
+  pub id: Uuid,
   pub file_path: RcString,
   pub json_path: RcString,
   pub lang_uid: i32,
@@ -641,6 +644,7 @@ pub struct Fragment {
   #[serde(skip)]
   game_file_chunk: RcWeak<GameFileChunk>,
 
+  id: Uuid,
   #[serde(skip)]
   file_path: RcString,
   #[serde(skip)]
@@ -672,6 +676,8 @@ impl Fragment {
   #[inline]
   pub fn game_file_chunk(&self) -> Rc<GameFileChunk> { self.game_file_chunk.upgrade().unwrap() }
   #[inline(always)]
+  pub fn id(&self) -> Uuid { self.id }
+  #[inline(always)]
   pub fn file_path(&self) -> &RcString { &self.file_path }
   #[inline(always)]
   pub fn json_path(&self) -> &RcString { &self.json_path }
@@ -702,6 +708,7 @@ impl Fragment {
       tr_file: tr_file.share_rc_weak(),
       game_file_chunk: game_file_chunk.share_rc_weak(),
 
+      id: opts.id,
       file_path: game_file_chunk.path.share_rc(),
       json_path: opts.json_path,
       lang_uid: opts.lang_uid,
