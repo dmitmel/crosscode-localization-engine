@@ -67,7 +67,7 @@ pub enum RequestMessageType {
   #[serde(rename = "VirtualGameFile/list_fragments", skip_serializing)]
   VirtualGameFileListFragments {
     project_id: u32,
-    path: String,
+    file_path: String,
     start: Option<usize>,
     end: Option<usize>,
   },
@@ -118,7 +118,40 @@ pub struct ListedFragment {
   // pub reference_texts: Rc<HashMap<RcString, RcString>>,
   #[serde(skip_serializing_if = "HashSet::is_empty")]
   pub flags: Rc<HashSet<RcString>>,
-  // TODO: translations, comments...
+  #[serde(skip_serializing_if = "Vec::is_empty", rename = "tr")]
+  pub translations: Vec<ListedTranslation>,
+  #[serde(skip_serializing_if = "Vec::is_empty", rename = "cm")]
+  pub comments: Vec<ListedComment>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ListedTranslation {
+  pub id: Uuid,
+  #[serde(rename = "author")]
+  pub author_username: RcString,
+  #[serde(rename = "editor")]
+  pub editor_username: RcString,
+  #[serde(rename = "ctime")]
+  pub creation_timestamp: Timestamp,
+  #[serde(rename = "mtime")]
+  pub modification_timestamp: Timestamp,
+  pub text: RcString,
+  #[serde(skip_serializing_if = "HashSet::is_empty")]
+  pub flags: Rc<HashSet<RcString>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ListedComment {
+  pub id: Uuid,
+  #[serde(rename = "author")]
+  pub author_username: RcString,
+  #[serde(rename = "editor")]
+  pub editor_username: RcString,
+  #[serde(rename = "ctime")]
+  pub creation_timestamp: Timestamp,
+  #[serde(rename = "mtime")]
+  pub modification_timestamp: Timestamp,
+  pub text: RcString,
 }
 
 macro_rules! backend_nice_error {
@@ -283,18 +316,19 @@ impl Backend {
         Ok(ResponseMessageType::ProjectListVirtualGameFiles { paths })
       }
 
-      RequestMessageType::VirtualGameFileListFragments { project_id, path, start, end } => {
+      RequestMessageType::VirtualGameFileListFragments { project_id, file_path, start, end } => {
         let project = match self.projects.get(project_id) {
           Some(v) => v,
           None => backend_nice_error!("project ID not found"),
         };
-        let virt_file = match project.get_virtual_game_file(path) {
+        let virt_file = match project.get_virtual_game_file(file_path) {
           Some(v) => v,
           None => backend_nice_error!("virtual game file not found"),
         };
         let all_fragments = virt_file.fragments();
         let (start, end) = Self::validate_range(all_fragments.len(), (*start, *end))?;
         let mut listed_fragments = Vec::with_capacity(end.checked_sub(start).unwrap());
+
         for i in start..end {
           let (_, f) = all_fragments.get_index(i).unwrap();
           listed_fragments.push(ListedFragment {
@@ -305,8 +339,36 @@ impl Backend {
             original_text: f.original_text().share_rc(),
             // reference_texts: f.reference_texts().share_rc(),
             flags: f.flags().share_rc(),
+
+            translations: f
+              .translations()
+              .iter()
+              .map(|t| ListedTranslation {
+                id: t.id(),
+                author_username: t.author_username().share_rc(),
+                editor_username: t.editor_username().share_rc(),
+                creation_timestamp: t.creation_timestamp(),
+                modification_timestamp: t.modification_timestamp(),
+                text: t.text().share_rc(),
+                flags: t.flags().share_rc(),
+              })
+              .collect(),
+
+            comments: f
+              .comments()
+              .iter()
+              .map(|t| ListedComment {
+                id: t.id(),
+                author_username: t.author_username().share_rc(),
+                editor_username: t.editor_username().share_rc(),
+                creation_timestamp: t.creation_timestamp(),
+                modification_timestamp: t.modification_timestamp(),
+                text: t.text().share_rc(),
+              })
+              .collect(),
           });
         }
+
         Ok(ResponseMessageType::VirtualGameFileListFragments { fragments: listed_fragments })
       }
     }
