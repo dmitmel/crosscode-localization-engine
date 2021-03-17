@@ -35,9 +35,9 @@ pub struct ScanDbFragmentSerde {
   #[serde(rename = "luid")]
   pub lang_uid: i32,
   #[serde(rename = "desc")]
-  pub description: Vec<RcString>,
-  pub text: HashMap<RcString, RcString>,
-  pub flags: HashSet<RcString>,
+  pub description: Rc<Vec<RcString>>,
+  pub text: Rc<HashMap<RcString, RcString>>,
+  pub flags: Rc<HashSet<RcString>>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -224,9 +224,9 @@ impl ScanDbGameFile {
 pub struct ScanDbFragmentInitOpts {
   pub json_path: RcString,
   pub lang_uid: i32,
-  pub description: Vec<RcString>,
-  pub text: HashMap<RcString, RcString>,
-  pub flags: HashSet<RcString>,
+  pub description: Rc<Vec<RcString>>,
+  pub text: Rc<HashMap<RcString, RcString>>,
+  pub flags: Rc<HashSet<RcString>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -246,9 +246,9 @@ pub struct ScanDbFragment {
   #[serde(rename = "luid")]
   lang_uid: i32,
   #[serde(rename = "desc")]
-  description: Vec<RcString>,
-  text: HashMap<RcString, RcString>,
-  flags: HashSet<RcString>,
+  description: Rc<Vec<RcString>>,
+  text: Rc<HashMap<RcString, RcString>>,
+  flags: Rc<HashSet<RcString>>,
 }
 
 impl ScanDbFragment {
@@ -269,11 +269,11 @@ impl ScanDbFragment {
   #[inline(always)]
   pub fn has_lang_uid(&self) -> bool { self.lang_uid != 0 }
   #[inline(always)]
-  pub fn description(&self) -> &[RcString] { &self.description }
+  pub fn description(&self) -> &Rc<Vec<RcString>> { &self.description }
   #[inline(always)]
-  pub fn text(&self) -> &HashMap<RcString, RcString> { &self.text }
+  pub fn text(&self) -> &Rc<HashMap<RcString, RcString>> { &self.text }
   #[inline(always)]
-  pub fn flags(&self) -> &HashSet<RcString> { &self.flags }
+  pub fn flags(&self) -> &Rc<HashSet<RcString>> { &self.flags }
 
   fn new(
     scan_db: &Rc<ScanDb>,

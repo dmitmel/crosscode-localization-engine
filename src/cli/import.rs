@@ -248,7 +248,7 @@ impl super::Command for ImportCommand {
                 .modification_timestamp
                 .unwrap_or(timestamp),
               text: imported_translation.text,
-              flags,
+              flags: Rc::new(flags),
             });
           }
         }

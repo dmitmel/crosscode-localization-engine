@@ -4,12 +4,13 @@ use self::transports::Transport;
 use crate::impl_prelude::*;
 use crate::project::Project;
 use crate::rc_string::{MaybeStaticStr, RcString};
-use crate::utils::Timestamp;
+use crate::utils::{self, RcExt, Timestamp};
 
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -63,6 +64,13 @@ pub enum RequestMessageType {
   ProjectListTrFiles { project_id: u32 },
   #[serde(rename = "Project/list_virtual_game_files", skip_serializing)]
   ProjectListVirtualGameFiles { project_id: u32 },
+  #[serde(rename = "VirtualGameFile/list_fragments", skip_serializing)]
+  VirtualGameFileListFragments {
+    project_id: u32,
+    path: String,
+    start: Option<usize>,
+    end: Option<usize>,
+  },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -91,6 +99,25 @@ pub enum ResponseMessageType {
   ProjectListTrFiles { paths: Vec<RcString> },
   #[serde(rename = "Project/list_virtual_game_files", skip_deserializing)]
   ProjectListVirtualGameFiles { paths: Vec<RcString> },
+  #[serde(rename = "VirtualGameFile/list_fragments", skip_deserializing)]
+  VirtualGameFileListFragments { fragments: Vec<ListedFragment> },
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ListedFragment {
+  #[serde(rename = "json")]
+  pub json_path: RcString,
+  #[serde(skip_serializing_if = "utils::is_default", rename = "luid")]
+  pub lang_uid: i32,
+  #[serde(skip_serializing_if = "Vec::is_empty", rename = "desc")]
+  pub description: Rc<Vec<RcString>>,
+  #[serde(rename = "orig")]
+  pub original_text: RcString,
+  // #[serde(rename = "refs", skip_serializing_if = "HashMap::is_empty")]
+  // pub reference_texts: HashMap<RcString, RcString>,
+  #[serde(skip_serializing_if = "HashSet::is_empty")]
+  pub flags: Rc<HashSet<RcString>>,
+  // TODO: translations, comments...
 }
 
 macro_rules! backend_nice_error {
@@ -212,13 +239,13 @@ impl Backend {
         Ok(ResponseMessageType::ProjectOpen { project_id })
       }
 
-      RequestMessageType::ProjectClose { project_id } => match self.projects.remove(&project_id) {
+      RequestMessageType::ProjectClose { project_id } => match self.projects.remove(project_id) {
         Some(_project) => Ok(ResponseMessageType::Ok),
         None => backend_nice_error!("project ID not found"),
       },
 
       RequestMessageType::ProjectGetMeta { project_id } => {
-        let project = match self.projects.get(&project_id) {
+        let project = match self.projects.get(project_id) {
           Some(v) => v,
           None => backend_nice_error!("project ID not found"),
         };
@@ -238,7 +265,7 @@ impl Backend {
       }
 
       RequestMessageType::ProjectListTrFiles { project_id } => {
-        let project = match self.projects.get(&project_id) {
+        let project = match self.projects.get(project_id) {
           Some(v) => v,
           None => backend_nice_error!("project ID not found"),
         };
@@ -247,14 +274,56 @@ impl Backend {
       }
 
       RequestMessageType::ProjectListVirtualGameFiles { project_id } => {
-        let project = match self.projects.get(&project_id) {
+        let project = match self.projects.get(project_id) {
           Some(v) => v,
           None => backend_nice_error!("project ID not found"),
         };
         let paths: Vec<RcString> = project.virtual_game_files().keys().cloned().collect();
         Ok(ResponseMessageType::ProjectListVirtualGameFiles { paths })
       }
+
+      RequestMessageType::VirtualGameFileListFragments { project_id, path, start, end } => {
+        let project = match self.projects.get(project_id) {
+          Some(v) => v,
+          None => backend_nice_error!("project ID not found"),
+        };
+        let virt_file = match project.get_virtual_game_file(path) {
+          Some(v) => v,
+          None => backend_nice_error!("virtual game file not found"),
+        };
+        let all_fragments = virt_file.fragments();
+        let (start, end) = Self::validate_range(all_fragments.len(), (*start, *end))?;
+        let mut listed_fragments = Vec::with_capacity(end.checked_sub(start).unwrap());
+        for i in start..end {
+          let (_, f) = all_fragments.get_index(i).unwrap();
+          listed_fragments.push(ListedFragment {
+            json_path: f.json_path().share_rc(),
+            lang_uid: f.lang_uid(),
+            description: f.description().share_rc(),
+            original_text: f.original_text().share_rc(),
+            // reference_texts: f.reference_texts().share_rc(),
+            flags: f.flags().share_rc(),
+          });
+        }
+        Ok(ResponseMessageType::VirtualGameFileListFragments { fragments: listed_fragments })
+      }
     }
+  }
+
+  /// Based on <https://github.com/rust-lang/rust/blob/0c341226ad3780c11b1f29f6da8172b1d653f9ef/library/core/src/slice/index.rs#L514-L548>.
+  fn validate_range(
+    len: usize,
+    range: (Option<usize>, Option<usize>),
+  ) -> AnyResult<(usize, usize)> {
+    let (start, end) = range;
+    let (start, end) = (start.unwrap_or(0), end.unwrap_or(len));
+    if start > end {
+      backend_nice_error!("start > end");
+    }
+    if end > len {
+      backend_nice_error!("end > len");
+    }
+    Ok((start, end))
   }
 }
 

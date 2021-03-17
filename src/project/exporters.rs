@@ -287,7 +287,7 @@ impl Exporter for GettextPoExporter {
       writer.write_all(b"\n")?;
 
       write_po_comment(writer, "#. ", &location_line)?;
-      for line in &fragment.description {
+      for line in &*fragment.description {
         write_po_comment(writer, "#. ", line)?;
       }
       write_po_comment(writer, "#: ", &{

@@ -61,13 +61,13 @@ pub struct FragmentSerde {
   #[serde(default, rename = "luid")]
   pub lang_uid: i32,
   #[serde(default, rename = "desc")]
-  pub description: Vec<RcString>,
+  pub description: Rc<Vec<RcString>>,
   #[serde(with = "utils::serde::MultilineStringHelper", rename = "orig")]
   pub original_text: RcString,
   // #[serde(default)]
-  // pub reference_texts: HashMap<RcString, Vec<RcString>>,
+  // pub reference_texts: Rc<HashMap<RcString, Vec<RcString>>>,
   #[serde(default)]
-  pub flags: HashSet<RcString>,
+  pub flags: Rc<HashSet<RcString>>,
   #[serde(rename = "tr")]
   pub translations: Vec<TranslationSerde>,
   #[serde(default)]
@@ -89,7 +89,7 @@ pub struct TranslationSerde {
   #[serde(with = "utils::serde::MultilineStringHelper")]
   pub text: RcString,
   #[serde(default)]
-  pub flags: HashSet<RcString>,
+  pub flags: Rc<HashSet<RcString>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -624,10 +624,10 @@ pub struct FragmentInitOpts {
   pub file_path: RcString,
   pub json_path: RcString,
   pub lang_uid: i32,
-  pub description: Vec<RcString>,
+  pub description: Rc<Vec<RcString>>,
   pub original_text: RcString,
-  // pub reference_texts: HashMap<RcString, RcString>,
-  pub flags: HashSet<RcString>,
+  // pub reference_texts: Rc<HashMap<RcString, RcString>>,
+  pub flags: Rc<HashSet<RcString>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -648,13 +648,13 @@ pub struct Fragment {
   #[serde(skip_serializing_if = "utils::is_default", rename = "luid")]
   lang_uid: i32,
   #[serde(skip_serializing_if = "Vec::is_empty", rename = "desc")]
-  description: Vec<RcString>,
+  description: Rc<Vec<RcString>>,
   #[serde(with = "utils::serde::MultilineStringHelper", rename = "orig")]
   original_text: RcString,
-  // #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-  // reference_texts: HashMap<RcString, RcString>,
-  #[serde(default, skip_serializing_if = "utils::serde::is_refcell_hashset_empty")]
-  flags: RefCell<HashSet<RcString>>,
+  // #[serde(skip_serializing_if = "HashMap::is_empty")]
+  // reference_texts: RefCell<Rc<HashMap<RcString, RcString>>>,
+  #[serde(skip_serializing_if = "utils::serde::is_refcell_rc_hashset_empty")]
+  flags: RefCell<Rc<HashSet<RcString>>>,
 
   #[serde(rename = "tr")]
   translations: RefCell<Vec<Rc<Translation>>>,
@@ -678,13 +678,13 @@ impl Fragment {
   #[inline(always)]
   pub fn lang_uid(&self) -> i32 { self.lang_uid }
   #[inline(always)]
-  pub fn description(&self) -> &[RcString] { &self.description }
+  pub fn description(&self) -> &Rc<Vec<RcString>> { &self.description }
   #[inline(always)]
   pub fn original_text(&self) -> &RcString { &self.original_text }
   // #[inline(always)]
-  // pub fn reference_texts(&self) -> &HashMap<RcString, RcString> { &self.reference_texts }
+  // pub fn reference_texts(&self) -> &Rc<HashMap<RcString, RcString>> { &self.reference_texts }
   #[inline(always)]
-  pub fn flags(&self) -> Ref<HashSet<RcString>> { self.flags.borrow() }
+  pub fn flags(&self) -> Ref<Rc<HashSet<RcString>>> { self.flags.borrow() }
   #[inline(always)]
   pub fn translations(&self) -> Ref<Vec<Rc<Translation>>> { self.translations.borrow() }
   #[inline(always)]
@@ -707,7 +707,7 @@ impl Fragment {
       lang_uid: opts.lang_uid,
       description: opts.description,
       original_text: opts.original_text,
-      // reference_texts: opts.reference_texts,
+      // reference_texts: RefCell::new(opts.reference_texts),
       flags: RefCell::new(opts.flags),
 
       translations: RefCell::new(Vec::new()),
@@ -727,11 +727,11 @@ impl Fragment {
   pub fn has_flag(&self, flag: &str) -> bool { self.flags.borrow().contains(flag) }
   pub fn add_flag(&self, flag: RcString) -> bool {
     self.dirty_flag.set(true);
-    self.flags.borrow_mut().insert(flag)
+    Rc::make_mut(&mut *self.flags.borrow_mut()).insert(flag)
   }
   pub fn remove_flag(&self, flag: &str) -> bool {
     self.dirty_flag.set(true);
-    self.flags.borrow_mut().remove(flag)
+    Rc::make_mut(&mut *self.flags.borrow_mut()).remove(flag)
   }
 
   pub fn reserve_additional_translations(&self, additional_capacity: usize) {
@@ -775,7 +775,7 @@ pub struct TranslationInitOpts {
   pub creation_timestamp: Timestamp,
   pub modification_timestamp: Timestamp,
   pub text: RcString,
-  pub flags: HashSet<RcString>,
+  pub flags: Rc<HashSet<RcString>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -796,8 +796,8 @@ pub struct Translation {
   modification_timestamp: Cell<Timestamp>,
   #[serde(with = "utils::serde::MultilineStringHelperRefCell")]
   text: RefCell<RcString>,
-  #[serde(default, skip_serializing_if = "utils::serde::is_refcell_hashset_empty")]
-  flags: RefCell<HashSet<RcString>>,
+  #[serde(skip_serializing_if = "utils::serde::is_refcell_rc_hashset_empty")]
+  flags: RefCell<Rc<HashSet<RcString>>>,
 }
 
 impl Translation {
@@ -818,7 +818,7 @@ impl Translation {
   #[inline(always)]
   pub fn text(&self) -> Ref<RcString> { self.text.borrow() }
   #[inline(always)]
-  pub fn flags(&self) -> Ref<HashSet<RcString>> { self.flags.borrow() }
+  pub fn flags(&self) -> Ref<Rc<HashSet<RcString>>> { self.flags.borrow() }
 
   fn new(fragment: &Rc<Fragment>, opts: TranslationInitOpts) -> Rc<Self> {
     Rc::new(Self {
@@ -848,11 +848,11 @@ impl Translation {
   pub fn has_flag(&self, flag: &str) -> bool { self.flags.borrow().contains(flag) }
   pub fn add_flag(&self, flag: RcString) {
     self.dirty_flag.set(true);
-    self.flags.borrow_mut().insert(flag);
+    Rc::make_mut(&mut *self.flags.borrow_mut()).insert(flag);
   }
   pub fn remove_flag(&self, flag: &str) {
     self.dirty_flag.set(true);
-    self.flags.borrow_mut().remove(flag);
+    Rc::make_mut(&mut *self.flags.borrow_mut()).remove(flag);
   }
 }
 

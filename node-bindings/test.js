@@ -32,6 +32,7 @@ for (let [request_index, request] of [
   { type: 'Project/open', dir: 'tmp' },
   { type: 'Project/get_meta', project_id: 1 },
   { type: 'Project/list_tr_files', project_id: 1 },
+  { type: 'VirtualGameFile/list_fragments' },
 ].entries()) {
   let message = {
     type: 'req',

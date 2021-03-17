@@ -1,7 +1,8 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell, RefMut};
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 #[inline]
 pub fn is_refcell_vec_empty<T>(v: &RefCell<Vec<T>>) -> bool { v.borrow().is_empty() }
@@ -9,6 +10,10 @@ pub fn is_refcell_vec_empty<T>(v: &RefCell<Vec<T>>) -> bool { v.borrow().is_empt
 pub fn is_refcell_hashmap_empty<K, V>(v: &RefCell<HashMap<K, V>>) -> bool { v.borrow().is_empty() }
 #[inline]
 pub fn is_refcell_hashset_empty<K, V>(v: &RefCell<HashSet<K, V>>) -> bool { v.borrow().is_empty() }
+#[inline]
+pub fn is_refcell_rc_hashset_empty<K, V>(v: &RefCell<Rc<HashSet<K, V>>>) -> bool {
+  v.borrow().is_empty()
+}
 
 pub const MULTILINE_STRING_WRAP_WIDTH: usize = 80;
 
@@ -61,5 +66,31 @@ impl MultilineStringHelperRefCell {
     T: From<String>,
   {
     Ok(RefCell::new(MultilineStringHelper::deserialize(deserializer)?))
+  }
+}
+
+#[derive(Debug)]
+pub struct RefHelper;
+
+impl RefHelper {
+  pub fn serialize<S, T>(value: &Ref<T>, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+    T: Serialize,
+  {
+    value.serialize(serializer)
+  }
+}
+
+#[derive(Debug)]
+pub struct RefMutHelper;
+
+impl RefMutHelper {
+  pub fn serialize<S, T>(value: &RefMut<T>, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+    T: Serialize,
+  {
+    value.serialize(serializer)
   }
 }

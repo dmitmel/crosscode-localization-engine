@@ -3,7 +3,7 @@ use crate::project;
 use crate::project::splitters;
 use crate::rc_string::RcString;
 use crate::scan;
-use crate::utils;
+use crate::utils::{self, RcExt};
 
 use std::path::{Path, PathBuf};
 
@@ -191,10 +191,10 @@ impl super::Command for CreateProjectCommand {
             file_path: scan_fragment.file_path().share_rc(),
             json_path: scan_fragment.json_path().share_rc(),
             lang_uid: scan_fragment.lang_uid(),
-            description: scan_fragment.description().to_owned(),
+            description: scan_fragment.description().share_rc(),
             original_text,
             // reference_texts: HashMap::new(),
-            flags: scan_fragment.flags().to_owned(),
+            flags: scan_fragment.flags().share_rc(),
           });
         }
       }

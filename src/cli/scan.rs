@@ -133,9 +133,9 @@ impl super::Command for ScanCommand {
         scan_db_file.new_fragment(scan::ScanDbFragmentInitOpts {
           json_path,
           lang_uid,
-          description,
-          text,
-          flags: HashSet::new(),
+          description: Rc::new(description),
+          text: Rc::new(text),
+          flags: Rc::new(HashSet::new()),
         });
         total_fragments_count += 1;
       }
