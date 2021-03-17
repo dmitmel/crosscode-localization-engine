@@ -1,7 +1,10 @@
 pub mod json;
 pub mod serde;
 
+use indexmap::IndexMap;
 use std::borrow::Cow;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fs;
 use std::io;
@@ -130,6 +133,40 @@ pub fn split_filename_extension(filename: &str) -> (&str, Option<&str>) {
     }
   }
   (filename, None)
+}
+
+pub trait IsEmpty {
+  fn is_empty(&self) -> bool;
+}
+
+impl<T> IsEmpty for Vec<T> {
+  #[inline(always)]
+  fn is_empty(&self) -> bool { self.is_empty() }
+}
+
+impl<K, V> IsEmpty for HashMap<K, V> {
+  #[inline(always)]
+  fn is_empty(&self) -> bool { self.is_empty() }
+}
+
+impl<T> IsEmpty for HashSet<T> {
+  #[inline(always)]
+  fn is_empty(&self) -> bool { self.is_empty() }
+}
+
+impl<K, V> IsEmpty for IndexMap<K, V> {
+  #[inline(always)]
+  fn is_empty(&self) -> bool { self.is_empty() }
+}
+
+impl<T: IsEmpty> IsEmpty for RefCell<T> {
+  #[inline(always)]
+  fn is_empty(&self) -> bool { self.borrow().is_empty() }
+}
+
+impl<T: IsEmpty> IsEmpty for Rc<T> {
+  #[inline(always)]
+  fn is_empty(&self) -> bool { (**self).is_empty() }
 }
 
 #[cfg(test)]

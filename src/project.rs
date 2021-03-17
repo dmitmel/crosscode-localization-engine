@@ -653,12 +653,12 @@ pub struct Fragment {
   original_text: RcString,
   // #[serde(skip_serializing_if = "HashMap::is_empty")]
   // reference_texts: RefCell<Rc<HashMap<RcString, RcString>>>,
-  #[serde(skip_serializing_if = "utils::serde::is_refcell_rc_hashset_empty")]
+  #[serde(skip_serializing_if = "utils::IsEmpty::is_empty")]
   flags: RefCell<Rc<HashSet<RcString>>>,
 
   #[serde(rename = "tr")]
   translations: RefCell<Vec<Rc<Translation>>>,
-  #[serde(skip_serializing_if = "utils::serde::is_refcell_vec_empty", rename = "cm")]
+  #[serde(skip_serializing_if = "utils::IsEmpty::is_empty", rename = "cm")]
   comments: RefCell<Vec<Rc<Comment>>>,
 }
 
@@ -796,7 +796,7 @@ pub struct Translation {
   modification_timestamp: Cell<Timestamp>,
   #[serde(with = "utils::serde::MultilineStringHelperRefCell")]
   text: RefCell<RcString>,
-  #[serde(skip_serializing_if = "utils::serde::is_refcell_rc_hashset_empty")]
+  #[serde(skip_serializing_if = "utils::IsEmpty::is_empty")]
   flags: RefCell<Rc<HashSet<RcString>>>,
 }
 

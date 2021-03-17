@@ -114,7 +114,7 @@ pub struct ListedFragment {
   #[serde(rename = "orig")]
   pub original_text: RcString,
   // #[serde(rename = "refs", skip_serializing_if = "HashMap::is_empty")]
-  // pub reference_texts: HashMap<RcString, RcString>,
+  // pub reference_texts: Rc<HashMap<RcString, RcString>>,
   #[serde(skip_serializing_if = "HashSet::is_empty")]
   pub flags: Rc<HashSet<RcString>>,
   // TODO: translations, comments...
