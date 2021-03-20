@@ -13,7 +13,7 @@ pub struct CharPos {
   pub column: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsingError {
   pub pos: CharPos,
   pub message: RcString,

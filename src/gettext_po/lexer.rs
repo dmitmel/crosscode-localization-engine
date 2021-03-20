@@ -5,14 +5,14 @@ use std::borrow::Cow;
 use std::iter;
 use std::str;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token<'src> {
   pub start_pos: CharPos,
   pub end_pos: CharPos,
   pub type_: TokenType<'src>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenType<'src> {
   Comment(CommentType, Cow<'src, str>),
   PrevMsgctxt,

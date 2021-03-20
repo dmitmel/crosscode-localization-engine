@@ -13,6 +13,7 @@ pub mod macros;
 
 pub mod backend;
 pub mod cc_ru_compat;
+pub mod crosscode_markup;
 pub mod ffi;
 pub mod gettext_po;
 pub mod impl_prelude;
