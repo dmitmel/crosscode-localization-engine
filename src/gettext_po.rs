@@ -22,6 +22,7 @@
 pub mod lexer;
 pub mod parser;
 
+use crate::impl_prelude::*;
 use crate::rc_string::RcString;
 pub use lexer::Lexer;
 pub use parser::{ParsedMessage, Parser};
@@ -52,22 +53,34 @@ impl ParsingError {
     filename: &'error str,
     src: &'error str,
   ) -> NiceParsingErrorFormatter<'error> {
-    NiceParsingErrorFormatter { error: self, filename, src }
+    NiceParsingErrorFormatter { error: self, filename, src: Some(src) }
   }
+}
+
+impl fmt::Display for ParsingError {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fmt::Display::fmt(
+      &NiceParsingErrorFormatter { error: self, filename: "<unknown>", src: None },
+      f,
+    )
+  }
+}
+
+impl StdError for ParsingError {
 }
 
 #[derive(Debug)]
 pub struct NiceParsingErrorFormatter<'error> {
   error: &'error ParsingError,
   filename: &'error str,
-  src: &'error str,
+  src: Option<&'error str>,
 }
 
 impl<'error> fmt::Display for NiceParsingErrorFormatter<'error> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let pos = self.error.pos;
     writeln!(f, "Syntax error in {}:{}:{}", self.filename, pos.line, pos.column)?;
-    if let Some(line_text) = CharPosIter::find_line(self.src, pos.line) {
+    if let Some(line_text) = try { CharPosIter::find_line(self.src?, pos.line)? } {
       let line_number_str = format!("{}", pos.line);
       let line_number_margin = " ".repeat(line_number_str.len());
       writeln!(f, "{} | {}", line_number_str, line_text)?;
