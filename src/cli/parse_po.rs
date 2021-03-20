@@ -1,7 +1,8 @@
-use crate::gettext_po::{self, ParsedMessage, ParsingError};
+use crate::gettext_po::{self, ParsedMessage};
 use crate::impl_prelude::*;
 use crate::utils;
 use crate::utils::json;
+use crate::utils::parsing::ParsingError;
 
 use std::borrow::Cow;
 use std::fs;

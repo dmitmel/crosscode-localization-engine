@@ -1,4 +1,5 @@
 pub mod json;
+pub mod parsing;
 pub mod serde;
 
 use indexmap::IndexMap;

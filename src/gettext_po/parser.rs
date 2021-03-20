@@ -1,6 +1,6 @@
 use super::lexer::{CommentType, Lexer, TokenType};
-use super::{CharPos, ParsingError};
 use crate::rc_string::RcString;
+use crate::utils::parsing::{CharPos, ParsingError};
 
 use std::borrow::Cow;
 use std::iter;
@@ -31,8 +31,8 @@ impl<'src> Parser<'src> {
     Self {
       lexer: lexer.peekable(),
       done: false,
-      current_token_start_pos: CharPos { index: 0, line: 0, column: 0 },
-      current_token_end_pos: CharPos { index: 0, line: 0, column: 0 },
+      current_token_start_pos: CharPos::default(),
+      current_token_end_pos: CharPos::default(),
     }
   }
 

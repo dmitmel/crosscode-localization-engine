@@ -1,5 +1,5 @@
-use super::{CharPos, CharPosIter, ParsingError};
 use crate::rc_string::RcString;
+use crate::utils::parsing::{CharPos, CharPosIter, ParsingError};
 
 use std::borrow::Cow;
 use std::iter;
@@ -45,13 +45,12 @@ pub struct Lexer<'src> {
 
 impl<'src> Lexer<'src> {
   pub fn new(src: &'src str) -> Self {
-    let current_pos = CharPos { index: 0, line: 0, column: 0 };
     Self {
       src,
       src_iter: CharPosIter::new(src).peekable(),
       done: false,
-      token_start_pos: current_pos,
-      current_pos,
+      token_start_pos: CharPos::default(),
+      current_pos: CharPos::default(),
       next_char_index: 0,
       is_previous_entry: false,
     }
@@ -61,7 +60,7 @@ impl<'src> Lexer<'src> {
     match self.src_iter.next() {
       Some((chr_pos, chr)) => {
         self.current_pos = chr_pos;
-        self.next_char_index = chr_pos.index + chr.len_utf8();
+        self.next_char_index = chr_pos.byte_index + chr.len_utf8();
         // HACK: Honestly, this should be handled by the main match block.
         if chr == '\n' {
           self.reset_current_line_flags();
@@ -85,7 +84,8 @@ impl<'src> Lexer<'src> {
     Token {
       start_pos: self.token_start_pos,
       end_pos: CharPos {
-        index: self.next_char_index,
+        byte_index: self.next_char_index,
+        char_index: self.current_pos.char_index + 1,
         column: self.current_pos.column + 1,
         line: self.current_pos.line,
       },
@@ -101,11 +101,7 @@ impl<'src> Lexer<'src> {
   fn reset_current_line_flags(&mut self) { self.is_previous_entry = false; }
 
   pub fn parse_next_token(&mut self) -> Result<Option<Token<'src>>, ParsingError> {
-    loop {
-      if self.done {
-        return Ok(None);
-      }
-
+    while !self.done {
       self.skip_whitespace();
 
       // NOTE: This is the only place where quick return when no more tokens
@@ -124,13 +120,12 @@ impl<'src> Lexer<'src> {
         _ => self.emit_error(format!("unexpected character {:?}", c))?,
       };
 
-      let token_type = match token_type {
-        Some(v) => v,
-        None => continue,
-      };
-
-      return Ok(Some(self.end_token(token_type)));
+      if let Some(token_type) = token_type {
+        return Ok(Some(self.end_token(token_type)));
+      }
     }
+
+    Ok(None)
   }
 
   fn skip_whitespace(&mut self) {
@@ -191,7 +186,7 @@ impl<'src> Lexer<'src> {
         '\"' => break,
 
         '\\' => {
-          let literal_text = &self.src[literal_text_start_index..self.current_pos.index];
+          let literal_text = &self.src[literal_text_start_index..self.current_pos.byte_index];
           let c = match self.peek_char() {
             None => self.emit_error("expected a character to escape".to_owned())?,
             Some(c) => c,
@@ -228,7 +223,7 @@ impl<'src> Lexer<'src> {
       }
     }
 
-    let last_literal_text = &self.src[literal_text_start_index..self.current_pos.index];
+    let last_literal_text = &self.src[literal_text_start_index..self.current_pos.byte_index];
     let text_cow = match text_buf {
       Some(mut text_buf) => {
         text_buf.push_str(last_literal_text);
@@ -247,7 +242,7 @@ impl<'src> Lexer<'src> {
     while self.peek_char().map_or(false, |c| c.is_ascii_alphanumeric() || c == '_') {
       self.next_char();
     }
-    let keyword = &self.src[self.token_start_pos.index..self.next_char_index];
+    let keyword = &self.src[self.token_start_pos.byte_index..self.next_char_index];
 
     Ok(Some(match (self.is_previous_entry, keyword) {
       (false, "domain") => self.emit_error(
