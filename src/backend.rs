@@ -155,8 +155,12 @@ pub struct ListedComment {
 }
 
 macro_rules! backend_nice_error {
-  ($expr:expr $(,)?) => {{
-    return Err(AnyError::from(BackendNiceError::from($expr)));
+  ($message:expr $(, $source:expr)? $(,)?) => {{
+    let message = $message;
+    #[allow(unused_mut)]
+    let mut err = BackendNiceError::from(message);
+    $(err.source = Some($source);)?
+    return Err(AnyError::from(err));
   }};
 }
 
@@ -200,10 +204,13 @@ impl Backend {
             };
             match self.process_message(in_msg) {
               Ok(out_msg) => out_msg,
-              Err(e) => Message::ErrorResponse(ErrorResponseMessage {
-                id: in_msg_id,
-                message: e.downcast::<BackendNiceError>()?.message,
-              }),
+              Err(e) => {
+                let e: BackendNiceError = e.downcast()?;
+                if let Some(e2) = e.source {
+                  crate::report_error(e2);
+                }
+                Message::ErrorResponse(ErrorResponseMessage { id: in_msg_id, message: e.message })
+              }
             }
           }
           Err(e) => Message::ErrorResponse(ErrorResponseMessage {
@@ -263,10 +270,7 @@ impl Backend {
           .with_context(|| format!("Failed to open project in {:?}", project_dir))
         {
           Ok(v) => v,
-          Err(e) => {
-            crate::report_error(e);
-            backend_nice_error!("failed to open project");
-          }
+          Err(e) => backend_nice_error!("failed to open project", e),
         };
         let project_id = self.project_id_alloc.next().unwrap();
         self.projects.insert(project_id, project);
@@ -423,14 +427,15 @@ impl Iterator for IdAllocator {
 #[derive(Debug)]
 pub struct BackendNiceError {
   pub message: MaybeStaticStr,
+  pub source: Option<AnyError>,
 }
 
 impl From<&'static str> for BackendNiceError {
-  fn from(message: &'static str) -> Self { Self { message: Cow::Borrowed(message) } }
+  fn from(message: &'static str) -> Self { Self { message: Cow::Borrowed(message), source: None } }
 }
 
 impl From<String> for BackendNiceError {
-  fn from(message: String) -> Self { Self { message: Cow::Owned(message) } }
+  fn from(message: String) -> Self { Self { message: Cow::Owned(message), source: None } }
 }
 
 impl fmt::Display for BackendNiceError {
@@ -445,6 +450,8 @@ impl fmt::Display for BackendNiceError {
 }
 
 impl StdError for BackendNiceError {
-  #[inline(always)]
-  fn source(&self) -> Option<&(dyn StdError + 'static)> { None }
+  #[inline]
+  fn source(&self) -> Option<&(dyn StdError + 'static)> {
+    self.source.as_ref().map(AnyError::as_ref)
+  }
 }
