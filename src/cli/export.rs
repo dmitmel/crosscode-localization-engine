@@ -2,12 +2,11 @@ use crate::impl_prelude::*;
 use crate::project::exporters;
 use crate::project::splitters;
 use crate::project::{Fragment, Project};
-use crate::rc_string::RcString;
+use crate::rc_string::{MaybeStaticStr, RcString};
 use crate::utils::json;
 use crate::utils::{self, RcExt};
 
 use indexmap::IndexMap;
-use std::borrow::Cow;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -119,7 +118,7 @@ impl super::Command for ExportCommand {
       let game_file_path = game_file.path();
       let mut fragments_in_export_file: Option<&mut Vec<_>> = if let Some(splitter) = &mut splitter
       {
-        let export_file_path: Cow<'static, str> = if let Some(path) =
+        let export_file_path: MaybeStaticStr = if let Some(path) =
           splitter.get_tr_file_for_entire_game_file(game_file.asset_root(), game_file_path)
         {
           path

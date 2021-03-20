@@ -1,9 +1,9 @@
 use crate::impl_prelude::*;
 use crate::localize_me;
+use crate::rc_string::MaybeStaticStr;
 use crate::utils;
 
 use once_cell::sync::Lazy;
-use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
@@ -23,14 +23,14 @@ pub trait Splitter: fmt::Debug {
     &mut self,
     asset_root: &str,
     file_path: &str,
-  ) -> Option<Cow<'static, str>>;
+  ) -> Option<MaybeStaticStr>;
 
   fn get_tr_file_for_fragment(
     &mut self,
     asset_root: &str,
     file_path: &str,
     _json_path: &str,
-  ) -> Cow<'static, str> {
+  ) -> MaybeStaticStr {
     self.get_tr_file_for_entire_game_file(asset_root, file_path).unwrap()
   }
 }
@@ -115,7 +115,7 @@ impl Splitter for MonolithicFileSplitter {
     &mut self,
     _asset_root: &str,
     _file_path: &str,
-  ) -> Option<Cow<'static, str>> {
+  ) -> Option<MaybeStaticStr> {
     Some("translation".into())
   }
 }
@@ -151,7 +151,7 @@ impl Splitter for SameFileTreeSplitter {
     &mut self,
     _asset_root: &str,
     file_path: &str,
-  ) -> Option<Cow<'static, str>> {
+  ) -> Option<MaybeStaticStr> {
     let (file_path, _) = utils::split_filename_extension(file_path);
     Some(file_path.to_owned().into())
   }
@@ -188,7 +188,7 @@ impl Splitter for LocalizeMeFileTreeSplitter {
     &mut self,
     _asset_root: &str,
     file_path: &str,
-  ) -> Option<Cow<'static, str>> {
+  ) -> Option<MaybeStaticStr> {
     let file_path = localize_me::serialize_file_path(file_path);
     let (file_path, _) = utils::split_filename_extension(file_path);
     Some(file_path.to_owned().into())
@@ -228,7 +228,7 @@ impl Splitter for NotabenoidChaptersSplitter {
     &mut self,
     _asset_root: &str,
     file_path: &str,
-  ) -> Option<Cow<'static, str>> {
+  ) -> Option<MaybeStaticStr> {
     return Some(inner(file_path).into());
 
     fn inner(file_path: &str) -> &'static str {
@@ -331,7 +331,7 @@ impl Splitter for NextGenerationSplitter {
     &mut self,
     asset_root: &str,
     file_path: &str,
-  ) -> Option<Cow<'static, str>> {
+  ) -> Option<MaybeStaticStr> {
     let full_components: Vec<_> = file_path.split('/').collect();
     match *full_components.as_slice() {
       ["extension", extension_dir_name, maybe_extension_manifest] => {
@@ -375,7 +375,7 @@ impl Splitter for NextGenerationSplitter {
     asset_root: &str,
     file_path: &str,
     json_path: &str,
-  ) -> Cow<'static, str> {
+  ) -> MaybeStaticStr {
     let components: Vec<_> = file_path.strip_prefix(asset_root).unwrap().split('/').collect();
     let json_components: Vec<_> = json_path.split('/').collect();
     let tr_file_path =
