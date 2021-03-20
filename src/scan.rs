@@ -171,6 +171,7 @@ pub struct ScanDbGameFile {
   #[serde(skip)]
   scan_db: RcWeak<ScanDb>,
   asset_root: RcString,
+  #[serde(skip)]
   path: RcString,
   fragments: RefCell<IndexMap<RcString, Rc<ScanDbFragment>>>,
 }
