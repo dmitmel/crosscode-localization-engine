@@ -1,8 +1,7 @@
 //! Port of <https://github.com/dmitmel/cc-translateinator/blob/a36da6700fe028cfbe8e19f89110774e50989fe5/src/crosscode_markup.ts>,
 //! which in turn was inspired by <https://github.com/L-Sherry/Localize-Me-Tools/blob/c117847bc15fe8b62a7bcd7f343310c9a4ce09da/checker.py#L118-L165>.
 
-use crate::rc_string::RcString;
-use crate::utils::parsing::{CharPos, ParsingError};
+use crate::utils::parsing::{self, ParsingError};
 
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
@@ -40,7 +39,7 @@ impl fmt::Display for Token<'_> {
     use TokenType::*;
     match self.type_ {
       LiteralText => write!(f, "{}", self.data),
-      TypingDelay => write!(f, "\\."),
+      TypingDelay => write!(f, "\\{}", self.data),
       Escape => write!(f, "\\{}", self.data),
       Color => write!(f, "\\c[{}]", self.data),
       TypingSpeed => write!(f, "\\s[{}]", self.data),
@@ -70,23 +69,85 @@ pub struct Lexer<'src> {
 impl<'src> Lexer<'src> {
   pub fn new(src: &'src str) -> Self { Self { src, current_pos: 0 } }
 
-  fn emit_error(&mut self, message: String) -> Result<!, ParsingError> {
-    Err(ParsingError {
-      pos: CharPos { byte_index: self.current_pos, char_index: 0, line: 0, column: 0 },
-      message: RcString::from(message),
-    })
-  }
+  // fn emit_error(&mut self, message: String) -> Result<!, ParsingError> {
+  //   Err(ParsingError {
+  //     pos: CharPos { byte_index: self.current_pos, char_index: 0, line: 0, column: 0 },
+  //     message: RcString::from(message),
+  //   })
+  // }
 
   pub fn parse_next_token(&mut self) -> Result<Option<Token<'src>>, ParsingError> {
     if self.current_pos >= self.src.len() {
       return Ok(None);
     }
-    let token = Token {
-      start_pos: self.current_pos,
-      end_pos: self.src.len(),
-      type_: TokenType::LiteralText,
-      data: &self.src[self.current_pos..],
+
+    let src = &self.src[self.current_pos..];
+    let token: Token = match src.find('\\') {
+      Some(0) => {
+        let mut i = 1;
+        let mut token_type: Option<TokenType> = None;
+        let mut token_data = "";
+
+        if let Some(command_char) = src.get(i..i + 1) {
+          i += 1;
+          token_data = command_char;
+
+          match command_char {
+            "." | "!" => token_type = Some(TokenType::TypingDelay),
+            "\\" => token_type = Some(TokenType::Escape),
+
+            "c" | "s" | "v" | "i" => {
+              if src.get(i..i + 1) == Some("[") {
+                i += 1;
+                if let Some(j) = parsing::find_start_at(src, i, ']') {
+                  token_data = &src[i..j];
+                  i = j + 1;
+                  match command_char {
+                    "c" => token_type = Some(TokenType::Color),
+                    "s" => token_type = Some(TokenType::TypingSpeed),
+                    "v" => token_type = Some(TokenType::Variable),
+                    "i" => token_type = Some(TokenType::Icon),
+                    _ => {}
+                  };
+                }
+              }
+            }
+
+            _ => {}
+          }
+        };
+
+        if token_type.is_none() {
+          token_data = &src[..i];
+        }
+        Token {
+          start_pos: self.current_pos,
+          end_pos: self.current_pos + i,
+          type_: token_type.unwrap_or(TokenType::LiteralText),
+          data: token_data,
+        }
+      }
+
+      Some(backslash_index) => Token {
+        start_pos: self.current_pos,
+        end_pos: self.current_pos + backslash_index,
+        type_: TokenType::LiteralText,
+        data: &src[..backslash_index],
+      },
+
+      None if !src.is_empty() => Token {
+        start_pos: self.current_pos,
+        end_pos: self.src.len(),
+        type_: TokenType::LiteralText,
+        data: src,
+      },
+
+      None => {
+        self.current_pos = self.src.len();
+        return Ok(None);
+      }
     };
+
     self.current_pos = token.end_pos;
     Ok(Some(token))
   }
@@ -128,44 +189,6 @@ mod tests {
       попробовать игру на предустановленной сложности.\n\nОднако, если это делает игру слишком \
       сложной или даже непроходимой для вас, в меню \\c[3]настроек\\c[0] имеется \
       \\c[3]вкладка\\c[0] c детальными настройками сложности.";
-
-    // TODO: remove a literal token list once the parser is complete
-    let expected_tokens: Vec<Token> = vec![
-      (LiteralText, "\n"),
-      (TypingSpeed, "1"),
-      (LiteralText, "CrossCode разрабатывался с учётом "),
-      (Color, "3"),
-      (LiteralText, "вызова для игрока"),
-      (Color, "0"),
-      (LiteralText, ", как в "),
-      (Color, "3"),
-      (LiteralText, "сражениях"),
-      (Color, "0"),
-      (LiteralText, ", так и в "),
-      (Color, "3"),
-      (LiteralText, "головоломках"),
-      (Color, "0"),
-      (
-        LiteralText,
-        ", и мы призываем всех игроков попробовать игру на предустановленной сложности.\n\n\
-        Однако, если это делает игру слишком сложной или даже непроходимой для вас, в меню ",
-      ),
-      (Color, "3"),
-      (LiteralText, "настроек"),
-      (Color, "0"),
-      (LiteralText, " имеется "),
-      (Color, "3"),
-      (LiteralText, "вкладка"),
-      (Color, "0"),
-      (LiteralText, " c детальными настройками сложности."),
-    ]
-    .into_iter()
-    .map(|(type_, data)| Token { start_pos: 0, end_pos: 0, type_, data })
-    .collect();
-
-    let mut roundtrip_text = String::with_capacity(text.len());
-    to_string(expected_tokens.iter(), &mut roundtrip_text);
-    assert_eq!(roundtrip_text, text);
 
     let mut roundtrip_text = String::with_capacity(text.len());
     let tokens = lex(text).collect::<Result<Vec<_>, ParsingError>>().unwrap();

@@ -1,6 +1,6 @@
 #![deny(missing_debug_implementations)]
 #![allow(clippy::new_without_default)]
-#![feature(try_blocks, never_type)]
+#![feature(try_blocks, never_type, pattern)]
 // TODO: consider using feature(hash_raw_entry)
 #![cfg_attr(
   target_os = "macos",
