@@ -15,9 +15,7 @@ jobs:
         id: install_rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
           components: rustfmt, clippy
-          override: true
       - name: Install needed apt packages
         run: sudo apt-get install clang-format
 
