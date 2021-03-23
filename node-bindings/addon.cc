@@ -95,12 +95,17 @@ void throw_ffi_result(crosslocale_result_t res) {
 
 class FfiBackend {
 public:
-  FfiBackend() { throw_ffi_result(crosslocale_backend_new(&this->raw)); }
+  FfiBackend() {
+    crosslocale_backend_t* raw = nullptr;
+    throw_ffi_result(crosslocale_backend_new(&raw));
+    this->raw = raw;
+  }
 
   ~FfiBackend() {
     if (this->raw != nullptr) {
-      throw_ffi_result(crosslocale_backend_free(this->raw));
+      crosslocale_backend_t* raw = this->raw;
       this->raw = nullptr;
+      throw_ffi_result(crosslocale_backend_free(raw));
     }
   }
 
