@@ -239,12 +239,17 @@ fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &FoundJsonFile) -> 
     return true;
   }
 
-  // TODO: check the relative file path
-  if found_file.path.starts_with("data/credits/") && {
-    let mut iter = lang_label.json_path.split('/');
-    // Note that `nth` advances the iterator
-    iter.nth(0) == Some("entries") && iter.nth(1) == Some("names")
-  } {
+  let file_path = found_file.path.strip_prefix(&*found_file.asset_root).unwrap();
+  let json_path: Vec<_> = lang_label.json_path.split('/').collect();
+
+  if file_path.starts_with("data/enemies/") && json_path.get(0) == Some(&"meta") {
+    return true;
+  }
+
+  if file_path.starts_with("data/credits/")
+    && json_path.get(0) == Some(&"entries")
+    && json_path.get(2) == Some(&"names")
+  {
     return true;
   }
 
