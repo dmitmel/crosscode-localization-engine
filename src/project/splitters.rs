@@ -226,13 +226,13 @@ impl Splitter for NotabenoidChaptersSplitter {
   #[allow(clippy::single_match)]
   fn get_tr_file_for_entire_game_file(
     &mut self,
-    _asset_root: &str,
+    asset_root: &str,
     file_path: &str,
   ) -> Option<MaybeStaticStr> {
-    return Some(inner(file_path).into());
+    return Some(inner(asset_root, file_path).into());
 
-    fn inner(file_path: &str) -> &'static str {
-      let components: Vec<_> = file_path.split('/').collect();
+    fn inner(asset_root: &str, file_path: &str) -> &'static str {
+      let components: Vec<_> = file_path.strip_prefix(asset_root).unwrap().split('/').collect();
       match components[0] {
         "data" if components.len() > 1 => match components[1] {
           "lang" => return "lang",
