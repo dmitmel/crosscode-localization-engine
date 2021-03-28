@@ -1,5 +1,6 @@
 pub mod backend;
 pub mod create_project;
+pub mod dump_scan;
 pub mod export;
 pub mod import;
 pub mod parse_po;
@@ -47,6 +48,7 @@ pub fn all_commands() -> Vec<Box<dyn Command>> {
   vec![
     Box::new(backend::BackendCommand),
     Box::new(create_project::CreateProjectCommand),
+    Box::new(dump_scan::DumpScanCommand),
     Box::new(export::ExportCommand),
     Box::new(import::ImportCommand),
     Box::new(parse_po::ParsePoCommand),

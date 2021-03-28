@@ -171,12 +171,15 @@ pub const DEFAULT_INDENT: &str = "  ";
 
 #[derive(Debug)]
 pub struct UltimateFormatterConfig<'a> {
+  pub compact: bool,
   pub indent: Option<&'a str>,
   pub trailing_commas: bool,
 }
 
 impl<'a> Default for UltimateFormatterConfig<'a> {
-  fn default() -> Self { Self { indent: Some(DEFAULT_INDENT), trailing_commas: false } }
+  fn default() -> Self {
+    Self { compact: false, indent: Some(DEFAULT_INDENT), trailing_commas: false }
+  }
 }
 
 /// Based on [`serde_json::ser::PrettyFormatter`].
@@ -315,7 +318,7 @@ impl<'a> Formatter for UltimateFormatter<'a> {
   where
     W: ?Sized + io::Write,
   {
-    writer.write_all(b": ")
+    writer.write_all(if self.config.compact { b":" } else { b": " })
   }
 
   #[inline]

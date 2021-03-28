@@ -90,6 +90,7 @@ impl Exporter for LocalizeMeTrPackExporter {
   {
     Box::new(Self {
       json_fmt: json::UltimateFormatter::new(json::UltimateFormatterConfig {
+        compact: config.compact,
         indent: if config.compact { None } else { Some(json::DEFAULT_INDENT) },
         ..Default::default()
       }),

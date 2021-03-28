@@ -17,6 +17,8 @@ impl super::Command for ParsePoCommand {
 
   fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
     app
+      .about("Debug command for testing the gettext po parser.")
+      .setting(clap::AppSettings::Hidden)
       .arg(clap::Arg::new("file").value_name("FILE"))
       .arg(clap::Arg::new("json").short('J').long("json"))
   }
