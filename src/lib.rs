@@ -2,11 +2,11 @@
 #![allow(clippy::new_without_default)]
 #![feature(try_blocks, never_type, pattern)]
 // TODO: consider using feature(hash_raw_entry)
-#![cfg_attr(
-  target_os = "macos",
-  feature(link_args),
-  link_args = "-Wl,-install_name,@loader_path/libcrosslocale.dylib"
-)]
+#![cfg_attr(target_os = "macos", feature(link_args))]
+
+#[allow(unused_attributes)]
+#[cfg_attr(target_os = "macos", link_args = "-Wl,-install_name,@loader_path/libcrosslocale.dylib")]
+extern "C" {}
 
 #[macro_use]
 pub mod macros;
