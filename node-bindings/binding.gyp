@@ -1,4 +1,13 @@
 {
+    "variables": {
+        "rust_target_dir%": "<!(node -p \"require('path').normalize(process.argv[1])\" <(module_root_dir)/../target)",
+        "rust_build_profile%": "release",
+        "conditions": [
+            ['OS=="linux"', {"rust_dylib_file": "libcrosslocale.so"}],
+            ['OS=="mac"', {"rust_dylib_file": "libcrosslocale.dylib"}],
+            ['OS=="win"', {"rust_dylib_file": "crosslocale.dll"}],
+        ],
+    },
     "targets": [
         {
             "target_name": "crosslocale",
@@ -20,26 +29,26 @@
                 "<(module_root_dir)/../ffi",
             ],
             "libraries": ["-lcrosslocale"],
-            "variables": {
-                "rust_target_dir%": "<(module_root_dir)/../target",
-            },
-            "configurations": {
-                "Debug": {
-                    "library_dirs": ["<(rust_target_dir)/debug"],
-                },
-                "Release": {
-                    "library_dirs": ["<(rust_target_dir)/release"],
-                },
-            },
+            "library_dirs": ["<(rust_target_dir)/<(rust_build_profile)"],
             "conditions": [
-                [
-                    'OS=="linux"',
-                    {
-                        # Taken from <https://github.com/greenheartgames/greenworks/blob/a7a698203b7fc43d156d83a66789c465fb4ae3e2/binding.gyp#L136-L141>
-                        "ldflags": ["-Wl,-rpath,\\$$ORIGIN"],
-                    },
-                ]
+                # Taken from <https://github.com/greenheartgames/greenworks/blob/a7a698203b7fc43d156d83a66789c465fb4ae3e2/binding.gyp#L136-L141>
+                ['OS=="linux"', {"ldflags": ["-Wl,-rpath,\\$$ORIGIN"]}],
             ],
         },
-    ]
+        {
+            "target_name": "symlink_rust_dylib",
+            "dependencies": ["crosslocale"],
+            "type": "none",
+            "actions": [
+                {
+                    "action_name": "symlink_rust_dylib",
+                    "inputs": [
+                        "<(rust_target_dir)/<(rust_build_profile)/<(rust_dylib_file)"
+                    ],
+                    "outputs": ["<(PRODUCT_DIR)/<(rust_dylib_file)"],
+                    "action": ["ln", "-sfT", "<@(_inputs)", "<@(_outputs)"],
+                },
+            ],
+        },
+    ],
 }

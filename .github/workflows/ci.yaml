@@ -67,7 +67,7 @@ jobs:
 
       - name: Build Node.js bindings
         working-directory: node-bindings
-        run: npm install --ignore-scripts && npm run build:debug
+        run: npm install --ignore-scripts && node-gyp rebuild -- -D rust_build_profile=debug
 
       - name: clang-format
         run: clang-format --verbose --dry-run ffi/crosslocale.h node-bindings/addon.cc
