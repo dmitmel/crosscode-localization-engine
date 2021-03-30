@@ -3,20 +3,28 @@ on: [push, pull_request, workflow_dispatch]
 
 env:
   CARGO_TERM_COLOR: always
+  macosx_deployment_target: 10.7
 
 jobs:
   build:
     name: Build
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-10.14]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v2
+
       - name: Install Rust toolchain
         id: install_rust
         uses: actions-rs/toolchain@v1
         with:
           components: rustfmt, clippy
-      - name: Install needed apt packages
+
+      - name: Install Linux-specific packages
+        if: runner.os == 'Linux'
         run: sudo apt-get install clang-format
 
       - uses: actions/cache@v2
@@ -48,26 +56,36 @@ jobs:
           args: --verbose --workspace
 
       - name: cargo fmt
+        if: runner.os == 'Linux'
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --verbose --all -- --check
 
       - name: cargo clippy
+        if: runner.os == 'Linux'
         uses: actions-rs/cargo@v1
         with:
           command: clippy
           args: --verbose --workspace
 
+      - name: Generate FFI headers
+        run: scripts/generate-ffi-headers.sh
+
       - name: Check FFI headers
-        run: |
-          mv -f ffi/crosslocale.h{,.bak}
-          scripts/generate-ffi-headers.sh
-          diff --unified --color=always ffi/crosslocale.h{.bak,}
+        if: runner.os == 'Linux'
+        run: git diff --color=always --exit-code ffi/crosslocale.h
 
       - name: Build Node.js bindings
         working-directory: node-bindings
-        run: npm install --ignore-scripts && npm run node-gyp rebuild -- -- -D rust_build_profile=debug
+        run: |
+          npm install --ignore-scripts
+          npm run node-gyp rebuild -- --debug -- -D rust_build_profile=debug
+
+      - name: Test Node.js bindings
+        working-directory: node-bindings
+        run: node test.js
 
       - name: clang-format
+        if: runner.os == 'Linux'
         run: clang-format --verbose --dry-run ffi/crosslocale.h node-bindings/addon.cc
