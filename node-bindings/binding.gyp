@@ -43,16 +43,9 @@
             "actions": [
                 {
                     "action_name": "symlink_rust_dylib",
-                    "inputs": [
-                        "<(rust_target_dir)/<(rust_build_profile)/<(rust_dylib_file)"
-                    ],
+                    "inputs": ["<(rust_target_dir)/<(rust_build_profile)/<(rust_dylib_file)"],
                     "outputs": ["<(PRODUCT_DIR)/<(rust_dylib_file)"],
-                    "action": [
-                        "node",
-                        "scripts/symlink.js",
-                        "<@(_inputs)",
-                        "<@(_outputs)",
-                    ],
+                    "action": ["node", "scripts/symlink.js", "<@(_inputs)", "<@(_outputs)"],
                 },
             ],
         },
