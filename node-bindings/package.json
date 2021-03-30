@@ -7,7 +7,8 @@
   "scripts": {
     "install": "\"$npm_execpath\" run build:release",
     "build:release": "node-gyp rebuild -- -f make -f compile_commands_json",
-    "build:debug": "node-gyp rebuild --debug -- -f make -f compile_commands_json"
+    "build:debug": "node-gyp rebuild --debug -- -f make -f compile_commands_json",
+    "node-gyp": "node-gyp"
   },
   "devDependencies": {
     "node-addon-api": "^3.1.0"
