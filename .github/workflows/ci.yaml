@@ -3,7 +3,7 @@ on: [push, pull_request, workflow_dispatch]
 
 env:
   CARGO_TERM_COLOR: always
-  macosx_deployment_target: 10.7
+  MACOSX_DEPLOYMENT_TARGET: 10.7
 
 jobs:
   build:
