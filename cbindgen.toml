@@ -1,5 +1,36 @@
 language = "C"
-include_guard = "_CROSSLOCALE_H"
 include_version = true
-cpp_compat = true
 usize_is_size_t = true
+
+header = """
+#ifndef _CROSSLOCALE_H
+#define _CROSSLOCALE_H
+"""
+
+after_includes = """
+
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
+#define _CROSSLOCALE_DLLIMPORT __declspec(dllimport)
+#else
+#define _CROSSLOCALE_DLLIMPORT
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
+
+#define extern extern _CROSSLOCALE_DLLIMPORT
+"""
+
+trailer = """
+#undef extern
+
+#ifdef __cplusplus
+} // extern "C"
+#endif // __cplusplus
+
+#endif // _CROSSLOCALE_H
+"""
+
+[fn]
+prefix = "_CROSSLOCALE_DLLIMPORT"

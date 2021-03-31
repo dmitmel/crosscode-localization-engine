@@ -83,8 +83,6 @@ jobs:
           npm run node-gyp rebuild -- --debug -- -D rust_build_profile=debug
 
       - name: Test Node.js bindings
-        # TODO: figure out what's causing the incompatibility error on Windows
-        if: runner.os != 'Windows'
         working-directory: node-bindings
         run: node test.js
 
