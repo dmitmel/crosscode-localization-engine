@@ -48,6 +48,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-rust-${{ steps.install_rust.outputs.rustc_hash }}-
 
+      - name: Get platform information
+        id: platform_info
+        shell: bash
+        run: echo "::set-output name=triple::$(rustc --version --verbose | awk '/^host:/ { print $2 }')"
+
       - name: cargo build
         uses: actions-rs/cargo@v1
         with:
@@ -63,17 +68,17 @@ jobs:
       - name: Upload ${{ matrix.exe_prefix }}crosslocale${{ matrix.exe_suffix }}
         uses: actions/upload-artifact@v1
         with:
-          name: ${{ matrix.exe_prefix }}crosslocale${{ matrix.exe_suffix }}
+          name: ${{ matrix.exe_prefix }}crosslocale-${{ steps.platform_info.outputs.triple }}${{ matrix.exe_suffix }}
           path: target/release/${{ matrix.exe_prefix }}crosslocale${{ matrix.exe_suffix }}
 
       - name: Upload ${{ matrix.dylib_prefix }}crosslocale${{ matrix.dylib_suffix }}
         uses: actions/upload-artifact@v1
         with:
-          name: ${{ matrix.dylib_prefix }}crosslocale${{ matrix.dylib_suffix }}
+          name: ${{ matrix.dylib_prefix }}crosslocale-${{ steps.platform_info.outputs.triple }}${{ matrix.dylib_suffix }}
           path: target/release/${{ matrix.dylib_prefix }}crosslocale${{ matrix.dylib_suffix }}
 
       - name: Upload crosslocale.node
         uses: actions/upload-artifact@v1
         with:
-          name: crosslocale.node
+          name: crosslocale-${{ steps.platform_info.outputs.triple }}.node
           path: node-bindings/build/Release/crosslocale.node
