@@ -1,0 +1,79 @@
+name: Manual Build
+on: [workflow_dispatch]
+
+env:
+  CARGO_TERM_COLOR: always
+  MACOSX_DEPLOYMENT_TARGET: 10.7
+
+jobs:
+  manual_build:
+    name: Manual Build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-10.14]
+        include:
+          - os: ubuntu-latest
+            exe_prefix: ''
+            exe_suffix: ''
+            dylib_prefix: 'lib'
+            dylib_suffix: '.so'
+          - os: windows-latest
+            exe_prefix: ''
+            exe_suffix: '.exe'
+            dylib_prefix: ''
+            dylib_suffix: '.dll'
+          - os: macos-10.14
+            exe_prefix: ''
+            exe_suffix: ''
+            dylib_prefix: 'lib'
+            dylib_suffix: '.dylib'
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Rust toolchain
+        id: install_rust
+        uses: actions-rs/toolchain@v1
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            node-bindings/build
+          key: ${{ runner.os }}-rust-${{ steps.install_rust.outputs.rustc_hash }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-${{ steps.install_rust.outputs.rustc_hash }}-
+
+      - name: cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --verbose --release
+
+      - name: Build Node.js bindings
+        working-directory: node-bindings
+        run: |
+          npm install --ignore-scripts
+          npm run node-gyp rebuild -- -- -D rust_build_profile=release
+
+      - name: Upload ${{ matrix.exe_prefix }}crosslocale${{ matrix.exe_suffix }}
+        uses: actions/upload-artifact@v1
+        with:
+          name: ${{ matrix.exe_prefix }}crosslocale${{ matrix.exe_suffix }}
+          path: target/release/${{ matrix.exe_prefix }}crosslocale${{ matrix.exe_suffix }}
+
+      - name: Upload ${{ matrix.dylib_prefix }}crosslocale${{ matrix.dylib_suffix }}
+        uses: actions/upload-artifact@v1
+        with:
+          name: ${{ matrix.dylib_prefix }}crosslocale${{ matrix.dylib_suffix }}
+          path: target/release/${{ matrix.dylib_prefix }}crosslocale${{ matrix.dylib_suffix }}
+
+      - name: Upload crosslocale.node
+        uses: actions/upload-artifact@v1
+        with:
+          name: crosslocale.node
+          path: node-bindings/build/Release/crosslocale.node
