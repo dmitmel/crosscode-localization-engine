@@ -37,6 +37,12 @@ jobs:
         id: install_rust
         uses: actions-rs/toolchain@v1
 
+      - name: Install macOS-specific packages
+        if: runner.os == 'macOS'
+        run: |
+          brew install binutils
+          echo /usr/local/opt/binutils/bin >> "$GITHUB_PATH"
+
       - uses: actions/cache@v2
         with:
           path: |
