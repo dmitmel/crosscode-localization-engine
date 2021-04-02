@@ -30,6 +30,10 @@ jobs:
             dylib_suffix: '.dylib'
     runs-on: ${{ matrix.os }}
 
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - uses: actions/checkout@v2
 
@@ -58,7 +62,6 @@ jobs:
 
       - name: Get platform information
         id: platform_info
-        shell: bash
         run: echo "::set-output name=triple::$(rustc --version --verbose | awk '/^host:/ { print $2 }')"
 
       - name: cargo build
@@ -80,20 +83,15 @@ jobs:
           strip -g target/release/${{ matrix.dylib_prefix }}crosslocale${{ matrix.dylib_suffix }}
           strip -g node-bindings/build/Release/crosslocale.node
 
-      - name: Upload ${{ matrix.exe_prefix }}crosslocale${{ matrix.exe_suffix }}
-        uses: actions/upload-artifact@v1
-        with:
-          name: ${{ matrix.exe_prefix }}crosslocale-${{ steps.platform_info.outputs.triple }}${{ matrix.exe_suffix }}
-          path: target/release/${{ matrix.exe_prefix }}crosslocale${{ matrix.exe_suffix }}
+      - name: Package the binaries
+        run: |
+          tar -czvf package.tgz \
+            target/release/${{ matrix.exe_prefix }}crosslocale${{ matrix.exe_suffix }} \
+            target/release/${{ matrix.dylib_prefix }}crosslocale${{ matrix.dylib_suffix }} \
+            node-bindings/build/Release/crosslocale.node
 
-      - name: Upload ${{ matrix.dylib_prefix }}crosslocale${{ matrix.dylib_suffix }}
+      - name: Upload the artifacts
         uses: actions/upload-artifact@v1
         with:
-          name: ${{ matrix.dylib_prefix }}crosslocale-${{ steps.platform_info.outputs.triple }}${{ matrix.dylib_suffix }}
-          path: target/release/${{ matrix.dylib_prefix }}crosslocale${{ matrix.dylib_suffix }}
-
-      - name: Upload crosslocale.node
-        uses: actions/upload-artifact@v1
-        with:
-          name: crosslocale-${{ steps.platform_info.outputs.triple }}.node
-          path: node-bindings/build/Release/crosslocale.node
+          name: package-${{ steps.platform_info.outputs.triple }}.tgz
+          path: package.tgz
