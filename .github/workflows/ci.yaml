@@ -34,9 +34,11 @@ jobs:
             ~/.cargo/git
             target
             node-bindings/build
-          key: ${{ runner.os }}-rust-${{ steps.install_rust.outputs.rustc_hash }}-${{ hashFiles('**/Cargo.lock') }}
+          key: |
+            ${{ github.workflow }}-${{ runner.os }}-rust-${{ steps.install_rust.outputs.rustc_hash }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-rust-${{ steps.install_rust.outputs.rustc_hash }}-
+            ${{ github.workflow }}-${{ runner.os }}-rust-${{ steps.install_rust.outputs.rustc_hash }}-
+            ${{ github.workflow }}-${{ runner.os }}-rust-
 
       - name: cargo check
         uses: actions-rs/cargo@v1
