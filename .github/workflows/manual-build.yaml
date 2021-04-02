@@ -65,6 +65,13 @@ jobs:
           npm install --ignore-scripts
           npm run node-gyp rebuild -- -- -D rust_build_profile=release
 
+      - name: Strip debug symbols from the binaries
+        if: runner.os != 'Windows'
+        run: |
+          strip -g target/release/${{ matrix.exe_prefix }}crosslocale${{ matrix.exe_suffix }}
+          strip -g target/release/${{ matrix.dylib_prefix }}crosslocale${{ matrix.dylib_suffix }}
+          strip -g node-bindings/build/Release/crosslocale.node
+
       - name: Upload ${{ matrix.exe_prefix }}crosslocale${{ matrix.exe_suffix }}
         uses: actions/upload-artifact@v1
         with:
