@@ -1,4 +1,5 @@
 use crate::impl_prelude::*;
+use crate::localize_me;
 use crate::project::exporters;
 use crate::project::splitters;
 use crate::project::{Fragment, Project};
@@ -67,10 +68,19 @@ impl super::Command for ExportCommand {
           ),
       )
       .arg(
-        clap::Arg::new("mapping_file_output")
+        clap::Arg::new("mapping_output")
           .value_name("PATH")
-          .long("mapping-file-output")
-          .about("File to write a Localize Me-style mapping table to."),
+          .long("mapping-output")
+          //
+          .about(
+            "Write a JSON file containing a mapping table from game files to the translation \
+            files containg their strings.",
+          ),
+      )
+      .arg(
+        clap::Arg::new("mapping_lm_paths")
+          .long("mapping-lm-paths")
+          .about("Use Localize Me-style paths of game files in the mapping table."),
       )
       .arg(
         clap::Arg::new("compact")
@@ -89,7 +99,8 @@ impl super::Command for ExportCommand {
     let opt_format = RcString::from(matches.value_of("format").unwrap());
     let opt_splitter = matches.value_of("splitter").map(RcString::from);
     let opt_remove_untranslated = matches.is_present("remove_untranslated");
-    let opt_mapping_file_output = matches.value_of_os("mapping_file_output").map(PathBuf::from);
+    let opt_mapping_output = matches.value_of_os("mapping_output").map(PathBuf::from);
+    let opt_mapping_lm_paths = matches.is_present("mapping_lm_paths");
     let opt_compact = matches.is_present("compact");
 
     info!(
@@ -134,14 +145,20 @@ impl super::Command for ExportCommand {
         let export_file_path =
           RcString::from(utils::fast_concat(&[&export_file_path, ".", export_file_extension]));
 
+        let mapping_game_file_path = if opt_mapping_lm_paths {
+          RcString::from(localize_me::serialize_file_path(game_file_path))
+        } else {
+          game_file_path.share_rc()
+        };
+        let mapping_game_file_path_2 = mapping_game_file_path.share_rc();
         if let Some(prev_assigned_export_file_path) =
-          exported_files_mapping.insert(game_file_path.share_rc(), export_file_path.share_rc())
+          exported_files_mapping.insert(mapping_game_file_path, export_file_path.share_rc())
         {
           ensure!(
             prev_assigned_export_file_path == export_file_path,
             "The splitter has assigned inconsistent export paths to the game file {:?}: the \
-          previous value was {:?}, the new one is {:?}. This is a bug in the splitter.",
-            game_file_path,
+            previous value was {:?}, the new one is {:?}. This is a bug in the splitter.",
+            mapping_game_file_path_2,
             prev_assigned_export_file_path,
             export_file_path,
           );
@@ -199,7 +216,7 @@ impl super::Command for ExportCommand {
       info!("Exported {} fragments", all_exported_fragments.len());
     }
 
-    if let Some(mapping_file_path) = opt_mapping_file_output {
+    if let Some(mapping_file_path) = opt_mapping_output {
       if splitter.is_some() {
         json::write_file(
           &mapping_file_path,
@@ -214,8 +231,8 @@ impl super::Command for ExportCommand {
         info!("Written the mapping file with {} entries", exported_files_mapping.len());
       } else {
         warn!(
-          "mapping_file_output was specified, but splitter wasn't. A mapping file doesn't \
-        make sense without splitting."
+          "Mapping output file was specified, but splitter wasn't. A mapping file doesn't make \
+          sense without splitting."
         );
       }
     }
