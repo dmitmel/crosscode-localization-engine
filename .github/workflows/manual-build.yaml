@@ -8,6 +8,7 @@ env:
 jobs:
   manual_build:
     name: Manual Build
+
     strategy:
       fail-fast: false
       matrix:
@@ -28,8 +29,8 @@ jobs:
             exe_suffix: ''
             dylib_prefix: 'lib'
             dylib_suffix: '.dylib'
-    runs-on: ${{ matrix.os }}
 
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash
