@@ -54,12 +54,11 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-            node-bindings/build
           key: |
-            ${{ github.workflow }}-${{ runner.os }}-rust-${{ steps.install_rust.outputs.rustc_hash }}-${{ hashFiles('**/Cargo.lock') }}
+            v2-${{ github.workflow }}-${{ runner.os }}-rust-${{ steps.install_rust.outputs.rustc_hash }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ github.workflow }}-${{ runner.os }}-rust-${{ steps.install_rust.outputs.rustc_hash }}-
-            ${{ github.workflow }}-${{ runner.os }}-rust-
+            v2-${{ github.workflow }}-${{ runner.os }}-rust-${{ steps.install_rust.outputs.rustc_hash }}-
+            v2-${{ github.workflow }}-${{ runner.os }}-rust-
 
       - name: Get platform information
         id: platform_info
