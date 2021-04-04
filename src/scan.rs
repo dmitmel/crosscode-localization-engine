@@ -128,15 +128,15 @@ impl ScanDb {
     Ok(myself)
   }
 
-  pub fn write(&self) -> AnyResult<()> {
+  pub fn write(&self, json_config: json::UltimateFormatterConfig) -> AnyResult<()> {
     if self.is_dirty() {
-      self.write_force()?;
+      self.write_force(json_config)?;
     }
     Ok(())
   }
 
-  pub fn write_force(&self) -> AnyResult<()> {
-    json::write_file(&self.db_file_path, self, json::UltimateFormatterConfig::default())
+  pub fn write_force(&self, json_config: json::UltimateFormatterConfig) -> AnyResult<()> {
+    json::write_file(&self.db_file_path, self, json_config)
       .with_context(|| format!("Failed to serialize to JSON file {:?}", self.db_file_path))?;
     self.dirty_flag.set(false);
     Ok(())

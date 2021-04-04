@@ -176,10 +176,19 @@ pub struct UltimateFormatterConfig<'a> {
   pub trailing_commas: bool,
 }
 
-impl<'a> Default for UltimateFormatterConfig<'a> {
-  fn default() -> Self {
+impl<'a> UltimateFormatterConfig<'a> {
+  #[inline]
+  pub fn pretty() -> Self {
     Self { compact: false, indent: Some(DEFAULT_INDENT), trailing_commas: false }
   }
+
+  #[inline]
+  pub fn compact() -> Self { Self { compact: true, indent: None, trailing_commas: false } }
+}
+
+impl<'a> Default for UltimateFormatterConfig<'a> {
+  #[inline(always)]
+  fn default() -> Self { Self::pretty() }
 }
 
 /// Based on [`serde_json::ser::PrettyFormatter`].

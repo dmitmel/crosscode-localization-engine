@@ -58,6 +58,12 @@ impl super::Command for ScanCommand {
           .conflicts_with("locales")
           .about("Extact absolutely all locales."),
       )
+      .arg(
+        clap::Arg::new("compact")
+          .short('c')
+          .long("compact")
+          .about("Disable pretty-printing of the resulting JSON file."),
+      )
   }
 
   fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
@@ -67,6 +73,7 @@ impl super::Command for ScanCommand {
       .values_of("locales")
       .map_or_else(HashSet::new, |values| values.map(RcString::from).collect());
     let opt_all_locales = matches.is_present("all_locales");
+    let opt_compact = matches.is_present("compact");
 
     info!("Performing a scan of game files in the assets dir {:?}", opt_assets_dir);
 
@@ -149,7 +156,12 @@ impl super::Command for ScanCommand {
     );
 
     info!("Writing the scan database");
-    scan_db.write().context("Failed to write the scan database")?;
+    let json_config = if opt_compact {
+      json::UltimateFormatterConfig::compact()
+    } else {
+      json::UltimateFormatterConfig::pretty()
+    };
+    scan_db.write(json_config).context("Failed to write the scan database")?;
 
     Ok(())
   }
