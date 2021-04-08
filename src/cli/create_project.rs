@@ -6,6 +6,7 @@ use crate::scan;
 use crate::utils::{self, RcExt};
 
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct CreateProjectCommand;
@@ -134,7 +135,7 @@ impl super::Command for CreateProjectCommand {
       modification_timestamp: timestamp,
       game_version: scan_game_version,
       original_locale: opt_original_locale,
-      reference_locales: opt_reference_locales,
+      reference_locales: Rc::new(opt_reference_locales),
       translation_locale: opt_translation_locale,
       translations_dir: opt_translations_dir,
       splitter: opt_splitter,

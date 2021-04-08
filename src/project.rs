@@ -32,7 +32,7 @@ pub struct ProjectMetaSerde {
   pub modification_timestamp: Timestamp,
   pub game_version: RcString,
   pub original_locale: RcString,
-  pub reference_locales: Vec<RcString>,
+  pub reference_locales: Rc<Vec<RcString>>,
   pub translation_locale: RcString,
   pub translations_dir: RcString,
   pub splitter: RcString,
@@ -124,7 +124,7 @@ pub struct ProjectMeta {
   modification_timestamp: Cell<Timestamp>, // TODO
   game_version: RcString,
   original_locale: RcString,
-  reference_locales: Vec<RcString>,
+  reference_locales: Rc<Vec<RcString>>,
   translation_locale: RcString,
   translations_dir: RcString,
   splitter: RefCell<Box<dyn Splitter>>,
@@ -144,7 +144,7 @@ pub struct ProjectMetaInitOpts {
   pub modification_timestamp: Timestamp,
   pub game_version: RcString,
   pub original_locale: RcString,
-  pub reference_locales: Vec<RcString>,
+  pub reference_locales: Rc<Vec<RcString>>,
   pub translation_locale: RcString,
   pub translations_dir: RcString,
   pub splitter: RcString,
@@ -166,7 +166,7 @@ impl ProjectMeta {
   #[inline(always)]
   pub fn original_locale(&self) -> &RcString { &self.original_locale }
   #[inline(always)]
-  pub fn reference_locales(&self) -> &[RcString] { &self.reference_locales }
+  pub fn reference_locales(&self) -> &Rc<Vec<RcString>> { &self.reference_locales }
   #[inline(always)]
   pub fn translation_locale(&self) -> &RcString { &self.translation_locale }
   #[inline(always)]
