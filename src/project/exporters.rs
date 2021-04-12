@@ -1,21 +1,142 @@
-use super::{Fragment, ProjectMeta};
+use super::{Fragment, ProjectMeta, Translation};
 use crate::gettext_po;
 use crate::impl_prelude::*;
 use crate::localize_me;
 use crate::rc_string::RcString;
 use crate::utils::json;
-use crate::utils::{self, Timestamp};
+use crate::utils::{self, RcExt, Timestamp};
 
 use once_cell::sync::Lazy;
 use serde_json::ser::Formatter;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::io::{self, Write};
 use std::rc::Rc;
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct ExporterConfig {
   pub compact: bool,
+}
+
+// assert_trait_is_object_safe!(ExportedProjectMeta);
+// pub trait ExportedProjectMeta: fmt::Debug {
+//   #[inline(always)]
+//   fn id(&self) -> Option<Uuid> { None }
+//   #[inline(always)]
+//   fn creation_timestamp(&self) -> Option<Timestamp> { None }
+//   #[inline(always)]
+//   fn modification_timestamp(&self) -> Option<Timestamp> { None }
+//   #[inline(always)]
+//   fn game_version(&self) -> Option<RcString> { None }
+//   #[inline(always)]
+//   fn original_locale(&self) -> Option<RcString> { None }
+//   #[inline(always)]
+//   fn reference_locales(&self) -> Option<Rc<Vec<RcString>>> { None }
+//   #[inline(always)]
+//   fn translation_locale(&self) -> Option<RcString> { None }
+// }
+
+// impl ExportedProjectMeta for ProjectMeta {
+//   #[inline(always)]
+//   fn id(&self) -> Option<Uuid> { Some(self.id()) }
+//   #[inline(always)]
+//   fn creation_timestamp(&self) -> Option<Timestamp> { Some(self.creation_timestamp()) }
+//   #[inline(always)]
+//   fn modification_timestamp(&self) -> Option<Timestamp> { Some(self.modification_timestamp()) }
+//   #[inline(always)]
+//   fn game_version(&self) -> Option<RcString> { Some(self.game_version().share_rc()) }
+//   #[inline(always)]
+//   fn original_locale(&self) -> Option<RcString> { Some(self.original_locale().share_rc()) }
+//   #[inline(always)]
+//   fn reference_locales(&self) -> Option<Rc<Vec<RcString>>> {
+//     Some(self.reference_locales().share_rc())
+//   }
+//   #[inline(always)]
+//   fn translation_locale(&self) -> Option<RcString> { Some(self.translation_locale().share_rc()) }
+// }
+
+#[derive(Debug)]
+pub struct ExportedProjectMeta {
+  pub id: Option<Uuid>,
+  pub creation_timestamp: Option<Timestamp>,
+  pub modification_timestamp: Option<Timestamp>,
+  pub game_version: Option<RcString>,
+  pub original_locale: Option<RcString>,
+  pub reference_locales: Option<Rc<Vec<RcString>>>,
+  pub translation_locale: Option<RcString>,
+}
+
+impl ExportedProjectMeta {
+  pub fn new(real_project_meta: &ProjectMeta) -> Self {
+    let m = real_project_meta;
+    Self {
+      id: Some(m.id()),
+      creation_timestamp: Some(m.creation_timestamp()),
+      modification_timestamp: Some(m.modification_timestamp()),
+      game_version: Some(m.game_version().share_rc()),
+      original_locale: Some(m.original_locale().share_rc()),
+      reference_locales: Some(m.reference_locales().share_rc()),
+      translation_locale: Some(m.translation_locale().share_rc()),
+    }
+  }
+}
+
+#[derive(Debug)]
+pub struct ExportedFragment {
+  pub id: Option<Uuid>,
+  pub file_path: RcString,
+  pub json_path: RcString,
+  pub lang_uid: Option<i32>,
+  pub description: Option<Rc<Vec<RcString>>>,
+  pub original_text: RcString,
+  // pub reference_texts: Option<Rc<HashMap<RcString, RcString>>>,
+  pub flags: Option<Rc<HashSet<RcString>>>,
+  pub best_translation: Option<ExportedTranslation>,
+  pub translations: Vec<ExportedTranslation>,
+}
+
+impl ExportedFragment {
+  pub fn new(real_fragment: &Fragment) -> Self {
+    let f = real_fragment;
+    Self {
+      id: Some(f.id()),
+      file_path: f.file_path().share_rc(),
+      json_path: f.json_path().share_rc(),
+      lang_uid: Some(f.lang_uid()),
+      description: Some(f.description().share_rc()),
+      original_text: f.original_text().share_rc(),
+      flags: Some(f.flags().share_rc()),
+      best_translation: f.get_best_translation().map(|t| ExportedTranslation::new(&t)),
+      translations: f.translations().iter().map(|t| ExportedTranslation::new(&t)).collect(),
+    }
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct ExportedTranslation {
+  pub id: Option<Uuid>,
+  pub author_username: Option<RcString>,
+  pub editor_username: Option<RcString>,
+  pub creation_timestamp: Option<Timestamp>,
+  pub modification_timestamp: Option<Timestamp>,
+  pub text: RcString,
+  pub flags: Option<Rc<HashSet<RcString>>>,
+}
+
+impl ExportedTranslation {
+  pub fn new(real_translation: &Translation) -> Self {
+    let t = real_translation;
+    Self {
+      id: Some(t.id()),
+      author_username: Some(t.author_username().share_rc()),
+      editor_username: Some(t.editor_username().share_rc()),
+      creation_timestamp: Some(t.creation_timestamp()),
+      modification_timestamp: Some(t.modification_timestamp()),
+      text: t.text().share_rc(),
+      flags: Some(t.flags().share_rc()),
+    }
+  }
 }
 
 assert_trait_is_object_safe!(Exporter);
@@ -32,10 +153,12 @@ pub trait Exporter: fmt::Debug {
 
   fn file_extension(&self) -> &'static str;
 
+  fn supports_multiple_translations_for_fragments(&self) -> bool;
+
   fn export(
     &mut self,
-    project_meta: &ProjectMeta,
-    fragments: &[Rc<Fragment>],
+    project_meta: &ExportedProjectMeta,
+    fragments: &[ExportedFragment],
     writer: &mut dyn Write,
   ) -> AnyResult<()>;
 }
@@ -103,10 +226,13 @@ impl Exporter for LocalizeMeTrPackExporter {
   #[inline(always)]
   fn file_extension(&self) -> &'static str { "json" }
 
+  #[inline(always)]
+  fn supports_multiple_translations_for_fragments(&self) -> bool { false }
+
   fn export(
     &mut self,
-    _project_meta: &ProjectMeta,
-    fragments: &[Rc<Fragment>],
+    _project_meta: &ExportedProjectMeta,
+    fragments: &[ExportedFragment],
     writer: &mut dyn Write,
   ) -> AnyResult<()> {
     let fmt = &mut self.json_fmt;
@@ -114,8 +240,8 @@ impl Exporter for LocalizeMeTrPackExporter {
     fmt.begin_object(writer)?;
     let mut is_first_entry = true;
     for fragment in fragments {
-      let translation_text = match fragment.get_best_translation() {
-        Some(tr) => tr.text().share_rc(),
+      let translation_text = match &fragment.best_translation {
+        Some(tr) => tr.text.share_rc(),
         None => RcString::from(""),
       };
 
@@ -205,11 +331,14 @@ impl Exporter for GettextPoExporter {
   #[inline(always)]
   fn file_extension(&self) -> &'static str { "po" }
 
+  #[inline(always)]
+  fn supports_multiple_translations_for_fragments(&self) -> bool { false }
+
   #[allow(clippy::write_with_newline)]
   fn export(
     &mut self,
-    project_meta: &ProjectMeta,
-    fragments: &[Rc<Fragment>],
+    project_meta: &ExportedProjectMeta,
+    fragments: &[ExportedFragment],
     writer: &mut dyn Write,
   ) -> AnyResult<()> {
     fn write_po_string(writer: &mut dyn io::Write, text: &str) -> io::Result<()> {
@@ -244,25 +373,35 @@ impl Exporter for GettextPoExporter {
       time::OffsetDateTime::from_unix_timestamp(timestamp).lazy_format("%Y-%m-%d %H:%M")
     }
 
-    let metadata_block = utils::fast_concat(&[
-      &format!("Project-Id-Version: crosscode {}\n", project_meta.game_version),
-      "Report-Msgid-Bugs-To: \n",
-      &format!(
-        "POT-Creation-Date: {}+0000\n",
-        format_po_timestamp(project_meta.creation_timestamp)
-      ),
-      &format!(
-        "PO-Revision-Date: {}+0000\n",
-        format_po_timestamp(project_meta.modification_timestamp.get())
-      ),
-      "Last-Translator: \n",
-      "Language-Team: \n",
-      &format!("Language: {}\n", project_meta.translation_locale),
-      "MIME-Version: 1.0\n",
-      "Content-Type: text/plain; charset=UTF-8\n",
-      "Content-Transfer-Encoding: 8bit\n",
-      "Plural-Forms: \n",
-      &format!("X-Generator: {} {}\n", crate::CRATE_NAME, crate::CRATE_VERSION),
+    let metadata_block = utils::fast_concat_cow(&[
+      if let Some(game_version) = &project_meta.game_version {
+        format!("Project-Id-Version: crosscode {}\n", game_version).into()
+      } else {
+        "Project-Id-Version: crosscode\n".into()
+      },
+      "Report-Msgid-Bugs-To: \n".into(),
+      if let Some(creation_timestamp) = project_meta.creation_timestamp {
+        format!("POT-Creation-Date: {}+0000\n", format_po_timestamp(creation_timestamp)).into()
+      } else {
+        "POT-Creation-Date: \n".into()
+      },
+      if let Some(modification_timestamp) = project_meta.modification_timestamp {
+        format!("POT-Revision-Date: {}+0000\n", format_po_timestamp(modification_timestamp)).into()
+      } else {
+        "POT-Revision-Date: \n".into()
+      },
+      "Last-Translator: \n".into(),
+      "Language-Team: \n".into(),
+      if let Some(translation_locale) = &project_meta.translation_locale {
+        format!("Language: {}\n", translation_locale).into()
+      } else {
+        "Language: \n".into()
+      },
+      "MIME-Version: 1.0\n".into(),
+      "Content-Type: text/plain; charset=UTF-8\n".into(),
+      "Content-Transfer-Encoding: 8bit\n".into(),
+      "Plural-Forms: \n".into(),
+      format!("X-Generator: {} {}\n", crate::CRATE_NAME, crate::CRATE_VERSION).into(),
     ]);
 
     writer.write_all(b"msgid ")?;
@@ -277,19 +416,25 @@ impl Exporter for GettextPoExporter {
         continue;
       }
 
-      let translation_text = match fragment.get_best_translation() {
-        Some(tr) => tr.text().share_rc(),
-        None => RcString::from(""),
+      let translation_text = match &fragment.best_translation {
+        Some(tr) => tr.text.as_str(),
+        None => "",
       };
 
-      let location_line =
-        format!("{} {} #{}", fragment.file_path, fragment.json_path, fragment.lang_uid);
+      let location_line = format!(
+        "{} {} #{}",
+        fragment.file_path,
+        fragment.json_path,
+        fragment.lang_uid.unwrap_or(0)
+      );
 
       writer.write_all(b"\n")?;
 
       write_po_comment(writer, "#. ", &location_line)?;
-      for line in &*fragment.description {
-        write_po_comment(writer, "#. ", line)?;
+      if let Some(description) = &fragment.description {
+        for line in description.iter() {
+          write_po_comment(writer, "#. ", line)?;
+        }
       }
       write_po_comment(writer, "#: ", &{
         let mut buf = String::new();
@@ -305,7 +450,7 @@ impl Exporter for GettextPoExporter {
       writer.write_all(b"msgid ")?;
       write_po_string(writer, &fragment.original_text)?;
       writer.write_all(b"msgstr ")?;
-      write_po_string(writer, &translation_text)?;
+      write_po_string(writer, translation_text)?;
     }
 
     Ok(())

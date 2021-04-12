@@ -156,6 +156,10 @@ impl ScanDb {
     assert!(prev_file.is_none());
     Ok(file)
   }
+
+  pub fn get_game_file(&self, path: &str) -> Option<Rc<ScanDbGameFile>> {
+    self.game_files.borrow().get(path).cloned()
+  }
 }
 
 #[derive(Debug)]
@@ -218,6 +222,10 @@ impl ScanDbGameFile {
       self.fragments.borrow_mut().insert(fragment.json_path.share_rc(), fragment.share_rc());
     assert!(prev_fragment.is_none());
     fragment
+  }
+
+  pub fn get_fragment(&self, path: &str) -> Option<Rc<ScanDbFragment>> {
+    self.fragments.borrow().get(path).cloned()
   }
 }
 

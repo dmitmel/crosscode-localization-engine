@@ -105,7 +105,7 @@ impl super::Command for ImportCommand {
 
   fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
     let opt_project_dir = PathBuf::from(matches.value_of_os("project_dir").unwrap());
-    let mut opt_inputs: Vec<_> = matches
+    let opt_inputs: Vec<_> = matches
       .values_of_os("inputs")
       .map_or_else(Vec::new, |values| values.map(PathBuf::from).collect());
     let opt_inputs_file = matches.value_of_os("inputs_file").map(PathBuf::from);
@@ -129,32 +129,7 @@ impl super::Command for ImportCommand {
       importers::create_by_id(&opt_format).context("Failed to create the importer")?;
     let mut total_imported_fragments_count = 0;
 
-    let default_author = opt_default_author;
-    let marker_flag = opt_marker_flag;
-
-    if opt_inputs.is_empty() {
-      if let Some(opt_inputs_file) = opt_inputs_file {
-        try_any_result!({
-          let reader = io::BufReader::new(fs::File::open(&opt_inputs_file)?);
-          for line in reader.lines() {
-            opt_inputs.push(PathBuf::from(line?));
-          }
-        })
-        .with_context(|| format_err!("Failed to read inputs from file {:?}", opt_inputs_file))?;
-      }
-    }
-
-    let imported_file_ext = OsStr::new(importer.file_extension());
-    let mut inputs: Vec<PathBuf> = Vec::new();
-    for input_path in opt_inputs {
-      for entry in walkdir::WalkDir::new(&input_path).into_iter() {
-        let entry =
-          entry.with_context(|| format!("Failed to list all files in dir {:?}", input_path))?;
-        if entry.file_type().is_file() && entry.path().extension() == Some(imported_file_ext) {
-          inputs.push(entry.path().to_owned());
-        }
-      }
-    }
+    let inputs = collect_input_files(&opt_inputs, &opt_inputs_file, &*importer)?;
 
     let inputs_len = inputs.len();
     for (i, input_path) in inputs.into_iter().enumerate() {
@@ -176,7 +151,7 @@ impl super::Command for ImportCommand {
         } else {
           warn!(
             "Import {:?}:\n\
-          fragment {:?} {:?}: not found in the project",
+            fragment {:?} {:?}: not found in the project",
             input_path, imported_fragment.file_path, imported_fragment.json_path,
           );
           continue;
@@ -185,7 +160,7 @@ impl super::Command for ImportCommand {
         if *fragment.original_text() != imported_fragment.original_text {
           warn!(
             "Import {:?}:\n\
-          fragment {:?} {:?}: stale original text, translation are likely outdated",
+            fragment {:?} {:?}: stale original text, translation are likely outdated",
             input_path, imported_fragment.file_path, imported_fragment.json_path,
           );
         }
@@ -201,7 +176,10 @@ impl super::Command for ImportCommand {
         let mut remaining_existing_translations: Option<Vec<Rc<Translation>>> = None;
         for imported_translation in imported_fragment.translations {
           let imported_translation_author =
-            imported_translation.author_username.unwrap_or_else(|| default_author.share_rc());
+            imported_translation.author_username.unwrap_or_else(|| opt_default_author.share_rc());
+          let imported_translation_editor = imported_translation
+            .editor_username
+            .unwrap_or_else(|| imported_translation_author.share_rc());
 
           let existing_translation = if !opt_always_add_new_translations {
             let remaining_existing_translations = remaining_existing_translations
@@ -210,7 +188,8 @@ impl super::Command for ImportCommand {
             remaining_existing_translations
               .iter()
               .position(|tr| {
-                tr.has_flag(&marker_flag) && *tr.author_username() == imported_translation_author
+                tr.has_flag(&opt_marker_flag)
+                  && *tr.author_username() == imported_translation_author
               })
               .map(|existing_translation_i: usize| -> Rc<Translation> {
                 remaining_existing_translations.remove(existing_translation_i)
@@ -226,7 +205,7 @@ impl super::Command for ImportCommand {
               imported_translation.modification_timestamp.unwrap_or(timestamp),
             );
             existing_translation.set_text(imported_translation.text);
-            for flag in imported_translation.flags {
+            for flag in imported_translation.flags.into_iter() {
               existing_translation.add_flag(flag);
             }
             for flag in &opt_add_flags {
@@ -235,14 +214,14 @@ impl super::Command for ImportCommand {
           } else {
             let mut flags =
               HashSet::with_capacity(1 + imported_translation.flags.len() + opt_add_flags.len());
-            flags.insert(marker_flag.share_rc());
+            flags.insert(opt_marker_flag.share_rc());
             flags.extend(imported_translation.flags.into_iter());
             flags.extend(opt_add_flags.iter().cloned());
 
             fragment.new_translation(project::TranslationInitOpts {
               id: utils::new_uuid(),
-              author_username: imported_translation_author.share_rc(),
-              editor_username: imported_translation_author,
+              author_username: imported_translation_author,
+              editor_username: imported_translation_editor,
               creation_timestamp: timestamp,
               modification_timestamp: imported_translation
                 .modification_timestamp
@@ -265,4 +244,44 @@ impl super::Command for ImportCommand {
 
     Ok(())
   }
+}
+
+pub fn collect_input_files(
+  opt_inputs: &[PathBuf],
+  opt_inputs_file: &Option<PathBuf>,
+  importer: &dyn importers::Importer,
+) -> AnyResult<Vec<PathBuf>> {
+  let mut inputs_from_inputs_file: Vec<PathBuf>;
+  // Redeclaration of opt_inputs makes the lifetime of the reference short
+  // enough that it can be substituted with a reference to
+  // inputs_from_inputs_file, which lives only inside of the function.
+  let opt_inputs: &[PathBuf] = if opt_inputs.is_empty() {
+    inputs_from_inputs_file = Vec::new();
+    if let Some(opt_inputs_file) = opt_inputs_file {
+      try_any_result!({
+        let reader = io::BufReader::new(fs::File::open(&opt_inputs_file)?);
+        for line in reader.lines() {
+          inputs_from_inputs_file.push(PathBuf::from(line?));
+        }
+      })
+      .with_context(|| format_err!("Failed to read inputs from file {:?}", opt_inputs_file))?;
+    }
+    &inputs_from_inputs_file
+  } else {
+    opt_inputs
+  };
+
+  let imported_file_ext = OsStr::new(importer.file_extension());
+  let mut input_files: Vec<PathBuf> = Vec::new();
+  for input_path in opt_inputs {
+    for entry in walkdir::WalkDir::new(&input_path).into_iter() {
+      let entry =
+        entry.with_context(|| format!("Failed to list all files in dir {:?}", input_path))?;
+      if entry.file_type().is_file() && entry.path().extension() == Some(imported_file_ext) {
+        input_files.push(entry.path().to_owned());
+      }
+    }
+  }
+
+  Ok(input_files)
 }

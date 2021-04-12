@@ -1,17 +1,16 @@
 use crate::impl_prelude::*;
 use crate::localize_me;
-use crate::project::exporters;
+use crate::project::exporters::{self, ExportedFragment};
 use crate::project::splitters;
-use crate::project::{Fragment, Project};
+use crate::project::Project;
 use crate::rc_string::{MaybeStaticStr, RcString};
+use crate::utils;
 use crate::utils::json;
-use crate::utils::{self, RcExt};
 
 use indexmap::IndexMap;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct ExportCommand;
@@ -119,16 +118,16 @@ impl super::Command for ExportCommand {
       _ => None,
     };
 
-    let mut all_exported_fragments = Vec::<Rc<Fragment>>::new();
-    let mut fragments_by_export_path = IndexMap::<RcString, Vec<Rc<Fragment>>>::new();
+    let mut total_exported_fragments_count = 0;
+    let mut all_exported_fragments = Vec::<ExportedFragment>::new();
+    let mut fragments_by_export_path = IndexMap::<RcString, Vec<ExportedFragment>>::new();
     let mut exported_files_mapping = IndexMap::<RcString, RcString>::new();
 
     let export_file_extension = exporter.file_extension();
 
     for game_file in project.virtual_game_files().values() {
       let game_file_path = game_file.path();
-      let mut fragments_in_export_file: Option<&mut Vec<_>> = if let Some(splitter) = &mut splitter
-      {
+      let fragments_in_export_file: &mut Vec<_> = if let Some(splitter) = &mut splitter {
         let export_file_path: MaybeStaticStr = if let Some(path) =
           splitter.get_tr_file_for_entire_game_file(game_file.asset_root(), game_file_path)
         {
@@ -150,44 +149,41 @@ impl super::Command for ExportCommand {
         } else {
           game_file_path.share_rc()
         };
-        let mapping_game_file_path_2 = mapping_game_file_path.share_rc();
-        if let Some(prev_assigned_export_file_path) =
-          exported_files_mapping.insert(mapping_game_file_path, export_file_path.share_rc())
+        if let Some(prev_assigned_export_file_path) = exported_files_mapping
+          .insert(mapping_game_file_path.share_rc(), export_file_path.share_rc())
         {
           ensure!(
             prev_assigned_export_file_path == export_file_path,
             "The splitter has assigned inconsistent export paths to the game file {:?}: the \
             previous value was {:?}, the new one is {:?}. This is a bug in the splitter.",
-            mapping_game_file_path_2,
+            mapping_game_file_path,
             prev_assigned_export_file_path,
             export_file_path,
           );
         }
 
-        Some(fragments_by_export_path.entry(export_file_path.share_rc()).or_insert_with(Vec::new))
+        fragments_by_export_path.entry(export_file_path.share_rc()).or_insert_with(Vec::new)
       } else {
-        None
+        &mut all_exported_fragments
       };
 
       for fragment in game_file.fragments().values() {
         if opt_remove_untranslated && fragment.translations().is_empty() {
           continue;
         }
-
-        all_exported_fragments.push(fragment.share_rc());
-        if let Some(fragments_in_export_file) = &mut fragments_in_export_file {
-          fragments_in_export_file.push(fragment.share_rc());
-        }
+        fragments_in_export_file.push(ExportedFragment::new(fragment));
+        total_exported_fragments_count += 1;
       }
     }
 
+    let exported_meta = exporters::ExportedProjectMeta::new(project.meta());
     let mut export_fragments_to_file =
-      |path: &Path, fragments: &[Rc<Fragment>]| -> AnyResult<()> {
+      |path: &Path, fragments: &[ExportedFragment]| -> AnyResult<()> {
         let mut writer = io::BufWriter::new(
           fs::File::create(&path)
             .with_context(|| format!("Failed to open file {:?} for writing", path))?,
         );
-        exporter.export(project.meta(), &fragments, &mut writer)?;
+        exporter.export(&exported_meta, &fragments, &mut writer)?;
         writer.flush()?;
         Ok(())
       };
@@ -207,13 +203,13 @@ impl super::Command for ExportCommand {
 
       info!(
         "Exported {} fragments to {} files",
-        all_exported_fragments.len(),
+        total_exported_fragments_count,
         fragments_by_export_path.len(),
       );
     } else {
       export_fragments_to_file(&opt_output, &all_exported_fragments)
         .with_context(|| format!("Failed to export all fragments to file {:?}", opt_output))?;
-      info!("Exported {} fragments", all_exported_fragments.len());
+      info!("Exported {} fragments", total_exported_fragments_count);
     }
 
     if let Some(mapping_file_path) = opt_mapping_output {

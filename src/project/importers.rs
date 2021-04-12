@@ -22,6 +22,7 @@ pub struct ImportedFragment {
 #[derive(Debug)]
 pub struct ImportedTranslation {
   pub author_username: Option<RcString>,
+  pub editor_username: Option<RcString>,
   pub creation_timestamp: Option<Timestamp>,
   pub modification_timestamp: Option<Timestamp>,
   pub text: RcString,
@@ -41,6 +42,8 @@ pub trait Importer: fmt::Debug {
   fn id(&self) -> &'static str;
 
   fn file_extension(&self) -> &'static str;
+
+  fn supports_multiple_translations_for_fragments(&self) -> bool;
 
   fn import(
     &mut self,
@@ -104,6 +107,9 @@ impl Importer for LocalizeMeTrPackImporter {
   #[inline(always)]
   fn file_extension(&self) -> &'static str { "json" }
 
+  #[inline(always)]
+  fn supports_multiple_translations_for_fragments(&self) -> bool { false }
+
   fn import(
     &mut self,
     file_path: &Path,
@@ -127,6 +133,7 @@ impl Importer for LocalizeMeTrPackImporter {
         original_text: RcString::from(tr_pack_entry.orig),
         translations: vec![ImportedTranslation {
           author_username: None,
+          editor_username: None,
           creation_timestamp: None,
           modification_timestamp: None,
           text: RcString::from(tr_pack_entry.text),
@@ -169,6 +176,9 @@ impl Importer for CcRuChapterFragmentsImporter {
   #[inline(always)]
   fn file_extension(&self) -> &'static str { "json" }
 
+  #[inline(always)]
+  fn supports_multiple_translations_for_fragments(&self) -> bool { false }
+
   fn import(
     &mut self,
     _file_path: &Path,
@@ -187,8 +197,9 @@ impl Importer for CcRuChapterFragmentsImporter {
           .into_iter()
           .map(|t| ImportedTranslation {
             author_username: Some(RcString::from(t.author_username)),
+            editor_username: None,
             creation_timestamp: Some(t.timestamp),
-            modification_timestamp: None,
+            modification_timestamp: Some(t.timestamp),
             text: RcString::from(t.text),
             flags: {
               let mut flags = HashSet::with_capacity(t.flags.len());
@@ -237,6 +248,9 @@ impl Importer for GettextPoImporter {
   #[inline(always)]
   fn file_extension(&self) -> &'static str { "po" }
 
+  #[inline(always)]
+  fn supports_multiple_translations_for_fragments(&self) -> bool { false }
+
   fn import(
     &mut self,
     file_path: &Path,
@@ -253,7 +267,7 @@ impl Importer for GettextPoImporter {
       let msgctxt = utils::fast_concat_cow(&message.msgctxt);
       let msgid = utils::fast_concat_cow(&message.msgid);
       let msgstr = utils::fast_concat_cow(&message.msgstr);
-      if msgid.is_empty() || msgctxt.is_empty() || msgstr.is_empty() {
+      if msgid.is_empty() || msgctxt.is_empty() {
         continue;
       }
 
@@ -276,13 +290,18 @@ impl Importer for GettextPoImporter {
         file_path: RcString::from(file_path),
         json_path: RcString::from(json_path),
         original_text: RcString::from(msgid),
-        translations: vec![ImportedTranslation {
-          author_username: None,
-          creation_timestamp: None,
-          modification_timestamp: None,
-          text: RcString::from(msgstr),
-          flags: HashSet::new(),
-        }],
+        translations: if !msgstr.is_empty() {
+          vec![ImportedTranslation {
+            author_username: None,
+            editor_username: None,
+            creation_timestamp: None,
+            modification_timestamp: None,
+            text: RcString::from(msgstr),
+            flags: HashSet::new(),
+          }]
+        } else {
+          Vec::new()
+        },
       });
     }
     Ok(())

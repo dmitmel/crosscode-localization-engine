@@ -1,4 +1,5 @@
 pub mod backend;
+pub mod convert;
 pub mod create_project;
 pub mod dump_scan;
 pub mod export;
@@ -47,6 +48,7 @@ pub trait Command {
 pub fn all_commands() -> Vec<Box<dyn Command>> {
   vec![
     Box::new(backend::BackendCommand),
+    Box::new(convert::ConvertCommand),
     Box::new(create_project::CreateProjectCommand),
     Box::new(dump_scan::DumpScanCommand),
     Box::new(export::ExportCommand),
