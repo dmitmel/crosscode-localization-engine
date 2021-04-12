@@ -21,17 +21,17 @@ pub struct ScanDbSerde {
   #[serde(rename = "ctime")]
   pub creation_timestamp: Timestamp,
   pub game_version: RcString,
-  pub game_files: IndexMap<RcString, ScanDbGameFileSerde>,
+  pub game_files: IndexMap<RcString, ScanGameFileSerde>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ScanDbGameFileSerde {
+pub struct ScanGameFileSerde {
   pub asset_root: RcString,
-  pub fragments: IndexMap<RcString, ScanDbFragmentSerde>,
+  pub fragments: IndexMap<RcString, ScanFragmentSerde>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ScanDbFragmentSerde {
+pub struct ScanFragmentSerde {
   #[serde(rename = "luid")]
   pub lang_uid: i32,
   #[serde(rename = "desc")]
@@ -63,7 +63,7 @@ pub struct ScanDb {
   db_file_path: PathBuf,
   #[serde(flatten)]
   meta: ScanDbMeta,
-  game_files: RefCell<IndexMap<RcString, Rc<ScanDbGameFile>>>,
+  game_files: RefCell<IndexMap<RcString, Rc<ScanGameFile>>>,
 }
 
 impl ScanDb {
@@ -74,7 +74,7 @@ impl ScanDb {
   #[inline(always)]
   pub fn meta(&self) -> &ScanDbMeta { &self.meta }
   #[inline(always)]
-  pub fn game_files(&self) -> Ref<IndexMap<RcString, Rc<ScanDbGameFile>>> {
+  pub fn game_files(&self) -> Ref<IndexMap<RcString, Rc<ScanGameFile>>> {
     self.game_files.borrow()
   }
 
@@ -109,13 +109,13 @@ impl ScanDb {
     });
 
     for (game_file_path, game_file_raw) in raw_data.game_files {
-      let file = myself.new_game_file(ScanDbGameFileInitOpts {
+      let file = myself.new_game_file(ScanGameFileInitOpts {
         asset_root: game_file_raw.asset_root,
         path: game_file_path,
       })?;
 
       for (fragment_json_path, fragment_raw) in game_file_raw.fragments {
-        file.new_fragment(ScanDbFragmentInitOpts {
+        file.new_fragment(ScanFragmentInitOpts {
           json_path: fragment_json_path,
           lang_uid: fragment_raw.lang_uid,
           description: fragment_raw.description,
@@ -148,28 +148,28 @@ impl ScanDb {
 
   pub fn new_game_file(
     self: &Rc<Self>,
-    opts: ScanDbGameFileInitOpts,
-  ) -> AnyResult<Rc<ScanDbGameFile>> {
+    opts: ScanGameFileInitOpts,
+  ) -> AnyResult<Rc<ScanGameFile>> {
     self.dirty_flag.set(true);
-    let file = ScanDbGameFile::new(self, opts)?;
+    let file = ScanGameFile::new(self, opts)?;
     let prev_file = self.game_files.borrow_mut().insert(file.path.share_rc(), file.share_rc());
     assert!(prev_file.is_none());
     Ok(file)
   }
 
-  pub fn get_game_file(&self, path: &str) -> Option<Rc<ScanDbGameFile>> {
+  pub fn get_game_file(&self, path: &str) -> Option<Rc<ScanGameFile>> {
     self.game_files.borrow().get(path).cloned()
   }
 }
 
 #[derive(Debug)]
-pub struct ScanDbGameFileInitOpts {
+pub struct ScanGameFileInitOpts {
   pub path: RcString,
   pub asset_root: RcString,
 }
 
 #[derive(Debug, Serialize)]
-pub struct ScanDbGameFile {
+pub struct ScanGameFile {
   #[serde(skip)]
   dirty_flag: Rc<Cell<bool>>,
   #[serde(skip)]
@@ -177,10 +177,10 @@ pub struct ScanDbGameFile {
   asset_root: RcString,
   #[serde(skip)]
   path: RcString,
-  fragments: RefCell<IndexMap<RcString, Rc<ScanDbFragment>>>,
+  fragments: RefCell<IndexMap<RcString, Rc<ScanFragment>>>,
 }
 
-impl ScanDbGameFile {
+impl ScanGameFile {
   #[inline(always)]
   pub fn is_dirty(&self) -> bool { self.dirty_flag.get() }
   #[inline]
@@ -190,11 +190,9 @@ impl ScanDbGameFile {
   #[inline(always)]
   pub fn path(&self) -> &RcString { &self.path }
   #[inline(always)]
-  pub fn fragments(&self) -> Ref<IndexMap<RcString, Rc<ScanDbFragment>>> {
-    self.fragments.borrow()
-  }
+  pub fn fragments(&self) -> Ref<IndexMap<RcString, Rc<ScanFragment>>> { self.fragments.borrow() }
 
-  fn new(scan_db: &Rc<ScanDb>, opts: ScanDbGameFileInitOpts) -> AnyResult<Rc<Self>> {
+  fn new(scan_db: &Rc<ScanDb>, opts: ScanGameFileInitOpts) -> AnyResult<Rc<Self>> {
     ensure!(
       opts.path.starts_with(&*opts.asset_root),
       "Path to a game file ({:?}) must start with its asset root ({:?})",
@@ -214,23 +212,23 @@ impl ScanDbGameFile {
     self.fragments.borrow_mut().reserve(additional_capacity);
   }
 
-  pub fn new_fragment(self: &Rc<Self>, opts: ScanDbFragmentInitOpts) -> Rc<ScanDbFragment> {
+  pub fn new_fragment(self: &Rc<Self>, opts: ScanFragmentInitOpts) -> Rc<ScanFragment> {
     self.dirty_flag.set(true);
     let scan_db = self.scan_db();
-    let fragment = ScanDbFragment::new(&scan_db, self, opts);
+    let fragment = ScanFragment::new(&scan_db, self, opts);
     let prev_fragment =
       self.fragments.borrow_mut().insert(fragment.json_path.share_rc(), fragment.share_rc());
     assert!(prev_fragment.is_none());
     fragment
   }
 
-  pub fn get_fragment(&self, path: &str) -> Option<Rc<ScanDbFragment>> {
+  pub fn get_fragment(&self, path: &str) -> Option<Rc<ScanFragment>> {
     self.fragments.borrow().get(path).cloned()
   }
 }
 
 #[derive(Debug)]
-pub struct ScanDbFragmentInitOpts {
+pub struct ScanFragmentInitOpts {
   pub json_path: RcString,
   pub lang_uid: i32,
   pub description: Rc<Vec<RcString>>,
@@ -239,13 +237,13 @@ pub struct ScanDbFragmentInitOpts {
 }
 
 #[derive(Debug, Serialize)]
-pub struct ScanDbFragment {
+pub struct ScanFragment {
   #[serde(skip)]
   dirty_flag: Rc<Cell<bool>>,
   #[serde(skip)]
   scan_db: RcWeak<ScanDb>,
   #[serde(skip)]
-  file: RcWeak<ScanDbGameFile>,
+  file: RcWeak<ScanGameFile>,
   #[serde(skip)]
   file_asset_root: RcString,
   #[serde(skip)]
@@ -260,13 +258,13 @@ pub struct ScanDbFragment {
   flags: Rc<HashSet<RcString>>,
 }
 
-impl ScanDbFragment {
+impl ScanFragment {
   #[inline(always)]
   pub fn is_dirty(&self) -> bool { self.dirty_flag.get() }
   #[inline]
   pub fn scan_db(&self) -> Rc<ScanDb> { self.scan_db.upgrade().unwrap() }
   #[inline]
-  pub fn file(&self) -> Rc<ScanDbGameFile> { self.file.upgrade().unwrap() }
+  pub fn file(&self) -> Rc<ScanGameFile> { self.file.upgrade().unwrap() }
   #[inline(always)]
   pub fn file_asset_root(&self) -> &RcString { &self.file_asset_root }
   #[inline(always)]
@@ -284,11 +282,7 @@ impl ScanDbFragment {
   #[inline(always)]
   pub fn flags(&self) -> &Rc<HashSet<RcString>> { &self.flags }
 
-  fn new(
-    scan_db: &Rc<ScanDb>,
-    file: &Rc<ScanDbGameFile>,
-    opts: ScanDbFragmentInitOpts,
-  ) -> Rc<Self> {
+  fn new(scan_db: &Rc<ScanDb>, file: &Rc<ScanGameFile>, opts: ScanFragmentInitOpts) -> Rc<Self> {
     Rc::new(Self {
       dirty_flag: scan_db.dirty_flag.share_rc(),
       scan_db: Rc::downgrade(scan_db),

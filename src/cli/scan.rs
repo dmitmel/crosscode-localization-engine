@@ -98,7 +98,7 @@ impl super::Command for ScanCommand {
     let all_json_files_len = all_json_files.len();
     for (i, found_file) in all_json_files.into_iter().enumerate() {
       trace!("[{}/{}] {:?}", i + 1, all_json_files_len, found_file.path);
-      let mut scan_db_file: Option<Rc<scan::ScanDbGameFile>> = None;
+      let mut scan_db_file: Option<Rc<scan::ScanGameFile>> = None;
 
       let abs_path = opt_assets_dir.join(&found_file.path);
       let json_data: json::Value = utils::json::read_file(&abs_path, &mut Vec::new())
@@ -130,14 +130,14 @@ impl super::Command for ScanCommand {
         };
 
         if scan_db_file.is_none() {
-          scan_db_file = Some(scan_db.new_game_file(scan::ScanDbGameFileInitOpts {
+          scan_db_file = Some(scan_db.new_game_file(scan::ScanGameFileInitOpts {
             path: found_file.path.share_rc(),
             asset_root: found_file.asset_root.share_rc(),
           })?);
         }
         let scan_db_file = scan_db_file.as_mut().unwrap();
 
-        scan_db_file.new_fragment(scan::ScanDbFragmentInitOpts {
+        scan_db_file.new_fragment(scan::ScanFragmentInitOpts {
           json_path,
           lang_uid,
           description: Rc::new(description),
