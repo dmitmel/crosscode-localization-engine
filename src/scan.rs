@@ -1,3 +1,6 @@
+// NOTE: Compact UUIDs aren't used for the scan database meta for compatibility
+// with existing code in cc-ru and the scan databases I have generated so far.
+
 pub mod fragment_descriptions;
 pub mod json_file_finder;
 pub mod lang_label_extractor;

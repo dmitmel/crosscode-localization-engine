@@ -105,6 +105,7 @@ pub enum ResponseMessageType {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ListedFragment {
+  #[serde(with = "utils::serde::CompactUuidHelper")]
   pub id: Uuid,
   #[serde(rename = "json")]
   pub json_path: RcString,
@@ -126,6 +127,7 @@ pub struct ListedFragment {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ListedTranslation {
+  #[serde(with = "utils::serde::CompactUuidHelper")]
   pub id: Uuid,
   #[serde(rename = "author")]
   pub author_username: RcString,
@@ -142,6 +144,7 @@ pub struct ListedTranslation {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ListedComment {
+  #[serde(with = "utils::serde::CompactUuidHelper")]
   pub id: Uuid,
   #[serde(rename = "author")]
   pub author_username: RcString,

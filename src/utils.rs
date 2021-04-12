@@ -19,6 +19,105 @@ use uuid::Uuid;
 #[inline(always)]
 pub fn new_uuid() -> Uuid { Uuid::new_v4() }
 
+pub const UUID_BYTE_LEN: usize = 16;
+pub const COMPACT_UUID_BYTE_LEN: usize = 26;
+
+/// The encoder/decoder of compact UUIDs is a domain-optimized variant of
+/// <https://github.com/andreasots/base32/blob/d901ddebf9254d5730a64ca7286df47f0fd78bdb/src/lib.rs>.
+pub type CompactUuid = [u8; COMPACT_UUID_BYTE_LEN];
+
+/// <https://tools.ietf.org/html/rfc4648>
+static BASE32_ALPHABET: [u8; 32] = *b"abcdefghijklmnopqrstuvwxyz234567";
+/// <https://tools.ietf.org/html/rfc4648>
+#[rustfmt::skip]
+static BASE32_INV_ALPHABET: [i8; 1 << 8] = [
+  //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, // 0
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, // 1
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, // 2
+  -1, -1, 26, 27, 28, 29, 30, 31, -1, -1, -1, -1, -1,  0, -1, -1, // 3
+  -1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, // 4
+  15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1, // 5
+  -1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, // 6
+  15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1, // 7
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, // 8
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, // 9
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, // A
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, // B
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, // C
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, // D
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, // E
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, // F
+];
+const BASE32_INPUT_BLOCK_SIZE: usize = 5;
+const BASE32_ENCODED_BLOCK_SIZE: usize = 8;
+
+/// This function should compile down to assembly without branching or panics.
+/// Optimized variant of <https://github.com/andreasots/base32/blob/d901ddebf9254d5730a64ca7286df47f0fd78bdb/src/lib.rs#L12-L53>.
+pub fn encode_compact_uuid(uuid: &Uuid) -> CompactUuid {
+  let input: &[u8; UUID_BYTE_LEN] = uuid.as_bytes();
+  let mut input_padded = [0u8; BASE32_INPUT_BLOCK_SIZE * 4];
+  input_padded[..UUID_BYTE_LEN].copy_from_slice(input);
+
+  let mut out_buffer = [0u8; BASE32_ENCODED_BLOCK_SIZE * 4];
+  let mut out_current: &mut [u8] = &mut out_buffer;
+  for block in input_padded.chunks(BASE32_INPUT_BLOCK_SIZE) {
+    let alphabet = BASE32_ALPHABET;
+    #[rustfmt::skip]
+    let encoded_block: [u8; BASE32_ENCODED_BLOCK_SIZE] = [
+      alphabet[( (block[0] & 0xF8) >> 3)                             as usize],
+      alphabet[(((block[0] & 0x07) << 2) | ((block[1] & 0xC0) >> 6)) as usize],
+      alphabet[( (block[1] & 0x3E) >> 1)                             as usize],
+      alphabet[(((block[1] & 0x01) << 4) | ((block[2] & 0xF0) >> 4)) as usize],
+      alphabet[(((block[2] & 0x0F) << 1) |  (block[3]         >> 7)) as usize],
+      alphabet[( (block[3] & 0x7C) >> 2)                             as usize],
+      alphabet[(((block[3] & 0x03) << 3) | ((block[4] & 0xE0) >> 5)) as usize],
+      alphabet[ ( block[4] & 0x1F      )                             as usize],
+    ];
+    out_current[..BASE32_ENCODED_BLOCK_SIZE].copy_from_slice(&encoded_block);
+    out_current = &mut out_current[BASE32_ENCODED_BLOCK_SIZE..];
+  }
+
+  let mut encoded: CompactUuid = [0; COMPACT_UUID_BYTE_LEN];
+  encoded.copy_from_slice(&out_buffer[..COMPACT_UUID_BYTE_LEN]);
+  encoded
+}
+
+/// This function should compile down to assembly without branching or panics.
+/// Optimized variant of <https://github.com/andreasots/base32/blob/d901ddebf9254d5730a64ca7286df47f0fd78bdb/src/lib.rs#L55-L101>.
+pub fn decode_compact_uuid(compact_uuid: &CompactUuid) -> Option<Uuid> {
+  let encoded: &[u8; COMPACT_UUID_BYTE_LEN] = compact_uuid;
+  let mut encoded_padded = [0u8; BASE32_ENCODED_BLOCK_SIZE * 4];
+  encoded_padded[..COMPACT_UUID_BYTE_LEN].copy_from_slice(encoded);
+
+  for byte in &mut encoded_padded[..COMPACT_UUID_BYTE_LEN] {
+    let value: i8 = BASE32_INV_ALPHABET[*byte as usize];
+    if value < 0 {
+      return None;
+    }
+    *byte = value as u8;
+  }
+
+  let mut out_buffer = [0u8; BASE32_INPUT_BLOCK_SIZE * 4];
+  let mut out_current: &mut [u8] = &mut out_buffer;
+  for block in encoded_padded.chunks(BASE32_ENCODED_BLOCK_SIZE) {
+    #[rustfmt::skip]
+    let decoded_block: [u8; BASE32_INPUT_BLOCK_SIZE] = [
+      ((block[0] << 3) | (block[1] >> 2)                  ),
+      ((block[1] << 6) | (block[2] << 1) | (block[3] >> 4)),
+      ((block[3] << 4) | (block[4] >> 1)                  ),
+      ((block[4] << 7) | (block[5] << 2) | (block[6] >> 3)),
+      ((block[6] << 5) |  block[7]                        ),
+    ];
+    out_current[..BASE32_INPUT_BLOCK_SIZE].copy_from_slice(&decoded_block);
+    out_current = &mut out_current[BASE32_INPUT_BLOCK_SIZE..];
+  }
+
+  let mut decoded: uuid::Bytes = [0; UUID_BYTE_LEN];
+  decoded.copy_from_slice(&out_buffer[..UUID_BYTE_LEN]);
+  Some(Uuid::from_bytes(decoded))
+}
+
 pub type Timestamp = i64;
 
 pub fn get_timestamp() -> Timestamp {
@@ -187,5 +286,17 @@ mod tests {
     assert_eq!(split_filename_extension(".name.ext."), (".name.ext", Some("")));
     assert_eq!(split_filename_extension("name.ext1.ext2"), ("name.ext1", Some("ext2")));
     assert_eq!(split_filename_extension(".name.ext1.ext2"), (".name.ext1", Some("ext2")));
+  }
+
+  #[test]
+  fn test_compact_uuid() {
+    for _ in 1..1000 {
+      let initial_uuid = Uuid::new_v4();
+      let mut current_uuid = initial_uuid;
+      for _ in 1..10 {
+        current_uuid = decode_compact_uuid(&encode_compact_uuid(&current_uuid)).unwrap();
+      }
+      assert_eq!(current_uuid, initial_uuid);
+    }
   }
 }

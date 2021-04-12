@@ -1,6 +1,12 @@
+// TODO: Apparently automatic borrowing via deserialization of Cow doesn't
+// work. I need to implement the visitors myself.
+
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
 use std::cell::{Ref, RefCell, RefMut};
+use std::convert::TryFrom;
+use std::str;
+use uuid::Uuid;
 
 pub const MULTILINE_STRING_WRAP_WIDTH: usize = 80;
 
@@ -79,5 +85,35 @@ impl RefMutHelper {
     T: Serialize,
   {
     value.serialize(serializer)
+  }
+}
+
+#[derive(Debug)]
+pub struct CompactUuidHelper;
+
+// TODO: Handle direct (de)serialization (from) to byte arrays without
+// encoding, like here:
+// <https://github.com/uuid-rs/uuid/blob/34a4f1c65b63b29e828a078566bd3a7c5e042c76/src/serde_support.rs>.
+impl CompactUuidHelper {
+  pub fn serialize<S>(value: &Uuid, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    let bytes = super::encode_compact_uuid(value);
+    str::from_utf8(&bytes).unwrap().serialize(serializer)
+  }
+
+  pub fn deserialize<'de, D>(deserializer: D) -> Result<Uuid, D::Error>
+  where
+    D: Deserializer<'de>,
+  {
+    let text = Cow::<'de, str>::deserialize(deserializer)?;
+    match try {
+      let bytes = <[u8; super::COMPACT_UUID_BYTE_LEN]>::try_from(text.as_bytes()).ok()?;
+      super::decode_compact_uuid(&bytes)?
+    } {
+      Some(v) => Ok(v),
+      None => Err(serde::de::Error::custom("compact UUID parsing failed")),
+    }
   }
 }

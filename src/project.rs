@@ -25,6 +25,7 @@ pub static META_FILE_NAME: Lazy<&'static Path> =
 
 #[derive(Debug, Deserialize)]
 pub struct ProjectMetaSerde {
+  #[serde(with = "utils::serde::CompactUuidHelper")]
   pub id: Uuid,
   #[serde(rename = "ctime")]
   pub creation_timestamp: Timestamp,
@@ -41,6 +42,7 @@ pub struct ProjectMetaSerde {
 
 #[derive(Debug, Deserialize)]
 pub struct TrFileSerde {
+  #[serde(with = "utils::serde::CompactUuidHelper")]
   pub id: Uuid,
   #[serde(rename = "ctime")]
   pub creation_timestamp: Timestamp,
@@ -58,6 +60,7 @@ pub struct GameFileChunkSerde {
 
 #[derive(Debug, Deserialize)]
 pub struct FragmentSerde {
+  #[serde(with = "utils::serde::CompactUuidHelper")]
   pub id: Uuid,
   #[serde(default, rename = "luid")]
   pub lang_uid: i32,
@@ -78,6 +81,7 @@ pub struct FragmentSerde {
 
 #[derive(Debug, Deserialize)]
 pub struct TranslationSerde {
+  #[serde(with = "utils::serde::CompactUuidHelper")]
   pub id: Uuid,
   #[serde(rename = "author")]
   pub author_username: RcString,
@@ -95,6 +99,7 @@ pub struct TranslationSerde {
 
 #[derive(Debug, Deserialize)]
 pub struct CommentSerde {
+  #[serde(with = "utils::serde::CompactUuidHelper")]
   pub id: Uuid,
   #[serde(rename = "author")]
   pub author_username: RcString,
@@ -117,6 +122,7 @@ pub struct ProjectMeta {
   #[serde(skip)]
   project: RcWeak<Project>,
 
+  #[serde(with = "utils::serde::CompactUuidHelper")]
   id: Uuid,
   #[serde(rename = "ctime")]
   creation_timestamp: Timestamp,
@@ -420,6 +426,7 @@ pub struct TrFile {
   #[serde(skip)]
   project: RcWeak<Project>,
 
+  #[serde(with = "utils::serde::CompactUuidHelper")]
   id: Uuid,
   #[serde(rename = "ctime")]
   creation_timestamp: Timestamp,
@@ -644,6 +651,7 @@ pub struct Fragment {
   #[serde(skip)]
   game_file_chunk: RcWeak<GameFileChunk>,
 
+  #[serde(with = "utils::serde::CompactUuidHelper")]
   id: Uuid,
   #[serde(skip)]
   file_path: RcString,
@@ -792,6 +800,7 @@ pub struct Translation {
   #[serde(skip)]
   fragment: RcWeak<Fragment>,
 
+  #[serde(with = "utils::serde::CompactUuidHelper")]
   id: Uuid,
   #[serde(rename = "author")]
   author_username: RcString,
@@ -880,6 +889,7 @@ pub struct Comment {
   #[serde(skip)]
   fragment: RcWeak<Fragment>,
 
+  #[serde(with = "utils::serde::CompactUuidHelper")]
   id: Uuid,
   #[serde(rename = "author")]
   author_username: RcString,
