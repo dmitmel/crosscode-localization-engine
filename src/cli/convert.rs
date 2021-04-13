@@ -204,46 +204,7 @@ impl super::Command for ConvertCommand {
         Some(v) => v,
         None => continue,
       };
-
-      let fragments_in_export_file: &mut Vec<_> = if let Some(splitter) = &mut splitter {
-        let export_file_path: MaybeStaticStr = if let Some(path) =
-          splitter.get_tr_file_for_entire_game_file(scan_game_file.asset_root(), &game_file_path)
-        {
-          path
-        } else {
-          bail!(
-            "The selected splitter can't be used for export because it has requested \
-            per-fragment splitting on the game file {:?}. An entire game file can be assigned \
-            to one and only one export file.",
-            game_file_path,
-          )
-        };
-
-        let export_file_path =
-          RcString::from(utils::fast_concat(&[&export_file_path, ".", export_file_extension]));
-
-        let mapping_game_file_path = if opt_mapping_lm_paths {
-          RcString::from(localize_me::serialize_file_path(&game_file_path))
-        } else {
-          game_file_path.share_rc()
-        };
-        if let Some(prev_assigned_export_file_path) = exported_files_mapping
-          .insert(mapping_game_file_path.share_rc(), export_file_path.share_rc())
-        {
-          ensure!(
-            prev_assigned_export_file_path == export_file_path,
-            "The splitter has assigned inconsistent export paths to the game file {:?}: the \
-            previous value was {:?}, the new one is {:?}. This is a bug in the splitter.",
-            mapping_game_file_path,
-            prev_assigned_export_file_path,
-            export_file_path,
-          );
-        }
-
-        fragments_by_export_path.entry(export_file_path.share_rc()).or_insert_with(Vec::new)
-      } else {
-        &mut all_exported_fragments
-      };
+      let mut fragments_in_export_file: Option<&mut Vec<ExportedFragment>> = None;
 
       for f in fragments_in_import_file {
         let sf = match scan_game_file.get_fragment(&f.json_path) {
@@ -279,7 +240,53 @@ impl super::Command for ConvertCommand {
         let best_translation =
           translations.iter().max_by_key(|f| f.modification_timestamp).cloned();
 
-        fragments_in_export_file.push(ExportedFragment {
+        if fragments_in_export_file.is_none() {
+          fragments_in_export_file = Some(if let Some(splitter) = &mut splitter {
+            let export_file_path: MaybeStaticStr = if let Some(path) = splitter
+              .get_tr_file_for_entire_game_file(scan_game_file.asset_root(), &game_file_path)
+            {
+              path
+            } else {
+              bail!(
+                "The selected splitter can't be used for export because it has requested \
+                per-fragment splitting on the game file {:?}. An entire game file can be \
+                assigned to one and only one export file.",
+                game_file_path,
+              )
+            };
+
+            let export_file_path =
+              RcString::from(utils::fast_concat(&[&export_file_path, ".", export_file_extension]));
+
+            let mapping_game_file_path = if opt_mapping_lm_paths {
+              RcString::from(localize_me::serialize_file_path(&game_file_path))
+            } else {
+              game_file_path.share_rc()
+            };
+            if let Some(prev_assigned_export_file_path) = exported_files_mapping
+              .insert(mapping_game_file_path.share_rc(), export_file_path.share_rc())
+            {
+              ensure!(
+                prev_assigned_export_file_path == export_file_path,
+                "The splitter has assigned inconsistent export paths to the game file {:?}: the \
+                previous value was {:?}, the new one is {:?}. This is a bug in the splitter.",
+                mapping_game_file_path,
+                prev_assigned_export_file_path,
+                export_file_path,
+              );
+            }
+
+            fragments_by_export_path.entry(export_file_path.share_rc()).or_insert_with(Vec::new)
+          } else {
+            &mut all_exported_fragments
+          });
+        }
+
+        match &mut fragments_in_export_file {
+          Some(v) => v,
+          None => unreachable!(),
+        }
+        .push(ExportedFragment {
           id: None,
           file_path: f.file_path,
           json_path: f.json_path,
