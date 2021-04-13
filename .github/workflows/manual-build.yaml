@@ -45,8 +45,12 @@ jobs:
       - name: Install macOS-specific packages
         if: runner.os == 'macOS'
         run: |
-          brew install binutils
-          echo /usr/local/opt/binutils/bin >> "$GITHUB_PATH"
+          brew install coreutils binutils gnu-tar
+          cat >>"$GITHUB_PATH" <<EOF
+          /usr/local/opt/coreutils/bin
+          /usr/local/opt/binutils/bin
+          /usr/local/opt/gnu-tar/libexec/gnubin
+          EOF
 
       - uses: actions/cache@v2
         with:
@@ -76,22 +80,33 @@ jobs:
           npm install --ignore-scripts
           npm run node-gyp rebuild -- -- -D rust_build_profile=release
 
-      - name: Strip debug symbols from the binaries
-        if: runner.os != 'Windows'
-        run: |
-          strip -g target/release/${{ matrix.exe_prefix }}crosslocale${{ matrix.exe_suffix }}
-          strip -g target/release/${{ matrix.dylib_prefix }}crosslocale${{ matrix.dylib_suffix }}
-          strip -g node-bindings/build/Release/crosslocale.node
-
       - name: Package the binaries
         run: |
-          tar -czvf package.tgz \
+          pkgdir="$RUNNER_TEMP"
+          mkdir -pv "$pkgdir"
+
+          cp -av \
             target/release/${{ matrix.exe_prefix }}crosslocale${{ matrix.exe_suffix }} \
             target/release/${{ matrix.dylib_prefix }}crosslocale${{ matrix.dylib_suffix }} \
-            node-bindings/build/Release/crosslocale.node
+            node-bindings/build/Release/crosslocale.node \
+            "$pkgdir"
+
+          cd "$pkgdir"
+
+          if [[ "$RUNNER_OS" != "Windows" ]]; then
+            strip -gv \
+              ${{ matrix.exe_prefix }}crosslocale${{ matrix.exe_suffix }} \
+              ${{ matrix.dylib_prefix }}crosslocale${{ matrix.dylib_suffix }} \
+              crosslocale.node
+          fi
+
+          tar -czv --force-local -f "$RUNNER_TEMP"/package.tgz \
+            ${{ matrix.exe_prefix }}crosslocale${{ matrix.exe_suffix }} \
+            ${{ matrix.dylib_prefix }}crosslocale${{ matrix.dylib_suffix }} \
+            crosslocale.node
 
       - name: Upload the artifacts
         uses: actions/upload-artifact@v1
         with:
           name: package-${{ steps.platform_info.outputs.triple }}.tgz
-          path: package.tgz
+          path: ${{ runner.temp }}/package.tgz
