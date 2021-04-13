@@ -101,6 +101,7 @@ jobs:
           fi
 
           tar -czv --force-local -f "$RUNNER_TEMP"/package.tgz \
+            --format=posix --numeric-owner --owner=0 --group=0 --sort=name \
             ${{ matrix.exe_prefix }}crosslocale${{ matrix.exe_suffix }} \
             ${{ matrix.dylib_prefix }}crosslocale${{ matrix.dylib_suffix }} \
             crosslocale.node
