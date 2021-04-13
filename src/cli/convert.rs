@@ -28,11 +28,23 @@ impl super::Command for ConvertCommand {
       .arg(
         clap::Arg::new("scan_db")
           .value_name("SCAN_DB_PATH")
+          .long("scan")
           .required(true)
           //
           .about(
             "A scan database to use for referencing data like fragment descriptions if the \
             input format doesn't contain it.",
+          ),
+      )
+      .arg(
+        clap::Arg::new("original_locale")
+          .value_name("LOCALE")
+          .long("original-locale")
+          //
+          .about(
+            "Locale of the original strings in the input files, used for warning about staleness \
+            of the translations. Normally, during exports, this is determined from the project \
+            meta file.",
           ),
       )
       .arg(
@@ -137,6 +149,7 @@ impl super::Command for ConvertCommand {
 
   fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
     let opt_scan_db = PathBuf::from(matches.value_of_os("scan_db").unwrap());
+    let opt_original_locale = matches.value_of("original_locale");
     let opt_inputs: Vec<_> = matches
       .values_of_os("inputs")
       .map_or_else(Vec::new, |values| values.map(PathBuf::from).collect());
@@ -166,7 +179,8 @@ impl super::Command for ConvertCommand {
     let scan_db = scan::ScanDb::open(opt_scan_db).context("Failed to open the scan database")?;
 
     let mut total_imported_fragments_count = 0;
-    let mut all_imported_fragments = IndexMap::<RcString, Vec<ImportedFragment>>::new();
+    let mut all_imported_fragments =
+      IndexMap::<RcString, Vec<(Rc<PathBuf>, ImportedFragment)>>::new();
 
     let inputs = super::import::collect_input_files(&opt_inputs, &opt_inputs_file, &*importer)?;
 
@@ -174,7 +188,7 @@ impl super::Command for ConvertCommand {
     for (i, input_path) in inputs.into_iter().enumerate() {
       trace!("[{}/{}] {:?}", i + 1, inputs_len, input_path);
 
-      let input = fs::read_to_string(&input_path)
+      let input = fs::read_to_string(&*input_path)
         .with_context(|| format!("Failed to read file {:?}", input_path))?;
       let mut imported_fragments = Vec::new();
       importer
@@ -185,7 +199,7 @@ impl super::Command for ConvertCommand {
         let fragments_in_import_file = all_imported_fragments
           .entry(imported_fragment.file_path.share_rc())
           .or_insert_with(Vec::new);
-        fragments_in_import_file.push(imported_fragment);
+        fragments_in_import_file.push((input_path.share_rc(), imported_fragment));
         total_imported_fragments_count += 1;
       }
     }
@@ -200,45 +214,39 @@ impl super::Command for ConvertCommand {
     let export_file_extension = exporter.file_extension();
 
     for (game_file_path, fragments_in_import_file) in all_imported_fragments {
-      let scan_game_file = match scan_db.get_game_file(&game_file_path) {
-        Some(v) => v,
-        None => continue,
-      };
+      // Don't stop on not found files just yet, so that we can report an error
+      // for each fragment in that game file, as such keep the Option wrapped.
+      let scan_game_file: Option<_> = scan_db.get_game_file(&game_file_path);
       let mut fragments_in_export_file: Option<&mut Vec<ExportedFragment>> = None;
 
-      for f in fragments_in_import_file {
-        let sf = match scan_game_file.get_fragment(&f.json_path) {
-          Some(v) => v,
-          None => continue,
+      for (input_path, f) in fragments_in_import_file {
+        let (scan_game_file, scan_fragment) = if let Some(v) = try {
+          let sgf = scan_game_file.as_ref()?;
+          (sgf, sgf.get_fragment(&f.json_path)?)
+        } {
+          v
+        } else {
+          warn!(
+            "Import {:?}:\n\
+            fragment {:?} {:?}: not found in the scan database",
+            input_path, f.file_path, f.json_path,
+          );
+          continue;
         };
-
-        // TODO: Add an option --original-locale for checking translation
-        // staleness. (Might as well add --translation-locale)
 
         if opt_remove_untranslated && f.translations.is_empty() {
           continue;
         }
 
-        let translations: Vec<ExportedTranslation> = f
-          .translations
-          .into_iter()
-          .map(|t| {
-            let author = t.author_username.unwrap_or_else(|| opt_default_author.share_rc());
-            let editor = t.editor_username.unwrap_or_else(|| author.share_rc());
-            ExportedTranslation {
-              id: None,
-              author_username: Some(author),
-              editor_username: Some(editor),
-              creation_timestamp: t.creation_timestamp,
-              modification_timestamp: t.modification_timestamp,
-              text: t.text,
-              flags: Some(Rc::new(t.flags)),
-            }
-          })
-          .collect();
-
-        let best_translation =
-          translations.iter().max_by_key(|f| f.modification_timestamp).cloned();
+        if let Some(real_original_text) = try { scan_fragment.text().get(opt_original_locale?)? } {
+          if *real_original_text != f.original_text {
+            warn!(
+              "Import {:?}:\n\
+              fragment {:?} {:?}: stale original text, translation are likely outdated",
+              input_path, f.file_path, f.json_path,
+            );
+          }
+        }
 
         if fragments_in_export_file.is_none() {
           fragments_in_export_file = Some(if let Some(splitter) = &mut splitter {
@@ -282,6 +290,27 @@ impl super::Command for ConvertCommand {
           });
         }
 
+        let translations: Vec<ExportedTranslation> = f
+          .translations
+          .into_iter()
+          .map(|t| {
+            let author = t.author_username.unwrap_or_else(|| opt_default_author.share_rc());
+            let editor = t.editor_username.unwrap_or_else(|| author.share_rc());
+            ExportedTranslation {
+              id: None,
+              author_username: Some(author),
+              editor_username: Some(editor),
+              creation_timestamp: t.creation_timestamp,
+              modification_timestamp: t.modification_timestamp,
+              text: t.text,
+              flags: Some(Rc::new(t.flags)),
+            }
+          })
+          .collect();
+
+        let best_translation =
+          translations.iter().max_by_key(|f| f.modification_timestamp).cloned();
+
         match &mut fragments_in_export_file {
           Some(v) => v,
           None => unreachable!(),
@@ -290,10 +319,10 @@ impl super::Command for ConvertCommand {
           id: None,
           file_path: f.file_path,
           json_path: f.json_path,
-          lang_uid: Some(sf.lang_uid()),
-          description: Some(sf.description().share_rc()),
+          lang_uid: Some(scan_fragment.lang_uid()),
+          description: Some(scan_fragment.description().share_rc()),
           original_text: f.original_text,
-          flags: Some(sf.flags().share_rc()),
+          flags: Some(scan_fragment.flags().share_rc()),
           best_translation,
           translations,
         });

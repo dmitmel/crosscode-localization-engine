@@ -135,7 +135,7 @@ impl super::Command for ImportCommand {
     for (i, input_path) in inputs.into_iter().enumerate() {
       trace!("[{}/{}] {:?}", i + 1, inputs_len, input_path);
 
-      let input = fs::read_to_string(&input_path)
+      let input = fs::read_to_string(&*input_path)
         .with_context(|| format!("Failed to read file {:?}", input_path))?;
       let mut imported_fragments = Vec::new();
       importer
@@ -250,7 +250,7 @@ pub fn collect_input_files(
   opt_inputs: &[PathBuf],
   opt_inputs_file: &Option<PathBuf>,
   importer: &dyn importers::Importer,
-) -> AnyResult<Vec<PathBuf>> {
+) -> AnyResult<Vec<Rc<PathBuf>>> {
   let mut inputs_from_inputs_file: Vec<PathBuf>;
   // Redeclaration of opt_inputs makes the lifetime of the reference short
   // enough that it can be substituted with a reference to
@@ -272,13 +272,13 @@ pub fn collect_input_files(
   };
 
   let imported_file_ext = OsStr::new(importer.file_extension());
-  let mut input_files: Vec<PathBuf> = Vec::new();
+  let mut input_files: Vec<Rc<PathBuf>> = Vec::new();
   for input_path in opt_inputs {
     for entry in walkdir::WalkDir::new(&input_path).into_iter() {
       let entry =
         entry.with_context(|| format!("Failed to list all files in dir {:?}", input_path))?;
       if entry.file_type().is_file() && entry.path().extension() == Some(imported_file_ext) {
-        input_files.push(entry.path().to_owned());
+        input_files.push(Rc::new(entry.path().to_owned()));
       }
     }
   }
