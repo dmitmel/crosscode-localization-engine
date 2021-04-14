@@ -85,6 +85,7 @@ pub enum ResponseMessageType {
   #[serde(rename = "Project/get_meta", skip_deserializing)]
   ProjectGetMeta {
     root_dir: PathBuf,
+    #[serde(with = "utils::serde::CompactUuidHelper")]
     id: Uuid,
     creation_timestamp: Timestamp,
     modification_timestamp: Timestamp,
