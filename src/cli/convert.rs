@@ -379,9 +379,10 @@ impl super::Command for ConvertCommand {
         json::write_file(
           &mapping_file_path,
           &exported_files_mapping,
-          json::UltimateFormatterConfig {
-            indent: if opt_compact { None } else { Some(json::DEFAULT_INDENT) },
-            ..Default::default()
+          if opt_compact {
+            json::UltimateFormatterConfig::compact()
+          } else {
+            json::UltimateFormatterConfig::pretty()
           },
         )
         .with_context(|| format!("Failed to write the mapping file to {:?}", mapping_file_path))?;
