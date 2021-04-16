@@ -1,5 +1,4 @@
 language = "C"
-include_version = true
 usize_is_size_t = true
 
 header = """
