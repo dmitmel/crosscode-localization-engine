@@ -5,6 +5,7 @@ use crate::rc_string::RcString;
 
 use std::fmt::Write as FmtWrite;
 use std::io::Write;
+use std::time::{Duration, Instant};
 
 assert_trait_is_object_safe!(ProgressReporter);
 pub trait ProgressReporter {
@@ -25,13 +26,13 @@ impl ProgressReporter for NopProgressReporter {
 
 pub struct TuiProgresReporter {
   stream: Box<dyn Write>,
-  task_in_progress: bool,
+  start_time: Option<Instant>,
   current_task_info: RcString,
 }
 
 impl TuiProgresReporter {
   pub fn new(stream: Box<dyn Write>) -> Self {
-    Self { stream, task_in_progress: false, current_task_info: RcString::from("") }
+    Self { stream, start_time: None, current_task_info: RcString::from("") }
   }
 }
 
@@ -39,12 +40,12 @@ impl TuiProgresReporter {
 // https://github.com/getsentry/sentry-cli/blob/5769a14cb1a06703250042907e330876f5cada2d/src/utils/logging.rs
 impl ProgressReporter for TuiProgresReporter {
   fn begin_task(&mut self) -> AnyResult<()> {
-    self.task_in_progress = true;
+    self.start_time = Some(Instant::now());
     Ok(())
   }
 
   fn end_task(&mut self) -> AnyResult<()> {
-    self.task_in_progress = false;
+    self.start_time = None;
     self.stream.write_all(b"\n")?;
     self.stream.flush()?;
     Ok(())
@@ -62,12 +63,16 @@ impl ProgressReporter for TuiProgresReporter {
   // already encoded in a static string
   #[allow(clippy::single_char_add_str)]
   fn set_task_progress(&mut self, mut current: usize, total: usize) -> AnyResult<()> {
-    if !self.task_in_progress {
-      return Ok(());
-    }
+    let start_time = match self.start_time {
+      Some(v) => v,
+      None => return Ok(()),
+    };
+    let elapsed: Duration = start_time.elapsed();
 
     current = current.min(total);
     let term_width = terminal_size().map(|(w, _h): (u16, u16)| w as usize).unwrap_or(80);
+
+    let rate = current as f64 / elapsed.as_secs_f64();
 
     // wget --limit-rate=50k https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-7.9p1.tar.gz -O /dev/null 2>&1
     // wget --limit-rate=50k https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-7.9p1.tar.gz -O /dev/null 2>&1 | cat
@@ -106,11 +111,22 @@ impl ProgressReporter for TuiProgresReporter {
     let total_num_width = total_num_str.len(); // correct because digits are ASCII-only
     let current_num_str = current.to_string();
     let current_num_width = current_num_str.len(); // correct because digits are ASCII-only
+    let rate_num_str = (rate as usize).to_string();
+    let rate_num_width = current_num_str.len(); // you get the idea
     right_str.push_str(&" ".repeat(total_num_width.saturating_sub(current_num_width)));
     right_str.push_str(&current_num_str);
     right_str.push_str("/");
     right_str.push_str(&total_num_str);
-    right_str.push_str(" ");
+    right_str.push_str("  ");
+    right_str.push_str(&" ".repeat(total_num_width.saturating_sub(rate_num_width)));
+    right_str.push_str(&rate_num_str);
+    right_str.push_str("/s ");
+
+    let elapsed_seconds = elapsed.as_secs() % 60;
+    let elapsed_minutes = (elapsed.as_secs() / 60) % 60;
+    let elapsed_hours = ((elapsed.as_secs() / 60) / 60) % 60;
+    write!(right_str, " {:02}:{:02}:{:02} ", elapsed_hours, elapsed_minutes, elapsed_seconds)
+      .unwrap();
 
     let total_bar_width = term_width - left_str.chars().count() - right_str.chars().count();
     let mut filled_bar_width = total_bar_width * current / total;
