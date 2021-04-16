@@ -1,4 +1,5 @@
 use crate::impl_prelude::*;
+use crate::progress::ProgressReporter;
 use crate::project;
 use crate::project::splitters;
 use crate::rc_string::RcString;
@@ -87,7 +88,12 @@ impl super::Command for CreateProjectCommand {
       )
   }
 
-  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
+  fn run(
+    &self,
+    _global_opts: super::GlobalOpts,
+    matches: &clap::ArgMatches,
+    _progress: Box<dyn ProgressReporter>,
+  ) -> AnyResult<()> {
     let opt_project_dir = PathBuf::from(matches.value_of_os("project_dir").unwrap());
     let opt_main_scan_db = PathBuf::from(matches.value_of_os("main_scan_db").unwrap());
     let opt_extra_scan_dbs: Vec<_> = matches

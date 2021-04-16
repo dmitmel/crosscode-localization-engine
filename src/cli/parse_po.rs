@@ -1,5 +1,6 @@
 use crate::gettext_po::{self, ParsedMessage};
 use crate::impl_prelude::*;
+use crate::progress::ProgressReporter;
 use crate::utils;
 use crate::utils::json;
 use crate::utils::parsing::ParsingError;
@@ -23,7 +24,12 @@ impl super::Command for ParsePoCommand {
       .arg(clap::Arg::new("json").short('J').long("json"))
   }
 
-  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
+  fn run(
+    &self,
+    _global_opts: super::GlobalOpts,
+    matches: &clap::ArgMatches,
+    _progress: Box<dyn ProgressReporter>,
+  ) -> AnyResult<()> {
     let opt_file = matches.value_of("file").map(PathBuf::from);
     let opt_json = matches.is_present("json");
 

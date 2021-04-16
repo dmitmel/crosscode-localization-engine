@@ -18,6 +18,7 @@ pub mod ffi;
 pub mod gettext_po;
 pub mod impl_prelude;
 pub mod localize_me;
+pub mod progress;
 pub mod project;
 pub mod rc_string;
 pub mod scan;

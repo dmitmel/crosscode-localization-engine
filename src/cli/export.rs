@@ -1,5 +1,6 @@
 use crate::impl_prelude::*;
 use crate::localize_me;
+use crate::progress::ProgressReporter;
 use crate::project::exporters::{self, ExportedFragment};
 use crate::project::splitters;
 use crate::project::Project;
@@ -92,7 +93,12 @@ impl super::Command for ExportCommand {
       )
   }
 
-  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
+  fn run(
+    &self,
+    _global_opts: super::GlobalOpts,
+    matches: &clap::ArgMatches,
+    _progress: Box<dyn ProgressReporter>,
+  ) -> AnyResult<()> {
     let opt_project_dir = PathBuf::from(matches.value_of_os("project_dir").unwrap());
     let opt_output = PathBuf::from(matches.value_of_os("output").unwrap());
     let opt_format = RcString::from(matches.value_of("format").unwrap());

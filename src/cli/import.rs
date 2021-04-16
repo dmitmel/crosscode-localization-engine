@@ -1,4 +1,5 @@
 use crate::impl_prelude::*;
+use crate::progress::ProgressReporter;
 use crate::project::importers;
 use crate::project::{self, Project, Translation};
 use crate::rc_string::RcString;
@@ -103,7 +104,12 @@ impl super::Command for ImportCommand {
       )
   }
 
-  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
+  fn run(
+    &self,
+    _global_opts: super::GlobalOpts,
+    matches: &clap::ArgMatches,
+    _progress: Box<dyn ProgressReporter>,
+  ) -> AnyResult<()> {
     let opt_project_dir = PathBuf::from(matches.value_of_os("project_dir").unwrap());
     let opt_inputs: Vec<_> = matches
       .values_of_os("inputs")

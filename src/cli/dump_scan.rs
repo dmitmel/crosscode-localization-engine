@@ -1,4 +1,5 @@
 use crate::impl_prelude::*;
+use crate::progress::ProgressReporter;
 use crate::scan;
 use crate::utils::json;
 
@@ -62,7 +63,12 @@ impl super::Command for DumpScanCommand {
       )
   }
 
-  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
+  fn run(
+    &self,
+    _global_opts: super::GlobalOpts,
+    matches: &clap::ArgMatches,
+    _progress: Box<dyn ProgressReporter>,
+  ) -> AnyResult<()> {
     let opt_scan_db = PathBuf::from(matches.value_of_os("scan_db").unwrap());
     let opt_compact_output = matches.is_present("compact_output");
     let opt_indent = matches.value_of("indent").unwrap();

@@ -1,5 +1,6 @@
 use crate::impl_prelude::*;
 use crate::localize_me;
+use crate::progress::ProgressReporter;
 use crate::project::exporters::{self, ExportedFragment, ExportedTranslation};
 use crate::project::importers::{self, ImportedFragment};
 use crate::project::splitters;
@@ -147,7 +148,12 @@ impl super::Command for ConvertCommand {
       )
   }
 
-  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
+  fn run(
+    &self,
+    _global_opts: super::GlobalOpts,
+    matches: &clap::ArgMatches,
+    _progress: Box<dyn ProgressReporter>,
+  ) -> AnyResult<()> {
     let opt_scan_db = PathBuf::from(matches.value_of_os("scan_db").unwrap());
     let opt_original_locale = matches.value_of("original_locale");
     let opt_inputs: Vec<_> = matches

@@ -1,6 +1,7 @@
 use crate::backend::transports::StdioTransport;
 use crate::backend::{self, Backend};
 use crate::impl_prelude::*;
+use crate::progress::ProgressReporter;
 
 #[derive(Debug)]
 pub struct BackendCommand;
@@ -30,7 +31,12 @@ impl super::Command for BackendCommand {
       )
   }
 
-  fn run(&self, _global_opts: super::GlobalOpts, _matches: &clap::ArgMatches) -> AnyResult<()> {
+  fn run(
+    &self,
+    _global_opts: super::GlobalOpts,
+    _matches: &clap::ArgMatches,
+    _progress: Box<dyn ProgressReporter>,
+  ) -> AnyResult<()> {
     Backend::new(Box::new(StdioTransport)).start()
   }
 }

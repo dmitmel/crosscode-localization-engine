@@ -82,9 +82,11 @@ name = "crosscode-localization-engine"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "atty",
  "clap",
  "env_logger",
  "indexmap",
+ "libc",
  "log",
  "once_cell",
  "serde",
@@ -93,6 +95,7 @@ dependencies = [
  "time",
  "uuid",
  "walkdir",
+ "winapi",
 ]
 
 [[package]]

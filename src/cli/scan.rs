@@ -1,4 +1,5 @@
 use crate::impl_prelude::*;
+use crate::progress::ProgressReporter;
 use crate::rc_string::RcString;
 use crate::scan;
 use crate::scan::fragment_descriptions;
@@ -66,7 +67,12 @@ impl super::Command for ScanCommand {
       )
   }
 
-  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
+  fn run(
+    &self,
+    _global_opts: super::GlobalOpts,
+    matches: &clap::ArgMatches,
+    mut progress: Box<dyn ProgressReporter>,
+  ) -> AnyResult<()> {
     let opt_assets_dir = PathBuf::from(matches.value_of_os("assets_dir").unwrap());
     let opt_output = PathBuf::from(matches.value_of_os("output").unwrap());
     let opt_extra_locales: HashSet<_> = matches
@@ -95,9 +101,11 @@ impl super::Command for ScanCommand {
       locales_filter: if opt_all_locales { None } else { Some(opt_extra_locales) },
     };
 
+    progress.begin_task()?;
     let all_json_files_len = all_json_files.len();
     for (i, found_file) in all_json_files.into_iter().enumerate() {
-      trace!("[{}/{}] {:?}", i + 1, all_json_files_len, found_file.path);
+      progress.set_task_info(&found_file.path)?;
+      progress.set_task_progress(i, all_json_files_len)?;
       let mut scan_db_file: Option<Rc<scan::ScanGameFile>> = None;
 
       let abs_path = opt_assets_dir.join(&found_file.path);
@@ -148,6 +156,8 @@ impl super::Command for ScanCommand {
       }
     }
 
+    progress.set_task_progress(all_json_files_len, all_json_files_len)?;
+    progress.end_task()?;
     info!(
       "Found {} localizable strings in {} files, {} were ignored",
       total_fragments_count,

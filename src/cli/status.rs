@@ -1,4 +1,5 @@
 use crate::impl_prelude::*;
+use crate::progress::ProgressReporter;
 use crate::project::Project;
 use crate::rc_string::RcString;
 
@@ -20,7 +21,12 @@ impl super::Command for StatusCommand {
     )
   }
 
-  fn run(&self, _global_opts: super::GlobalOpts, matches: &clap::ArgMatches) -> AnyResult<()> {
+  fn run(
+    &self,
+    _global_opts: super::GlobalOpts,
+    matches: &clap::ArgMatches,
+    _progress: Box<dyn ProgressReporter>,
+  ) -> AnyResult<()> {
     let opt_project_dir = PathBuf::from(matches.value_of_os("project_dir").unwrap());
 
     let project = Project::open(opt_project_dir).context("Failed to open the project")?;
