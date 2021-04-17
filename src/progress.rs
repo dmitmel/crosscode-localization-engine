@@ -4,7 +4,7 @@ use crate::impl_prelude::*;
 use crate::rc_string::RcString;
 
 use std::fmt::Write as FmtWrite;
-use std::io::Write;
+use std::io::{self, Write};
 use std::time::{Duration, Instant};
 
 assert_trait_is_object_safe!(ProgressReporter);
@@ -25,14 +25,14 @@ impl ProgressReporter for NopProgressReporter {
 }
 
 pub struct TuiProgresReporter {
-  stream: Box<dyn Write>,
+  stream: io::Stderr,
   start_time: Option<Instant>,
   current_task_info: RcString,
 }
 
 impl TuiProgresReporter {
-  pub fn new(stream: Box<dyn Write>) -> Self {
-    Self { stream, start_time: None, current_task_info: RcString::from("") }
+  pub fn new() -> Self {
+    Self { stream: io::stderr(), start_time: None, current_task_info: RcString::from("") }
   }
 }
 
@@ -156,7 +156,7 @@ pub fn terminal_size() -> Option<(u16, u16)> {
 
   #[cfg(unix)]
   unsafe {
-    let fd = libc::STDOUT_FILENO;
+    let fd = libc::STDERR_FILENO;
     if libc::isatty(fd) != 1 {
       return None;
     }
@@ -171,13 +171,13 @@ pub fn terminal_size() -> Option<(u16, u16)> {
   unsafe {
     use winapi::um::handleapi::INVALID_HANDLE_VALUE;
     use winapi::um::processenv::GetStdHandle;
-    use winapi::um::winbase::STD_OUTPUT_HANDLE;
+    use winapi::um::winbase::STD_ERROR_HANDLE;
     use winapi::um::wincon::{
       GetConsoleScreenBufferInfo, CONSOLE_SCREEN_BUFFER_INFO, COORD, SMALL_RECT,
     };
     use winapi::um::winnt::HANDLE;
 
-    let handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    let handle = GetStdHandle(STD_ERROR_HANDLE);
     if handle == INVALID_HANDLE_VALUE {
       return None;
     }

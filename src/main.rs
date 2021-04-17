@@ -16,7 +16,6 @@ use crate::impl_prelude::*;
 use std::collections::HashMap;
 use std::env;
 use std::ffi::OsStr;
-use std::io;
 
 pub fn main() {
   let backtrace_var_name = OsStr::new("RUST_BACKTRACE");
@@ -56,7 +55,7 @@ pub fn try_main() -> AnyResult<()> {
     ProgressMode::Never => false,
   };
   let progress_reporter: Box<dyn progress::ProgressReporter> = if enable_fancy_progress_bar {
-    Box::new(progress::TuiProgresReporter::new(Box::new(io::stderr())))
+    Box::new(progress::TuiProgresReporter::new())
   } else {
     Box::new(progress::NopProgressReporter)
   };
