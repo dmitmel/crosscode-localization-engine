@@ -5,6 +5,7 @@ export function init_logging(): void;
 export class Backend {
   send_message(text: Buffer | string): void;
   recv_message(callback: (err: Error | null, message: Buffer) => void): void;
+  recv_message_sync(): Buffer;
   close(): void;
   is_closed(): boolean;
 }

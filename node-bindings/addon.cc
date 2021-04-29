@@ -217,6 +217,7 @@ public:
                     {
                         InstanceMethod("send_message", &NodeBackend::send_message),
                         InstanceMethod("recv_message", &NodeBackend::recv_message),
+                        InstanceMethod("recv_message_sync", &NodeBackend::recv_message_sync),
                         InstanceMethod("close", &NodeBackend::close),
                         InstanceMethod("is_closed", &NodeBackend::is_closed),
                     });
@@ -284,6 +285,22 @@ private:
     worker->Queue();
 
     return Napi::Value();
+  }
+
+  Napi::Value recv_message_sync(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (!(info.Length() == 0)) {
+      NAPI_THROW(Napi::TypeError::New(env, "recv_message_sync(): Buffer"), Napi::Value());
+    }
+
+    std::unique_ptr<RustString> message;
+    try {
+      message = this->inner->recv_message();
+    } catch (const FfiBackendException& e) {
+      throw e.ToNodeError(env);
+    }
+
+    return Napi::Buffer<uint8_t>::Copy(env, message->get_buf(), message->get_len());
   }
 
   Napi::Value close(const Napi::CallbackInfo& info) {
