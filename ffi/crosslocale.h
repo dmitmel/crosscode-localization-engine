@@ -8,9 +8,9 @@
 #include <stdlib.h>
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
-#define _CROSSLOCALE_DLLIMPORT __declspec(dllimport)
+#  define _CROSSLOCALE_DLLIMPORT __declspec(dllimport)
 #else
-#define _CROSSLOCALE_DLLIMPORT
+#  define _CROSSLOCALE_DLLIMPORT
 #endif
 
 #ifdef __cplusplus
@@ -54,13 +54,13 @@ crosslocale_result_t crosslocale_backend_free(struct crosslocale_backend_t* myse
 
 _CROSSLOCALE_DLLIMPORT
 crosslocale_result_t crosslocale_backend_recv_message(const struct crosslocale_backend_t* myself,
-                                                      uint8_t** out_message,
-                                                      size_t* out_message_len,
-                                                      size_t* out_message_cap);
+  uint8_t** out_message,
+  size_t* out_message_len,
+  size_t* out_message_cap);
 
 _CROSSLOCALE_DLLIMPORT
-crosslocale_result_t crosslocale_backend_send_message(const struct crosslocale_backend_t* myself,
-                                                      const uint8_t* message, size_t message_len);
+crosslocale_result_t crosslocale_backend_send_message(
+  const struct crosslocale_backend_t* myself, const uint8_t* message, size_t message_len);
 
 _CROSSLOCALE_DLLIMPORT
 crosslocale_result_t crosslocale_backend_close(struct crosslocale_backend_t* myself);

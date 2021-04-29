@@ -62,9 +62,9 @@ public:
   }
 
   const char* id() const noexcept {
-#define BackendException_check_id(id)                                                              \
-  if (this->code == id) {                                                                          \
-    return #id;                                                                                    \
+#define BackendException_check_id(id) \
+  if (this->code == id) {             \
+    return #id;                       \
   }
 
     BackendException_check_id(CROSSLOCALE_OK);
@@ -138,7 +138,7 @@ public:
     size_t message_len = 0;
     size_t message_cap = 0;
     throw_ffi_result(
-        crosslocale_backend_recv_message(this->raw, &message_buf, &message_len, &message_cap));
+      crosslocale_backend_recv_message(this->raw, &message_buf, &message_len, &message_cap));
     return std::make_unique<RustString>(message_buf, message_len, message_cap);
   }
 
@@ -194,8 +194,9 @@ public:
 
   std::vector<napi_value> GetResult(Napi::Env env) override {
     if (!this->has_error) {
-      return {env.Null(), Napi::Buffer<uint8_t>::Copy(env, this->message_str->get_buf(),
-                                                      this->message_str->get_len())};
+      return {env.Null(),
+        Napi::Buffer<uint8_t>::Copy(
+          env, this->message_str->get_buf(), this->message_str->get_len())};
     } else {
       Napi::Error obj = error.ToNodeError(env);
       return {obj.Value()};
@@ -212,15 +213,15 @@ private:
 class NodeBackend : public Napi::ObjectWrap<NodeBackend> {
 public:
   static Napi::Object Init(Napi::Env env, Napi::Object exports) {
-    Napi::Function ctor =
-        DefineClass(env, "Backend",
-                    {
-                        InstanceMethod("send_message", &NodeBackend::send_message),
-                        InstanceMethod("recv_message", &NodeBackend::recv_message),
-                        InstanceMethod("recv_message_sync", &NodeBackend::recv_message_sync),
-                        InstanceMethod("close", &NodeBackend::close),
-                        InstanceMethod("is_closed", &NodeBackend::is_closed),
-                    });
+    Napi::Function ctor = DefineClass(env,
+      "Backend",
+      {
+        InstanceMethod("send_message", &NodeBackend::send_message),
+        InstanceMethod("recv_message", &NodeBackend::recv_message),
+        InstanceMethod("recv_message_sync", &NodeBackend::recv_message_sync),
+        InstanceMethod("close", &NodeBackend::close),
+        InstanceMethod("is_closed", &NodeBackend::is_closed),
+      });
 
     exports.Set("Backend", ctor);
     return exports;
@@ -245,8 +246,8 @@ private:
   Napi::Value send_message(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     if (!(info.Length() == 1 && (info[0].IsBuffer() || info[0].IsString()))) {
-      NAPI_THROW(Napi::TypeError::New(env, "send_message(text: Buffer | string): void"),
-                 Napi::Value());
+      NAPI_THROW(
+        Napi::TypeError::New(env, "send_message(text: Buffer | string): void"), Napi::Value());
     }
 
     if (info[0].IsBuffer()) {
@@ -276,8 +277,8 @@ private:
   Napi::Value recv_message(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     if (!(info.Length() == 1 && info[0].IsFunction())) {
-      NAPI_THROW(Napi::TypeError::New(env, "recv_message(callback: Function): void"),
-                 Napi::Value());
+      NAPI_THROW(
+        Napi::TypeError::New(env, "recv_message(callback: Function): void"), Napi::Value());
     }
 
     Napi::Function callback(env, info[0]);
@@ -335,17 +336,18 @@ private:
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
   if (CROSSLOCALE_FFI_BRIDGE_VERSION != SUPPORTED_FFI_BRIDGE_VERSION) {
-    NAPI_THROW(Napi::Error::New(env, "Incompatible FFI bridge version! Check if a correct "
-                                     "crosslocale dynamic library is installed!"),
-               Napi::Object());
+    NAPI_THROW(Napi::Error::New(env,
+                 "Incompatible FFI bridge version! Check if a correct "
+                 "crosslocale dynamic library is installed!"),
+      Napi::Object());
   }
 
   exports.Set(Napi::String::New(env, "FFI_BRIDGE_VERSION"),
-              Napi::Number::New(env, CROSSLOCALE_FFI_BRIDGE_VERSION));
+    Napi::Number::New(env, CROSSLOCALE_FFI_BRIDGE_VERSION));
   exports.Set(Napi::String::New(env, "VERSION"),
-              Napi::String::New(env, (char*)CROSSLOCALE_VERSION_PTR, CROSSLOCALE_VERSION_LEN));
+    Napi::String::New(env, (char*)CROSSLOCALE_VERSION_PTR, CROSSLOCALE_VERSION_LEN));
   exports.Set(Napi::String::New(env, "PROTOCOL_VERSION"),
-              Napi::Number::New(env, CROSSLOCALE_PROTOCOL_VERSION));
+    Napi::Number::New(env, CROSSLOCALE_PROTOCOL_VERSION));
   exports.Set(Napi::String::New(env, "init_logging"), Napi::Function::New(env, init_logging));
   return NodeBackend::Init(env, exports);
 }
