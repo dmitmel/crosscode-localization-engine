@@ -93,6 +93,26 @@ void throw_ffi_result(crosslocale_result_t res) {
   }
 }
 
+class RustString {
+public:
+  RustString(uint8_t* buf, size_t len, size_t cap) : buf(buf), len(len), cap(cap) {}
+
+  ~RustString() { throw_ffi_result(crosslocale_message_free(this->buf, this->len, this->cap)); }
+
+  void operator=(const RustString&) = delete;
+  RustString(const RustString&) = delete;
+
+  uint8_t* get_buf() { return this->buf; }
+  char* get_char_buf() { return (char*)this->buf; }
+  size_t get_len() { return this->len; }
+  size_t get_cap() { return this->cap; }
+
+private:
+  uint8_t* buf;
+  size_t len;
+  size_t cap;
+};
+
 class FfiBackend {
 public:
   FfiBackend() {
@@ -112,23 +132,19 @@ public:
   void operator=(const FfiBackend&) = delete;
   FfiBackend(const FfiBackend&) = delete;
 
-  std::string recv_message() {
+  std::unique_ptr<RustString> recv_message() {
     std::lock_guard<std::mutex> guard(this->recv_mutex);
     uint8_t* message_buf = nullptr;
     size_t message_len = 0;
     size_t message_cap = 0;
     throw_ffi_result(
         crosslocale_backend_recv_message(this->raw, &message_buf, &message_len, &message_cap));
-    // Note that this copies the original string.
-    std::string str((char*)message_buf, message_len);
-    throw_ffi_result(crosslocale_message_free(message_buf, message_len, message_cap));
-    return str;
+    return std::make_unique<RustString>(message_buf, message_len, message_cap);
   }
 
-  void send_message(std::string message_str) {
+  void send_message(const uint8_t* buf, size_t len) {
     std::lock_guard<std::mutex> guard(this->send_mutex);
-    throw_ffi_result(crosslocale_backend_send_message(this->raw, (uint8_t*)message_str.data(),
-                                                      message_str.length()));
+    throw_ffi_result(crosslocale_backend_send_message(this->raw, buf, len));
   }
 
   void close() {
@@ -159,7 +175,7 @@ Napi::Value init_logging(const Napi::CallbackInfo& info) {
 class NodeRecvMessageWorker : public Napi::AsyncWorker {
 public:
   NodeRecvMessageWorker(Napi::Function& callback, std::shared_ptr<FfiBackend> inner)
-      : Napi::AsyncWorker(callback), inner(inner), error(CROSSLOCALE_OK), has_error(false) {}
+      : Napi::AsyncWorker(callback), inner(inner) {}
 
   ~NodeRecvMessageWorker() {}
 
@@ -178,7 +194,8 @@ public:
 
   std::vector<napi_value> GetResult(Napi::Env env) override {
     if (!this->has_error) {
-      return {env.Null(), Napi::String::New(env, this->message_str)};
+      return {env.Null(), Napi::Buffer<uint8_t>::Copy(env, this->message_str->get_buf(),
+                                                      this->message_str->get_len())};
     } else {
       Napi::Error obj = error.ToNodeError(env);
       return {obj.Value()};
@@ -187,9 +204,9 @@ public:
 
 private:
   std::shared_ptr<FfiBackend> inner;
-  std::string message_str;
-  FfiBackendException error;
-  bool has_error;
+  std::unique_ptr<RustString> message_str;
+  FfiBackendException error = CROSSLOCALE_OK;
+  bool has_error = false;
 };
 
 class NodeBackend : public Napi::ObjectWrap<NodeBackend> {
@@ -226,16 +243,32 @@ private:
 
   Napi::Value send_message(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
-    if (!(info.Length() == 1 && info[0].IsString())) {
-      NAPI_THROW(Napi::TypeError::New(env, "send_message(text: string): void"), Napi::Value());
+    if (!(info.Length() == 1 && (info[0].IsBuffer() || info[0].IsString()))) {
+      NAPI_THROW(Napi::TypeError::New(env, "send_message(text: Buffer | string): void"),
+                 Napi::Value());
     }
 
-    Napi::String message = info[0].As<Napi::String>();
-    try {
-      this->inner->send_message(message.Utf8Value());
-    } catch (const FfiBackendException& e) {
-      throw e.ToNodeError(env);
+    if (info[0].IsBuffer()) {
+      Napi::Buffer<uint8_t> message(env, info[0]);
+      uint8_t* data = message.Data();
+      size_t len = message.Length();
+      try {
+        this->inner->send_message(data, len);
+      } catch (const FfiBackendException& e) {
+        throw e.ToNodeError(env);
+      }
+    } else {
+      Napi::String message(env, info[0]);
+      std::string std_message = message.Utf8Value();
+      uint8_t* data = (uint8_t*)std_message.data();
+      size_t len = std_message.length();
+      try {
+        this->inner->send_message(data, len);
+      } catch (const FfiBackendException& e) {
+        throw e.ToNodeError(env);
+      }
     }
+
     return Napi::Value();
   }
 
@@ -246,7 +279,7 @@ private:
                  Napi::Value());
     }
 
-    Napi::Function callback = info[0].As<Napi::Function>();
+    Napi::Function callback(env, info[0]);
     NodeRecvMessageWorker* worker = new NodeRecvMessageWorker(callback, this->inner);
     worker->Queue();
 

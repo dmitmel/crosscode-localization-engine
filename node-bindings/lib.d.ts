@@ -3,8 +3,8 @@ export const VERSION: string;
 export const PROTOCOL_VERSION: number;
 export function init_logging(): void;
 export class Backend {
-  send_message(text: string): void;
-  recv_message(callback: (err: Error | null, message: string) => void): void;
+  send_message(text: Buffer | string): void;
+  recv_message(callback: (err: Error | null, message: Buffer) => void): void;
   close(): void;
   is_closed(): boolean;
 }

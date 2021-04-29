@@ -30,10 +30,10 @@ let backend = new addon.Backend();
 
 (async () => {
   while (true) {
-    let message_str;
+    let message_buf;
 
     try {
-      message_str = await new Promise((resolve, reject) => {
+      message_buf = await new Promise((resolve, reject) => {
         backend.recv_message((err, message) => {
           if (err != null) reject(err);
           else resolve(message);
@@ -46,8 +46,8 @@ let backend = new addon.Backend();
       throw err;
     }
 
-    let message = JSON.parse(message_str);
-    console.log(`recv[${humanizeByteSize(Buffer.byteLength(message_str))}]`, inspect(message));
+    let message = JSON.parse(message_buf.toString('utf8'));
+    console.log(`recv[${humanizeByteSize(message_buf.length)}]`, inspect(message));
   }
 })();
 
