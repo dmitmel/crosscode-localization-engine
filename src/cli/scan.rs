@@ -13,6 +13,8 @@ use serde::Deserialize;
 use std::borrow::Cow;
 use std::char;
 use std::collections::HashSet;
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::str::FromStr;
@@ -82,6 +84,26 @@ impl super::Command for ScanCommand {
     let opt_compact = matches.is_present("compact");
 
     info!("Performing a scan of game files in the assets dir {:?}", opt_assets_dir);
+
+    // Note that this is just a pre-emptive check that may become false if
+    // another program modifies the file system in parallel...
+    if match fs::metadata(&opt_output) {
+      Ok(metadata) => metadata.permissions().readonly(),
+      // Only proceed with the warning if the parent directory doesn't exist.
+      // If it does, then the file will be created anyway. However, this check
+      // will fail (be a false-negative) when the output path points to a
+      // symlink to a non-existent file, so TODO.
+      Err(e) if e.kind() == io::ErrorKind::NotFound => match opt_output.parent() {
+        Some(output_dir) => !output_dir.exists(),
+        // We are at the FS root (the parent is None), but it (the root)
+        // doesn't exist? But anyway, the root is always a directory to my
+        // knowledge, so we shouldn't be able to write to it as a file anyways.
+        None => true,
+      },
+      Err(_) => true,
+    } {
+      warn!("The output location is not writable, this may result in a crash");
+    }
 
     let game_version =
       read_game_version(&opt_assets_dir).context("Failed to read the game version")?;
