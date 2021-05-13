@@ -28,7 +28,10 @@ use crate::impl_prelude::*;
 
 pub static CRATE_TITLE: &str = "CrossLocalE";
 pub static CRATE_NAME: &str = env!("CARGO_PKG_NAME");
-pub static CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
+pub static CRATE_VERSION: &str = match option_env!("CARGO_PKG_NICE_VERSION") {
+  Some(v) => v,
+  None => env!("CARGO_PKG_VERSION"),
+};
 
 pub fn init_logging() -> bool {
   let set_logger_result: Result<(), log::SetLoggerError> =
