@@ -172,10 +172,7 @@ pub fn terminal_size() -> Option<(u16, u16)> {
     use winapi::um::handleapi::INVALID_HANDLE_VALUE;
     use winapi::um::processenv::GetStdHandle;
     use winapi::um::winbase::STD_ERROR_HANDLE;
-    use winapi::um::wincon::{
-      GetConsoleScreenBufferInfo, CONSOLE_SCREEN_BUFFER_INFO, COORD, SMALL_RECT,
-    };
-    use winapi::um::winnt::HANDLE;
+    use winapi::um::wincon::{GetConsoleScreenBufferInfo, CONSOLE_SCREEN_BUFFER_INFO};
 
     let handle = GetStdHandle(STD_ERROR_HANDLE);
     if handle == INVALID_HANDLE_VALUE {
