@@ -69,10 +69,7 @@ jobs:
         run: echo "::set-output name=triple::$(rustc --version --verbose | awk '/^host:/ { print $2 }')"
 
       - name: cargo build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --verbose --release
+        run: cargo build --verbose --release
 
       - name: Build Node.js bindings
         working-directory: node-bindings
