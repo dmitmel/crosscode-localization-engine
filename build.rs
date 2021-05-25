@@ -16,10 +16,7 @@ fn main() {
     // <https://github.com/rustyhorde/vergen/tree/21aec3fc6624b8e04332f8eb2659ddecbbc7689d>
 
     let git_dir = Path::new(".git");
-
-    if git_dir.exists() {
-      println!("cargo:rerun-if-changed={}", git_dir.join("HEAD").display());
-    }
+    println!("cargo:rerun-if-changed={}", git_dir.display());
 
     let version = env::var("CARGO_PKG_VERSION").ok()?;
 
