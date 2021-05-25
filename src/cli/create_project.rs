@@ -97,7 +97,7 @@ impl super::Command for CreateProjectCommand {
     let opt_project_dir = PathBuf::from(matches.value_of_os("project_dir").unwrap());
     let opt_main_scan_db = PathBuf::from(matches.value_of_os("main_scan_db").unwrap());
     let opt_extra_scan_dbs: Vec<_> = matches
-      .values_of("extra_scan_dbs")
+      .values_of_os("extra_scan_dbs")
       .map_or_else(Vec::new, |values| values.map(PathBuf::from).collect());
     let opt_original_locale = RcString::from(matches.value_of("original_locale").unwrap());
     let opt_reference_locales: Vec<_> = matches

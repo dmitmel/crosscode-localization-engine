@@ -1,4 +1,5 @@
 pub mod backend;
+pub mod completions;
 pub mod convert;
 pub mod create_project;
 pub mod dump_scan;
@@ -10,6 +11,7 @@ pub mod status;
 
 use crate::impl_prelude::*;
 use crate::progress::ProgressReporter;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct GlobalOpts {
@@ -79,6 +81,7 @@ pub trait Command {
 pub fn all_commands() -> Vec<Box<dyn Command>> {
   vec![
     Box::new(backend::BackendCommand),
+    Box::new(completions::CompletionsCommand),
     Box::new(convert::ConvertCommand),
     Box::new(create_project::CreateProjectCommand),
     Box::new(dump_scan::DumpScanCommand),
@@ -88,4 +91,16 @@ pub fn all_commands() -> Vec<Box<dyn Command>> {
     Box::new(scan::ScanCommand),
     Box::new(status::StatusCommand),
   ]
+}
+
+pub fn create_complete_arg_parser<'help>(
+) -> (clap::App<'help>, HashMap<&'static str, Box<dyn Command>>) {
+  let mut arg_parser = GlobalOpts::create_arg_parser();
+  let all_commands: Vec<Box<dyn Command>> = all_commands();
+  let mut all_commands_map = HashMap::with_capacity(all_commands.len());
+  for command in all_commands {
+    arg_parser = arg_parser.subcommand(command.create_arg_parser(clap::App::new(command.name())));
+    all_commands_map.insert(command.name(), command);
+  }
+  (arg_parser, all_commands_map)
 }

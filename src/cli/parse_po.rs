@@ -30,7 +30,7 @@ impl super::Command for ParsePoCommand {
     matches: &clap::ArgMatches,
     _progress: Box<dyn ProgressReporter>,
   ) -> AnyResult<()> {
-    let opt_file = matches.value_of("file").map(PathBuf::from);
+    let opt_file = matches.value_of_os("file").map(PathBuf::from);
     let opt_json = matches.is_present("json");
 
     let (src, filename): (String, Cow<str>) = match &opt_file {

@@ -10,10 +10,9 @@ pub mod macros;
 
 pub mod cli;
 
-use crate::cli::{Command, ProgressMode};
+use crate::cli::ProgressMode;
 use crate::impl_prelude::*;
 
-use std::collections::HashMap;
 use std::env;
 use std::ffi::OsStr;
 
@@ -31,15 +30,7 @@ pub fn main() {
 pub fn try_main() -> AnyResult<()> {
   crate::init_logging();
 
-  let mut arg_parser = cli::GlobalOpts::create_arg_parser();
-
-  let all_commands: Vec<Box<dyn Command>> = cli::all_commands();
-  let mut all_commands_map = HashMap::with_capacity(all_commands.len());
-  for command in all_commands {
-    arg_parser = arg_parser.subcommand(command.create_arg_parser(clap::App::new(command.name())));
-    all_commands_map.insert(command.name(), command);
-  }
-
+  let (arg_parser, mut all_commands_map) = cli::create_complete_arg_parser();
   let matches = arg_parser.get_matches();
   let global_opts = cli::GlobalOpts::from_matches(&matches);
 
