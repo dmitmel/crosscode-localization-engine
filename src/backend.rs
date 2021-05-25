@@ -79,7 +79,11 @@ pub enum ResponseMessageType {
   #[serde(rename = "ok", skip_deserializing)]
   Ok,
   #[serde(rename = "Backend/info", skip_deserializing)]
-  BackendInfo { implementation_name: MaybeStaticStr, implementation_version: MaybeStaticStr },
+  BackendInfo {
+    implementation_name: MaybeStaticStr,
+    implementation_version: MaybeStaticStr,
+    implementation_nice_version: MaybeStaticStr,
+  },
   #[serde(rename = "Project/open", skip_deserializing)]
   ProjectOpen { project_id: u32 },
   #[serde(rename = "Project/get_meta", skip_deserializing)]
@@ -267,6 +271,7 @@ impl Backend {
       RequestMessageType::BackendInfo {} => Ok(ResponseMessageType::BackendInfo {
         implementation_name: Cow::Borrowed(crate::CRATE_NAME),
         implementation_version: Cow::Borrowed(crate::CRATE_VERSION),
+        implementation_nice_version: Cow::Borrowed(crate::CRATE_NICE_VERSION),
       }),
 
       RequestMessageType::ProjectOpen { dir: project_dir } => {

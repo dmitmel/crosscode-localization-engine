@@ -29,7 +29,7 @@ pub enum ProgressMode {
 impl GlobalOpts {
   pub fn create_arg_parser<'help>() -> clap::App<'help> {
     clap::App::new(crate::CRATE_TITLE)
-      .version(crate::CRATE_VERSION)
+      .version(crate::CRATE_NICE_VERSION)
       .about("CrossCode Localization Engine command-line tool")
       .global_setting(clap::AppSettings::ColoredHelp)
       .global_setting(clap::AppSettings::VersionlessSubcommands)

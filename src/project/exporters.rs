@@ -401,7 +401,7 @@ impl Exporter for GettextPoExporter {
       "Content-Type: text/plain; charset=UTF-8\n".into(),
       "Content-Transfer-Encoding: 8bit\n".into(),
       "Plural-Forms: \n".into(),
-      format!("X-Generator: {} {}\n", crate::CRATE_NAME, crate::CRATE_VERSION).into(),
+      format!("X-Generator: {} {}\n", crate::CRATE_NAME, crate::CRATE_NICE_VERSION).into(),
     ]);
 
     writer.write_all(b"msgid ")?;

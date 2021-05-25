@@ -12,12 +12,16 @@ use std::sync::mpsc;
 use std::thread;
 
 #[no_mangle]
-pub static CROSSLOCALE_FFI_BRIDGE_VERSION: u32 = 1;
+pub static CROSSLOCALE_FFI_BRIDGE_VERSION: u32 = 2;
 
 #[no_mangle]
 pub static CROSSLOCALE_VERSION_PTR: &u8 = &crate::CRATE_VERSION.as_bytes()[0];
 #[no_mangle]
 pub static CROSSLOCALE_VERSION_LEN: usize = crate::CRATE_VERSION.len();
+#[no_mangle]
+pub static CROSSLOCALE_NICE_VERSION_PTR: &u8 = &crate::CRATE_NICE_VERSION.as_bytes()[0];
+#[no_mangle]
+pub static CROSSLOCALE_NICE_VERSION_LEN: usize = crate::CRATE_NICE_VERSION.len();
 #[no_mangle]
 pub static CROSSLOCALE_PROTOCOL_VERSION: u32 = crate::backend::PROTOCOL_VERSION;
 

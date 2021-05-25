@@ -29,6 +29,10 @@ extern const uint8_t* CROSSLOCALE_VERSION_PTR;
 
 extern const size_t CROSSLOCALE_VERSION_LEN;
 
+extern const uint8_t* CROSSLOCALE_NICE_VERSION_PTR;
+
+extern const size_t CROSSLOCALE_NICE_VERSION_LEN;
+
 extern const uint32_t CROSSLOCALE_PROTOCOL_VERSION;
 
 extern const crosslocale_result_t CROSSLOCALE_OK;
