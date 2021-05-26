@@ -91,6 +91,12 @@ pub fn try_main() -> AnyResult<()> {
   //   // return Ok(());
   // }
 
+  if let Some(dir) = &global_opts.cd {
+    trace!("cd {:?}", dir);
+    env::set_current_dir(dir)
+      .with_context(|| format!("Failed to change the working directory to {:?}", dir))?;
+  }
+
   let (command_name, command_matches) = matches.subcommand().unwrap();
   let command = all_commands_map.remove(command_name).unwrap();
 

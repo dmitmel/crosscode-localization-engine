@@ -11,12 +11,15 @@ pub mod status;
 
 use crate::impl_prelude::*;
 use crate::progress::ProgressReporter;
+
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct GlobalOpts {
   pub verbose: bool,
   pub progress_mode: ProgressMode,
+  pub cd: Option<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -44,11 +47,22 @@ impl GlobalOpts {
       )
       .arg(
         clap::Arg::new("progress_mode")
+          .value_name("MODE")
+          .value_hint(clap::ValueHint::Other)
           .short('p')
           .long("progress")
           .about("Enable the fancy progress bars.")
           .possible_values(&["auto", "always", "never"])
           .default_value("auto")
+          .global(true),
+      )
+      .arg(
+        clap::Arg::new("cd")
+          .value_name("DIR")
+          .value_hint(clap::ValueHint::DirPath)
+          .short('C')
+          .long("cd")
+          .about("Change the working directory first before doing anything.")
           .global(true),
       )
   }
@@ -62,6 +76,7 @@ impl GlobalOpts {
         "never" => ProgressMode::Never,
         _ => unreachable!(),
       },
+      cd: matches.value_of_os("cd").map(PathBuf::from),
     }
   }
 }
