@@ -22,6 +22,7 @@ impl super::Command for DumpScanCommand {
       .arg(
         clap::Arg::new("scan_db")
           .value_name("SCAN_DB_PATH")
+          .value_hint(clap::ValueHint::FilePath)
           .required(true)
           .about("Path to a scan database to dump."),
       )
@@ -37,6 +38,8 @@ impl super::Command for DumpScanCommand {
       )
       .arg(
         clap::Arg::new("indent")
+          .value_name("INDENT")
+          .value_hint(clap::ValueHint::Other)
           .long("indent")
           .about("Selects what to use for indentation.")
           .possible_values(&["0", "1", "2", "3", "4", "5", "6", "7", "8", "tab"])

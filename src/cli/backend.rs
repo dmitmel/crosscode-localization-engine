@@ -18,6 +18,7 @@ impl super::Command for BackendCommand {
       .arg(
         clap::Arg::new("protocol_version")
           .value_name("VERSION")
+          .value_hint(clap::ValueHint::Other)
           .required(true)
           .long("protocol-version")
           .possible_value(&backend::PROTOCOL_VERSION_STR),
@@ -25,6 +26,7 @@ impl super::Command for BackendCommand {
       .arg(
         clap::Arg::new("transport")
           .value_name("TRANSPORT")
+          .value_hint(clap::ValueHint::Other)
           .required(true)
           .long("transport")
           .possible_value("stdio"),

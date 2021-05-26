@@ -20,7 +20,7 @@ impl super::Command for ParsePoCommand {
     app
       .about("Debug command for testing the gettext po parser.")
       .setting(clap::AppSettings::Hidden)
-      .arg(clap::Arg::new("file").value_name("FILE"))
+      .arg(clap::Arg::new("file").value_name("FILE").value_hint(clap::ValueHint::FilePath))
       .arg(clap::Arg::new("json").short('J').long("json"))
   }
 

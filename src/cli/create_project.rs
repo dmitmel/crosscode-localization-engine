@@ -21,18 +21,21 @@ impl super::Command for CreateProjectCommand {
       .arg(
         clap::Arg::new("project_dir")
           .value_name("PROJECT")
+          .value_hint(clap::ValueHint::DirPath)
           .required(true)
           .about("Path to the project directory."),
       )
       .arg(
         clap::Arg::new("main_scan_db")
           .value_name("MAIN_SCAN_DB_PATH")
+          .value_hint(clap::ValueHint::FilePath)
           .required(true)
           .about("Path to the main scan database from which the project will be generated."),
       )
       .arg(
         clap::Arg::new("extra_scan_dbs")
           .value_name("EXTRA_SCAN_DB_PATHS")
+          .value_hint(clap::ValueHint::FilePath)
           .multiple(true)
           //
           .about(
@@ -43,6 +46,7 @@ impl super::Command for CreateProjectCommand {
       .arg(
         clap::Arg::new("original_locale")
           .value_name("LOCALE")
+          .value_hint(clap::ValueHint::Other)
           .long("original-locale")
           .default_value("en_US")
           .about("Locale to translate from."),
@@ -50,6 +54,7 @@ impl super::Command for CreateProjectCommand {
       .arg(
         clap::Arg::new("reference_locales")
           .value_name("LOCALE")
+          .value_hint(clap::ValueHint::Other)
           .multiple(true)
           .number_of_values(1)
           .long("reference-locales")
@@ -58,6 +63,7 @@ impl super::Command for CreateProjectCommand {
       .arg(
         clap::Arg::new("translation_locale")
           .value_name("LOCALE")
+          .value_hint(clap::ValueHint::Other)
           .long("translation-locale")
           .required(true)
           .about("Locale of the translation."),
@@ -65,6 +71,7 @@ impl super::Command for CreateProjectCommand {
       .arg(
         clap::Arg::new("splitter")
           .value_name("NAME")
+          .value_hint(clap::ValueHint::Other)
           .long("splitter")
           .possible_values(splitters::SPLITTERS_IDS)
           .default_value(splitters::NextGenerationSplitter::ID)
@@ -76,6 +83,7 @@ impl super::Command for CreateProjectCommand {
       .arg(
         clap::Arg::new("translations_dir")
           .value_name("PATH")
+          .value_hint(clap::ValueHint::DirPath)
           .long("translations-dir")
           .validator_os(|s| {
             if !Path::new(s).is_relative() {

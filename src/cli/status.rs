@@ -13,12 +13,16 @@ impl super::Command for StatusCommand {
   fn name(&self) -> &'static str { "status" }
 
   fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
-    app.about("Displays general information about the project, such as translation progress.").arg(
-      clap::Arg::new("project_dir")
-        .value_name("PROJECT")
-        .required(true)
-        .about("Path to the project directory."),
-    )
+    app
+      .about("Displays general information about the project, such as translation progress.")
+      //
+      .arg(
+        clap::Arg::new("project_dir")
+          .value_name("PROJECT")
+          .value_hint(clap::ValueHint::DirPath)
+          .required(true)
+          .about("Path to the project directory."),
+      )
   }
 
   fn run(

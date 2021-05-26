@@ -27,12 +27,14 @@ impl super::Command for ImportCommand {
       .arg(
         clap::Arg::new("project_dir")
           .value_name("PROJECT")
+          .value_hint(clap::ValueHint::DirPath)
           .required(true)
           .about("Path to the project directory."),
       )
       .arg(
         clap::Arg::new("inputs")
           .value_name("IMPORT_PATH")
+          .value_hint(clap::ValueHint::AnyPath)
           .multiple(true)
           .required(true)
           .conflicts_with("inputs_file")
@@ -41,6 +43,7 @@ impl super::Command for ImportCommand {
       .arg(
         clap::Arg::new("inputs_file")
           .value_name("PATH")
+          .value_hint(clap::ValueHint::FilePath)
           .short('i')
           //
           .about(
@@ -52,6 +55,7 @@ impl super::Command for ImportCommand {
       .arg(
         clap::Arg::new("format")
           .value_name("NAME")
+          .value_hint(clap::ValueHint::Other)
           .short('f')
           .long("format")
           .possible_values(importers::IMPORTERS_IDS)
@@ -61,6 +65,7 @@ impl super::Command for ImportCommand {
       .arg(
         clap::Arg::new("default_author")
           .value_name("USERNAME")
+          .value_hint(clap::ValueHint::Username)
           .long("default-author")
           .default_value("__import")
           .about(
@@ -71,6 +76,7 @@ impl super::Command for ImportCommand {
       .arg(
         clap::Arg::new("marker_flag")
           .value_name("FLAG")
+          .value_hint(clap::ValueHint::Other)
           .long("marker-flag")
           .default_value("imported")
           .about("Name of the flag used for marking automatically imported translations."),
@@ -97,6 +103,7 @@ impl super::Command for ImportCommand {
       .arg(
         clap::Arg::new("add_flags")
           .value_name("FLAG")
+          .value_hint(clap::ValueHint::Other)
           .long("add-flag")
           .multiple(true)
           .number_of_values(1)

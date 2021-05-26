@@ -28,12 +28,14 @@ impl super::Command for ExportCommand {
       .arg(
         clap::Arg::new("project_dir")
           .value_name("PROJECT")
+          .value_hint(clap::ValueHint::DirPath)
           .required(true)
           .about("Path to the project directory."),
       )
       .arg(
         clap::Arg::new("output")
           .value_name("PATH")
+          .value_hint(clap::ValueHint::AnyPath)
           .short('o')
           .long("output")
           .required(true)
@@ -45,6 +47,7 @@ impl super::Command for ExportCommand {
       .arg(
         clap::Arg::new("format")
           .value_name("NAME")
+          .value_hint(clap::ValueHint::Other)
           .short('f')
           .long("format")
           .possible_values(exporters::EXPORTERS_IDS)
@@ -54,6 +57,7 @@ impl super::Command for ExportCommand {
       .arg(
         clap::Arg::new("splitter")
           .value_name("NAME")
+          .value_hint(clap::ValueHint::Other)
           .long("splitter")
           .possible_values(splitters::SPLITTERS_IDS)
           .about("Strategy used for splitting the exported files."),
@@ -71,7 +75,7 @@ impl super::Command for ExportCommand {
         clap::Arg::new("mapping_output")
           .value_name("PATH")
           .long("mapping-output")
-          //
+          .value_hint(clap::ValueHint::FilePath)
           .about(
             "Write a JSON file containing a mapping table from game files to the translation \
             files containg their strings.",

@@ -34,12 +34,14 @@ impl super::Command for ScanCommand {
       .arg(
         clap::Arg::new("assets_dir")
           .value_name("ASSETS")
+          .value_hint(clap::ValueHint::DirPath)
           .required(true)
           .about("Path to the assets directory."),
       )
       .arg(
         clap::Arg::new("output")
           .value_name("PATH")
+          .value_hint(clap::ValueHint::FilePath)
           .short('o')
           .long("output")
           .required(true)
@@ -48,6 +50,7 @@ impl super::Command for ScanCommand {
       .arg(
         clap::Arg::new("locales")
           .value_name("LOCALE")
+          .value_hint(clap::ValueHint::Other)
           .multiple(true)
           .number_of_values(1)
           .short('l')

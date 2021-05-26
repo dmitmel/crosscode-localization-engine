@@ -20,6 +20,7 @@ impl super::Command for CompletionsCommand {
       .arg(
         clap::Arg::new("shell")
           .value_name("SHELL")
+          .value_hint(clap::ValueHint::Other)
           .required(true)
           //
           .possible_values(&["bash", "elvish", "fish", "powershell", "zsh"]),

@@ -29,6 +29,7 @@ impl super::Command for ConvertCommand {
       .arg(
         clap::Arg::new("scan_db")
           .value_name("SCAN_DB_PATH")
+          .value_hint(clap::ValueHint::FilePath)
           .long("scan")
           .required(true)
           //
@@ -40,6 +41,7 @@ impl super::Command for ConvertCommand {
       .arg(
         clap::Arg::new("original_locale")
           .value_name("LOCALE")
+          .value_hint(clap::ValueHint::Other)
           .long("original-locale")
           //
           .about(
@@ -51,6 +53,7 @@ impl super::Command for ConvertCommand {
       .arg(
         clap::Arg::new("inputs")
           .value_name("INPUT_PATH")
+          .value_hint(clap::ValueHint::AnyPath)
           .multiple(true)
           .required(true)
           .conflicts_with("inputs_file")
@@ -59,6 +62,7 @@ impl super::Command for ConvertCommand {
       .arg(
         clap::Arg::new("inputs_file")
           .value_name("PATH")
+          .value_hint(clap::ValueHint::FilePath)
           .short('i')
           //
           .about(
@@ -70,6 +74,7 @@ impl super::Command for ConvertCommand {
       .arg(
         clap::Arg::new("output")
           .value_name("PATH")
+          .value_hint(clap::ValueHint::AnyPath)
           .short('o')
           .long("output")
           .required(true)
@@ -81,6 +86,7 @@ impl super::Command for ConvertCommand {
       .arg(
         clap::Arg::new("input_format")
           .value_name("FORMAT")
+          .value_hint(clap::ValueHint::Other)
           .short('f')
           .long("format")
           .possible_values(importers::IMPORTERS_IDS)
@@ -90,6 +96,7 @@ impl super::Command for ConvertCommand {
       .arg(
         clap::Arg::new("output_format")
           .value_name("FORMAT")
+          .value_hint(clap::ValueHint::Other)
           .short('F')
           .long("output-format")
           .possible_values(exporters::EXPORTERS_IDS)
@@ -99,6 +106,7 @@ impl super::Command for ConvertCommand {
       .arg(
         clap::Arg::new("default_author")
           .value_name("USERNAME")
+          .value_hint(clap::ValueHint::Username)
           .long("default-author")
           .default_value("__convert")
           .about(
@@ -109,6 +117,7 @@ impl super::Command for ConvertCommand {
       .arg(
         clap::Arg::new("splitter")
           .value_name("SPLITTER")
+          .value_hint(clap::ValueHint::Other)
           .long("splitter")
           .possible_values(splitters::SPLITTERS_IDS)
           .about("Strategy used for splitting the output files."),
@@ -125,6 +134,7 @@ impl super::Command for ConvertCommand {
       .arg(
         clap::Arg::new("mapping_output")
           .value_name("PATH")
+          .value_hint(clap::ValueHint::FilePath)
           .long("mapping-output")
           //
           .about(
