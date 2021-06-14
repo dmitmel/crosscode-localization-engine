@@ -44,7 +44,7 @@ pub fn init_logging() -> bool {
       "trace",
     ));
   let other_logger_already_installed = set_logger_result.is_err();
-  info!("{}/{} v{}", CRATE_TITLE, CRATE_NAME, CRATE_VERSION);
+  info!("{}/{} v{}", CRATE_TITLE, CRATE_NAME, CRATE_NICE_VERSION);
   !other_logger_already_installed
 }
 
