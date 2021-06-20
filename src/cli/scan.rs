@@ -138,9 +138,9 @@ impl super::Command for ScanCommand {
     });
 
     let all_json_files_len = all_json_files.len();
-    progress.begin_task()?;
+    progress.begin_task(all_json_files_len)?;
     progress.set_task_info(&RcString::from("<Starting...>"))?;
-    progress.set_task_progress(0, all_json_files_len)?;
+    progress.set_task_progress(0)?;
 
     let pool: threadpool::ThreadPool = {
       let mut builder = threadpool::Builder::new();
@@ -234,12 +234,12 @@ impl super::Command for ScanCommand {
 
     for (i, task_result) in lang_labels_rx.into_iter().enumerate() {
       progress.set_task_info(&task_result.found_file.path)?;
-      progress.set_task_progress(i + 1, all_json_files_len)?;
+      progress.set_task_progress(i + 1)?;
       let i = task_result.task_index;
       sorted_results[i] = Some(task_result);
     }
 
-    progress.set_task_progress(all_json_files_len, all_json_files_len)?;
+    progress.set_task_progress(all_json_files_len)?;
     pool.join();
     progress.end_task()?;
 

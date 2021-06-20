@@ -9,45 +9,70 @@ use std::time::{Duration, Instant};
 
 assert_trait_is_object_safe!(ProgressReporter);
 pub trait ProgressReporter {
-  fn begin_task(&mut self) -> AnyResult<()>;
+  fn begin_task(&mut self, total: usize) -> AnyResult<()>;
   fn end_task(&mut self) -> AnyResult<()>;
   fn set_task_info(&mut self, info: &RcString) -> AnyResult<()>;
-  fn set_task_progress(&mut self, current: usize, total: usize) -> AnyResult<()>;
+  fn set_task_progress(&mut self, current: usize) -> AnyResult<()>;
+  fn redraw(&mut self) -> AnyResult<()>;
 }
 
 pub struct NopProgressReporter;
 
 impl ProgressReporter for NopProgressReporter {
-  fn begin_task(&mut self) -> AnyResult<()> { Ok(()) }
+  fn begin_task(&mut self, _total: usize) -> AnyResult<()> { Ok(()) }
   fn end_task(&mut self) -> AnyResult<()> { Ok(()) }
   fn set_task_info(&mut self, _info: &RcString) -> AnyResult<()> { Ok(()) }
-  fn set_task_progress(&mut self, _current: usize, _total: usize) -> AnyResult<()> { Ok(()) }
+  fn set_task_progress(&mut self, _current: usize) -> AnyResult<()> { Ok(()) }
+  fn redraw(&mut self) -> AnyResult<()> { Ok(()) }
 }
 
 pub struct TuiProgresReporter {
   stream: io::Stderr,
   start_time: Option<Instant>,
+  prev_redraw_time: Option<Instant>,
   current_task_info: RcString,
+  current_item: usize,
+  current_total: usize,
 }
 
 impl TuiProgresReporter {
+  const REDRAW_INTERVAL: Duration = Duration::from_millis(40);
+
   pub fn new() -> Self {
-    Self { stream: io::stderr(), start_time: None, current_task_info: RcString::from("") }
+    Self {
+      stream: io::stderr(),
+      start_time: None,
+      prev_redraw_time: None,
+      current_task_info: RcString::from(""),
+      current_item: 0,
+      current_total: 0,
+    }
+  }
+
+  pub fn reset(&mut self) {
+    self.start_time = None;
+    self.prev_redraw_time = None;
+    self.current_task_info = RcString::from("");
+    self.current_item = 0;
+    self.current_total = 0;
   }
 }
 
 // TODO: Make the progress bar compatible with the logger:
 // https://github.com/getsentry/sentry-cli/blob/5769a14cb1a06703250042907e330876f5cada2d/src/utils/logging.rs
 impl ProgressReporter for TuiProgresReporter {
-  fn begin_task(&mut self) -> AnyResult<()> {
+  fn begin_task(&mut self, total: usize) -> AnyResult<()> {
+    self.reset();
+    self.current_total = total;
     self.start_time = Some(Instant::now());
     Ok(())
   }
 
   fn end_task(&mut self) -> AnyResult<()> {
-    self.start_time = None;
+    self.redraw()?;
     self.stream.write_all(b"\n")?;
     self.stream.flush()?;
+    self.reset();
     Ok(())
   }
 
@@ -56,20 +81,35 @@ impl ProgressReporter for TuiProgresReporter {
     Ok(())
   }
 
+  fn set_task_progress(&mut self, current: usize) -> AnyResult<()> {
+    self.current_item = current.min(self.current_total);
+
+    if let Some(prev_redraw_time) = self.prev_redraw_time {
+      let since_prev_redraw = prev_redraw_time.elapsed();
+      if since_prev_redraw < Self::REDRAW_INTERVAL {
+        return Ok(());
+      }
+    }
+
+    self.redraw()
+  }
+
   // TODO: Use unicode_width, see
   // <https://github.com/Aetf/unicode-truncate/blob/b1821b0af6801b81e1f1f900526748754f8cd44f/src/lib.rs>
 
   // NOTE: push_str is technically faster because non-ASCII characters are
   // already encoded in a static string
   #[allow(clippy::single_char_add_str)]
-  fn set_task_progress(&mut self, mut current: usize, total: usize) -> AnyResult<()> {
+  fn redraw(&mut self) -> AnyResult<()> {
+    let current = self.current_item;
+    let total = self.current_total;
+
     let start_time = match self.start_time {
       Some(v) => v,
       None => return Ok(()),
     };
     let elapsed: Duration = start_time.elapsed();
 
-    current = current.min(total);
     let term_width = terminal_size().map(|(w, _h): (u16, u16)| w as usize).unwrap_or(80);
 
     let rate = current as f64 / elapsed.as_secs_f64();
@@ -145,6 +185,7 @@ impl ProgressReporter for TuiProgresReporter {
     self.stream.write_all(b"\r")?;
     self.stream.flush()?;
 
+    self.prev_redraw_time = Some(Instant::now());
     Ok(())
   }
 }
