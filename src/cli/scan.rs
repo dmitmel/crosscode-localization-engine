@@ -18,6 +18,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::str::FromStr;
+use std::sync::{mpsc, Arc};
 
 #[derive(Debug)]
 pub struct ScanCommand;
@@ -70,6 +71,17 @@ impl super::Command for ScanCommand {
           .long("compact")
           .about("Disable pretty-printing of the resulting JSON file."),
       )
+      .arg(
+        clap::Arg::new("jobs")
+          .short('j')
+          .long("jobs")
+          .about(
+            "The number of parallel worker threads allocated for the scanner. Zero means using as \
+            many threads as there are CPU cores available.",
+          )
+          .validator(|s| usize::from_str(s).map(|_| ()))
+          .default_value("0"),
+      )
   }
 
   fn run(
@@ -78,13 +90,14 @@ impl super::Command for ScanCommand {
     matches: &clap::ArgMatches,
     mut progress: Box<dyn ProgressReporter>,
   ) -> AnyResult<()> {
-    let opt_assets_dir = PathBuf::from(matches.value_of_os("assets_dir").unwrap());
+    let opt_assets_dir = Arc::new(PathBuf::from(matches.value_of_os("assets_dir").unwrap()));
     let opt_output = PathBuf::from(matches.value_of_os("output").unwrap());
     let opt_extra_locales: HashSet<_> = matches
       .values_of("locales")
       .map_or_else(HashSet::new, |values| values.map(RcString::from).collect());
     let opt_all_locales = matches.is_present("all_locales");
     let opt_compact = matches.is_present("compact");
+    let opt_jobs = usize::from_str(matches.value_of("jobs").unwrap()).unwrap();
 
     info!("Performing a scan of game files in the assets dir {:?}", opt_assets_dir);
 
@@ -120,52 +133,131 @@ impl super::Command for ScanCommand {
     let scan_db = scan::ScanDb::create(opt_output, scan::ScanDbCreateOpts { game_version });
 
     info!("Extracting localizable strings");
-    let mut total_fragments_count = 0;
-    let mut ignored_lang_labels_count = 0;
-    let extractor_opts = lang_label_extractor::ExtractionOptions {
+    let extractor_opts = Arc::new(lang_label_extractor::ExtractionOptions {
       locales_filter: if opt_all_locales { None } else { Some(opt_extra_locales) },
+    });
+
+    let all_json_files_len = all_json_files.len();
+    progress.begin_task()?;
+    progress.set_task_info(&RcString::from("<Starting...>"))?;
+    progress.set_task_progress(0, all_json_files_len)?;
+
+    let pool: threadpool::ThreadPool = {
+      let mut builder = threadpool::Builder::new();
+      if opt_jobs != 0 {
+        builder = builder.num_threads(opt_jobs);
+      }
+      builder.build()
     };
 
-    progress.begin_task()?;
-    let all_json_files_len = all_json_files.len();
-    for (i, found_file) in all_json_files.into_iter().enumerate() {
-      progress.set_task_info(&found_file.path)?;
-      progress.set_task_progress(i, all_json_files_len)?;
+    #[derive(Debug)]
+    struct TaskResult {
+      task_index: usize,
+      found_file: FoundJsonFile,
+      lang_labels: Vec<LangLabel>,
+      ignored_lang_labels_count: usize,
+    }
+
+    // The task results are boxed to reduce the size of the memory block which
+    // needs to be copied on transmissions and when sorting.
+    let (lang_labels_tx, lang_labels_rx) = mpsc::channel::<Box<TaskResult>>();
+
+    for (task_index, found_file) in all_json_files.into_iter().enumerate() {
+      let lang_labels_tx = lang_labels_tx.clone();
+      let opt_assets_dir = opt_assets_dir.clone();
+      let extractor_opts = extractor_opts.clone();
+
+      pool.execute(move || {
+        let abs_path = opt_assets_dir.join(&found_file.path);
+        let json_data: json::Value = match utils::json::read_file(&abs_path, &mut Vec::new()) {
+          Ok(v) => v,
+          Err(e) => {
+            crate::report_error(
+              AnyError::new(e)
+                .context(format!("Failed to deserialize from JSON file {:?}", abs_path)),
+            );
+            return;
+          }
+        };
+
+        let lang_labels_iter = match lang_label_extractor::extract_from_file(
+          &found_file,
+          &json_data,
+          &extractor_opts,
+        ) {
+          Some(v) => v,
+          _ => return,
+        };
+
+        let mut collected_lang_labels = Vec::<LangLabel>::new();
+        let mut local_ignored_lang_labels_count: usize = 0;
+        for mut lang_label in lang_labels_iter {
+          if is_lang_label_ignored(&lang_label, &found_file) {
+            local_ignored_lang_labels_count += 1;
+            continue;
+          }
+
+          lang_label.description = if !found_file.is_lang_file {
+            match fragment_descriptions::generate(&json_data, &lang_label.json_path) {
+              Ok(v) => v,
+              Err(e) => {
+                warn!("file {:?}: fragment {:?}: {:?}", found_file.path, lang_label.json_path, e);
+                continue;
+              }
+            }
+          } else {
+            Vec::new()
+          };
+
+          collected_lang_labels.push(lang_label);
+        }
+
+        lang_labels_tx
+          .send(Box::new(TaskResult {
+            task_index,
+            found_file,
+            lang_labels: collected_lang_labels,
+            ignored_lang_labels_count: local_ignored_lang_labels_count,
+          }))
+          .unwrap();
+      });
+    }
+
+    // Drop the main instance from which all others have been cloned, to allow
+    // the receiving side to exit without deadlocks.
+    drop(lang_labels_tx);
+
+    let mut sorted_results = Vec::<Option<Box<TaskResult>>>::with_capacity(all_json_files_len);
+    for _ in 0..all_json_files_len {
+      sorted_results.push(None);
+    }
+
+    for (i, task_result) in lang_labels_rx.into_iter().enumerate() {
+      progress.set_task_info(&task_result.found_file.path)?;
+      progress.set_task_progress(i + 1, all_json_files_len)?;
+      let i = task_result.task_index;
+      sorted_results[i] = Some(task_result);
+    }
+
+    progress.set_task_progress(all_json_files_len, all_json_files_len)?;
+    pool.join();
+    progress.end_task()?;
+
+    let mut total_fragments_count: usize = 0;
+    let mut ignored_lang_labels_count: usize = 0;
+    // This loop isn't actually slow.
+    for task_result in sorted_results.into_iter() {
+      let task_result = task_result.unwrap();
+      ignored_lang_labels_count += task_result.ignored_lang_labels_count;
       let mut scan_db_file: Option<Rc<scan::ScanGameFile>> = None;
 
-      let abs_path = opt_assets_dir.join(&found_file.path);
-      let json_data: json::Value = utils::json::read_file(&abs_path, &mut Vec::new())
-        .with_context(|| format!("Failed to deserialize from JSON file {:?}", abs_path))?;
-
-      let lang_labels_iter =
-        match lang_label_extractor::extract_from_file(&found_file, &json_data, &extractor_opts) {
-          Some(v) => v,
-          _ => continue,
-        };
-
-      for lang_label in lang_labels_iter {
-        if is_lang_label_ignored(&lang_label, &found_file) {
-          ignored_lang_labels_count += 1;
-          continue;
-        }
-        let LangLabel { json_path, lang_uid, text, .. } = lang_label;
-
-        let description = if !found_file.is_lang_file {
-          match fragment_descriptions::generate(&json_data, &json_path) {
-            Ok(v) => v,
-            Err(e) => {
-              warn!("file {:?}: fragment {:?}: {:?}", found_file.path, json_path, e);
-              continue;
-            }
-          }
-        } else {
-          Vec::new()
-        };
+      for lang_label in task_result.lang_labels {
+        let LangLabel { json_path, lang_uid, description, text, .. } = lang_label;
 
         if scan_db_file.is_none() {
           scan_db_file = Some(scan_db.new_game_file(scan::ScanGameFileInitOpts {
-            path: found_file.path.share_rc(),
-            asset_root: found_file.asset_root.share_rc(),
+            path: task_result.found_file.path.share_rc(),
+            asset_root: task_result.found_file.asset_root.share_rc(),
           })?);
         }
         let scan_db_file = scan_db_file.as_mut().unwrap();
@@ -181,8 +273,6 @@ impl super::Command for ScanCommand {
       }
     }
 
-    progress.set_task_progress(all_json_files_len, all_json_files_len)?;
-    progress.end_task()?;
     info!(
       "Found {} localizable strings in {} files, {} were ignored",
       total_fragments_count,

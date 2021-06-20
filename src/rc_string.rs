@@ -8,14 +8,14 @@ use std::fmt;
 use std::hash::Hash;
 use std::ops::Deref;
 use std::path::Path;
-use std::rc::Rc;
 use std::str::FromStr;
+use std::sync::Arc;
 
 // TODO: Replace all string Cows with this.
 pub type MaybeStaticStr = Cow<'static, str>;
 
 #[repr(transparent)]
-pub struct RcString(Rc<String>);
+pub struct RcString(Arc<String>);
 
 impl RcString {
   #[inline(always)]
@@ -23,54 +23,54 @@ impl RcString {
   #[inline(always)]
   pub fn as_string(&self) -> &String { &self.0 }
   #[inline(always)]
-  pub fn as_rc(&self) -> &Rc<String> { &self.0 }
+  pub fn as_rc(&self) -> &Arc<String> { &self.0 }
   #[inline(always)]
-  pub fn into_rc(self) -> Rc<String> { self.0 }
+  pub fn into_rc(self) -> Arc<String> { self.0 }
 
   #[inline(always)]
-  pub fn share_rc(&self) -> RcString { RcString(Rc::clone(&self.0)) }
+  pub fn share_rc(&self) -> RcString { RcString(Arc::clone(&self.0)) }
   #[inline(always)]
   pub fn rc_clone_inner(&self) -> String { (*self.0).clone() }
 }
 
 impl From<char> for RcString {
   #[inline(always)]
-  fn from(c: char) -> Self { Self(Rc::new(String::from(c))) }
+  fn from(c: char) -> Self { Self(Arc::new(String::from(c))) }
 }
 
 impl From<&str> for RcString {
   #[inline(always)]
-  fn from(s: &str) -> Self { Self(Rc::new(s.to_owned())) }
+  fn from(s: &str) -> Self { Self(Arc::new(s.to_owned())) }
 }
 
 impl From<&mut str> for RcString {
   #[inline(always)]
-  fn from(s: &mut str) -> Self { Self(Rc::new(s.to_owned())) }
+  fn from(s: &mut str) -> Self { Self(Arc::new(s.to_owned())) }
 }
 
 impl From<String> for RcString {
   #[inline(always)]
-  fn from(s: String) -> Self { Self(Rc::new(s)) }
+  fn from(s: String) -> Self { Self(Arc::new(s)) }
 }
 
 impl From<&String> for RcString {
   #[inline(always)]
-  fn from(s: &String) -> Self { Self(Rc::new(s.to_owned())) }
+  fn from(s: &String) -> Self { Self(Arc::new(s.to_owned())) }
 }
 
 impl From<Box<String>> for RcString {
   #[inline(always)]
-  fn from(s: Box<String>) -> Self { Self(Rc::new(*s)) }
+  fn from(s: Box<String>) -> Self { Self(Arc::new(*s)) }
 }
 
-impl From<Rc<String>> for RcString {
+impl From<Arc<String>> for RcString {
   #[inline(always)]
-  fn from(s: Rc<String>) -> Self { Self(s) }
+  fn from(s: Arc<String>) -> Self { Self(s) }
 }
 
 impl From<Cow<'_, str>> for RcString {
   #[inline(always)]
-  fn from(s: Cow<'_, str>) -> Self { Self(Rc::new(s.into_owned())) }
+  fn from(s: Cow<'_, str>) -> Self { Self(Arc::new(s.into_owned())) }
 }
 
 impl Deref for RcString {
@@ -88,7 +88,7 @@ impl Clone for RcString {
 
 impl Default for RcString {
   #[inline(always)]
-  fn default() -> Self { Self(Rc::new(String::default())) }
+  fn default() -> Self { Self(Arc::new(String::default())) }
 }
 
 impl PartialEq for RcString {
@@ -112,11 +112,11 @@ impl PartialEq<String> for RcString {
   fn ne(&self, other: &String) -> bool { (*self.0).ne(other) }
 }
 
-impl PartialEq<Rc<String>> for RcString {
+impl PartialEq<Arc<String>> for RcString {
   #[inline(always)]
-  fn eq(&self, other: &Rc<String>) -> bool { self.0.eq(other) }
+  fn eq(&self, other: &Arc<String>) -> bool { self.0.eq(other) }
   #[inline(always)]
-  fn ne(&self, other: &Rc<String>) -> bool { self.0.ne(other) }
+  fn ne(&self, other: &Arc<String>) -> bool { self.0.ne(other) }
 }
 
 impl Eq for RcString {
@@ -161,17 +161,17 @@ impl PartialOrd<String> for RcString {
   fn ge(&self, other: &String) -> bool { (*self.0).ge(other) }
 }
 
-impl PartialOrd<Rc<String>> for RcString {
+impl PartialOrd<Arc<String>> for RcString {
   #[inline(always)]
-  fn partial_cmp(&self, other: &Rc<String>) -> Option<Ordering> { self.0.partial_cmp(other) }
+  fn partial_cmp(&self, other: &Arc<String>) -> Option<Ordering> { self.0.partial_cmp(other) }
   #[inline(always)]
-  fn lt(&self, other: &Rc<String>) -> bool { self.0.lt(other) }
+  fn lt(&self, other: &Arc<String>) -> bool { self.0.lt(other) }
   #[inline(always)]
-  fn le(&self, other: &Rc<String>) -> bool { self.0.le(other) }
+  fn le(&self, other: &Arc<String>) -> bool { self.0.le(other) }
   #[inline(always)]
-  fn gt(&self, other: &Rc<String>) -> bool { self.0.gt(other) }
+  fn gt(&self, other: &Arc<String>) -> bool { self.0.gt(other) }
   #[inline(always)]
-  fn ge(&self, other: &Rc<String>) -> bool { self.0.ge(other) }
+  fn ge(&self, other: &Arc<String>) -> bool { self.0.ge(other) }
 }
 
 impl Ord for RcString {
@@ -233,9 +233,9 @@ impl Borrow<String> for RcString {
   fn borrow(&self) -> &String { &self.0 }
 }
 
-impl Borrow<Rc<String>> for RcString {
+impl Borrow<Arc<String>> for RcString {
   #[inline(always)]
-  fn borrow(&self) -> &Rc<String> { &self.0 }
+  fn borrow(&self) -> &Arc<String> { &self.0 }
 }
 
 impl AsRef<str> for RcString {
@@ -248,9 +248,9 @@ impl AsRef<String> for RcString {
   fn as_ref(&self) -> &String { &self.0 }
 }
 
-impl AsRef<Rc<String>> for RcString {
+impl AsRef<Arc<String>> for RcString {
   #[inline(always)]
-  fn as_ref(&self) -> &Rc<String> { &self.0 }
+  fn as_ref(&self) -> &Arc<String> { &self.0 }
 }
 
 impl AsRef<[u8]> for RcString {

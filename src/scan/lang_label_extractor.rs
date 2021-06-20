@@ -11,7 +11,7 @@ pub static KNOWN_BUILTIN_LOCALES: &[&str] =
   &["en_US", "de_DE", "zh_CN", "zh_TW", "ja_JP", "ko_KR"];
 pub static LANG_UID_PROPERTY_NAME: &str = "langUid";
 
-#[allow(missing_debug_implementations)]
+#[derive(Debug, Clone)]
 pub struct ExtractionOptions {
   pub locales_filter: Option<HashSet<RcString>>,
 }
@@ -38,6 +38,7 @@ pub struct LangLabel {
   pub json_path: RcString,
   /// 0 represents the lack of a lang UID
   pub lang_uid: i32,
+  pub description: Vec<RcString>,
   /// mainly intended for preliminary filtering
   pub main_locale_text: RcString,
   pub text: HashMap<RcString, RcString>,
@@ -106,7 +107,7 @@ fn try_extract_lang_label(
     }
   }
 
-  Some(LangLabel { json_path, lang_uid, main_locale_text, text })
+  Some(LangLabel { json_path, lang_uid, description: Vec::new(), main_locale_text, text })
 }
 
 fn try_extract_lang_label_from_lang_file(
@@ -124,6 +125,7 @@ fn try_extract_lang_label_from_lang_file(
   Some(LangLabel {
     json_path: RcString::from(json_path.join("/")),
     lang_uid: 0,
+    description: Vec::new(),
     main_locale_text,
     text: text_map,
   })

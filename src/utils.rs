@@ -11,6 +11,7 @@ use std::fs;
 use std::io;
 use std::path::Path;
 use std::rc::{Rc, Weak as RcWeak};
+use std::sync::{Arc, Weak as ArcWeak};
 use std::time::SystemTime;
 use uuid::Uuid;
 
@@ -159,9 +160,31 @@ pub trait RcExt<T: ?Sized>: private::Sealed {
 
 impl<T: ?Sized> RcExt<T> for Rc<T> {
   #[inline(always)]
-  fn share_rc(&self) -> Rc<T> { Rc::clone(self) }
+  fn share_rc(&self) -> Rc<T> { Self::clone(self) }
   #[inline(always)]
-  fn share_rc_weak(&self) -> RcWeak<T> { Rc::downgrade(self) }
+  fn share_rc_weak(&self) -> RcWeak<T> { Self::downgrade(self) }
+  #[inline(always)]
+  fn rc_clone_inner(&self) -> T
+  where
+    T: Clone,
+  {
+    (**self).clone()
+  }
+}
+
+pub trait ArcExt<T: ?Sized>: private::Sealed {
+  fn share_rc(&self) -> Arc<T>;
+  fn share_rc_weak(&self) -> ArcWeak<T>;
+  fn rc_clone_inner(&self) -> T
+  where
+    T: Clone;
+}
+
+impl<T: ?Sized> ArcExt<T> for Arc<T> {
+  #[inline(always)]
+  fn share_rc(&self) -> Arc<T> { Self::clone(self) }
+  #[inline(always)]
+  fn share_rc_weak(&self) -> ArcWeak<T> { Self::downgrade(self) }
   #[inline(always)]
   fn rc_clone_inner(&self) -> T
   where
@@ -177,7 +200,16 @@ pub trait RcWeakExt<T: ?Sized>: private::Sealed {
 
 impl<T: ?Sized> RcWeakExt<T> for RcWeak<T> {
   #[inline(always)]
-  fn share_rc_weak(&self) -> RcWeak<T> { RcWeak::clone(self) }
+  fn share_rc_weak(&self) -> RcWeak<T> { Self::clone(self) }
+}
+
+pub trait ArcWeakExt<T: ?Sized>: private::Sealed {
+  fn share_rc_weak(&self) -> ArcWeak<T>;
+}
+
+impl<T: ?Sized> ArcWeakExt<T> for ArcWeak<T> {
+  #[inline(always)]
+  fn share_rc_weak(&self) -> ArcWeak<T> { Self::clone(self) }
 }
 
 mod private {
