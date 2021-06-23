@@ -27,6 +27,11 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Install Node.js
+        uses: actions/setup-node@v1
+        with:
+          node-version: '16.x'
+
       - name: Install Linux-specific packages
         if: runner.os == 'Linux'
         run: sudo apt-get install clang-format

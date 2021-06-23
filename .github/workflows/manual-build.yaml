@@ -88,6 +88,12 @@ jobs:
             node-bindings/build/Release/crosslocale.node \
             "$pkgdir"
 
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            cp -av \
+              target/release/${{ matrix.dylib_prefix }}crosslocale${{ matrix.dylib_suffix }}.lib \
+              "$pkgdir"
+          fi
+
           cd "$pkgdir"
 
           if [[ "$RUNNER_OS" != "Windows" ]]; then
