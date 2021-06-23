@@ -372,7 +372,7 @@ static IGNORED_STRINGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 
 #[allow(clippy::iter_nth_zero)]
 fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &FoundJsonFile) -> bool {
-  if IGNORED_STRINGS.contains(lang_label.main_locale_text.as_str()) {
+  if IGNORED_STRINGS.contains(lang_label.main_locale_text.trim()) {
     return true;
   }
 
