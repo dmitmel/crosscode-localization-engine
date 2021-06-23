@@ -3,12 +3,16 @@ use crate::progress::ProgressReporter;
 use crate::scan;
 use crate::utils::json;
 
+use linkme::distributed_slice;
 use serde_json::ser::Formatter;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct DumpScanCommand;
+
+#[distributed_slice(super::RAW_COMMANDS_REGISTRY)]
+fn register() -> Box<dyn super::Command> { Box::new(DumpScanCommand) }
 
 impl super::Command for DumpScanCommand {
   fn name(&self) -> &'static str { "dump-scan" }

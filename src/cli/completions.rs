@@ -5,10 +5,14 @@ use crate::progress::ProgressReporter;
 
 use clap_generate::generate;
 use clap_generate::generators;
+use linkme::distributed_slice;
 use std::io;
 
 #[derive(Debug)]
 pub struct CompletionsCommand;
+
+#[distributed_slice(super::RAW_COMMANDS_REGISTRY)]
+fn register() -> Box<dyn super::Command> { Box::new(CompletionsCommand) }
 
 impl super::Command for CompletionsCommand {
   fn name(&self) -> &'static str { "completions" }

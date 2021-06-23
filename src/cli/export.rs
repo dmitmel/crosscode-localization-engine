@@ -9,12 +9,16 @@ use crate::utils;
 use crate::utils::json;
 
 use indexmap::IndexMap;
+use linkme::distributed_slice;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct ExportCommand;
+
+#[distributed_slice(super::RAW_COMMANDS_REGISTRY)]
+fn register() -> Box<dyn super::Command> { Box::new(ExportCommand) }
 
 impl super::Command for ExportCommand {
   fn name(&self) -> &'static str { "export" }

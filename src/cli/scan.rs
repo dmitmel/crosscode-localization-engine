@@ -8,6 +8,7 @@ use crate::scan::lang_label_extractor::{self, LangLabel};
 use crate::utils;
 use crate::utils::json;
 
+use linkme::distributed_slice;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::borrow::Cow;
@@ -22,6 +23,9 @@ use std::sync::{mpsc, Arc};
 
 #[derive(Debug)]
 pub struct ScanCommand;
+
+#[distributed_slice(super::RAW_COMMANDS_REGISTRY)]
+fn register() -> Box<dyn super::Command> { Box::new(ScanCommand) }
 
 impl super::Command for ScanCommand {
   fn name(&self) -> &'static str { "scan" }

@@ -37,6 +37,7 @@ time = { version = "0.2.25" }
 # textwrap = { version = "0.11.0" }
 atty = { version = "0.2.14" }
 threadpool = "1.8.1"
+linkme = "0.2.5"
 
 [target.'cfg(unix)'.dependencies]
 libc = { version = "0.2" }

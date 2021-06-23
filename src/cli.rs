@@ -12,6 +12,7 @@ pub mod status;
 use crate::impl_prelude::*;
 use crate::progress::ProgressReporter;
 
+use linkme::distributed_slice;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -93,27 +94,15 @@ pub trait Command {
   ) -> AnyResult<()>;
 }
 
-pub fn all_commands() -> Vec<Box<dyn Command>> {
-  vec![
-    Box::new(backend::BackendCommand),
-    Box::new(completions::CompletionsCommand),
-    Box::new(convert::ConvertCommand),
-    Box::new(create_project::CreateProjectCommand),
-    Box::new(dump_scan::DumpScanCommand),
-    Box::new(export::ExportCommand),
-    Box::new(import::ImportCommand),
-    Box::new(parse_po::ParsePoCommand),
-    Box::new(scan::ScanCommand),
-    Box::new(status::StatusCommand),
-  ]
-}
+#[distributed_slice]
+pub static RAW_COMMANDS_REGISTRY: [fn() -> Box<dyn Command>] = [..];
 
 pub fn create_complete_arg_parser<'help>(
 ) -> (clap::App<'help>, HashMap<&'static str, Box<dyn Command>>) {
   let mut arg_parser = GlobalOpts::create_arg_parser();
-  let all_commands: Vec<Box<dyn Command>> = all_commands();
-  let mut all_commands_map = HashMap::with_capacity(all_commands.len());
-  for command in all_commands {
+  let mut all_commands_map = HashMap::with_capacity(RAW_COMMANDS_REGISTRY.len());
+  for command_fn in RAW_COMMANDS_REGISTRY {
+    let command: Box<dyn Command> = command_fn();
     arg_parser = arg_parser.subcommand(command.create_arg_parser(clap::App::new(command.name())));
     all_commands_map.insert(command.name(), command);
   }

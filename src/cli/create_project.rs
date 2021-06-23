@@ -6,11 +6,15 @@ use crate::rc_string::RcString;
 use crate::scan;
 use crate::utils::{self, RcExt};
 
+use linkme::distributed_slice;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct CreateProjectCommand;
+
+#[distributed_slice(super::RAW_COMMANDS_REGISTRY)]
+fn register() -> Box<dyn super::Command> { Box::new(CreateProjectCommand) }
 
 impl super::Command for CreateProjectCommand {
   fn name(&self) -> &'static str { "create-project" }
