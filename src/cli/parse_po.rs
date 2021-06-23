@@ -140,7 +140,7 @@ fn print_messages_po<'src>(iter: impl Iterator<Item = ParsedMessage<'src>>) -> A
           "{}{} {}",
           prefix,
           keyword,
-          if text_strings.len() == 1 { quote_string(&text_strings[0]) } else { "\"\"".to_owned() }
+          if text_strings.len() == 1 { quote_string(text_strings[0]) } else { "\"\"".to_owned() }
         );
 
         if text_strings.len() > 1 {

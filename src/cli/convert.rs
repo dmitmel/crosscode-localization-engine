@@ -361,7 +361,7 @@ impl super::Command for ConvertCommand {
           fs::File::create(&path)
             .with_context(|| format!("Failed to open file {:?} for writing", path))?,
         );
-        exporter.export(&exported_meta, &fragments, &mut writer)?;
+        exporter.export(&exported_meta, fragments, &mut writer)?;
         writer.flush()?;
         Ok(())
       };

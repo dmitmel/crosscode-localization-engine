@@ -231,7 +231,7 @@ impl<'a> LinesWithEndings<'a> {
   #[inline(always)]
   pub fn new(text: &'a str) -> LinesWithEndings<'a> { LinesWithEndings { text } }
   #[inline(always)]
-  pub fn as_str(&self) -> &'a str { &self.text }
+  pub fn as_str(&self) -> &'a str { self.text }
 }
 
 impl<'a> Iterator for LinesWithEndings<'a> {

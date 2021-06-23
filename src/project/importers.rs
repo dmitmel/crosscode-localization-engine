@@ -257,7 +257,7 @@ impl Importer for GettextPoImporter {
     input: &str,
     imported_fragments: &mut Vec<ImportedFragment>,
   ) -> AnyResult<()> {
-    for (i, message) in gettext_po::parse(&input).enumerate() {
+    for (i, message) in gettext_po::parse(input).enumerate() {
       let message = match message {
         Ok(v) => v,
         Err(e) => {

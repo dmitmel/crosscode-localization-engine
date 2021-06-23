@@ -36,7 +36,7 @@ pub fn generate(file_data: &json::Value, fragment_json_path: &str) -> AnyResult<
     };
     let next_value =
       step().ok_or_else(|| format_err!("Invalid JSON path at depth {}", depth + 1))?;
-    generate_for_json_object(&current_value, key, &mut state);
+    generate_for_json_object(current_value, key, &mut state);
     current_value = next_value;
   }
 

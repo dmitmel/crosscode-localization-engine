@@ -347,7 +347,7 @@ pub fn read_game_version(assets_dir: &Path) -> AnyResult<RcString> {
       let hotfix_str = unsafe { change.get_unchecked(..i) };
       let hotfix = u32::from_str(hotfix_str).ok()?;
       change = unsafe { change.get_unchecked(i..) };
-      change = change.strip_prefix(")")?;
+      change = change.strip_prefix(')')?;
       Some((hotfix_str, hotfix))
     }
   }

@@ -69,7 +69,7 @@ pub fn find_all_in_assets_dir(assets_dir: &Path) -> AnyResult<Vec<FoundJsonFile>
         Ok(p) => p,
         _ => continue,
       };
-      let path_str = path_to_str_with_error(&path)?;
+      let path_str = path_to_str_with_error(path)?;
 
       let is_lang_file = path.starts_with(&lang_dir);
       // Hacky, but good enough for CC.

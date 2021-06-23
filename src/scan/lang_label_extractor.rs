@@ -30,7 +30,7 @@ pub fn extract_from_file<'json>(
   } else {
     try_extract_lang_label
   };
-  Some(LangLabelIter::new(&found_file.path, &json_data, extraction_fn, options))
+  Some(LangLabelIter::new(&found_file.path, json_data, extraction_fn, options))
 }
 
 #[derive(Debug)]
@@ -176,7 +176,7 @@ impl<'json> Iterator for LangLabelIter<'json> {
       if let Some((key, value)) = current_iter.next() {
         self.current_json_path.push(key.into_owned());
         if let Some(lang_label) = (self.try_extract_lang_label_fn)(
-          &self.options,
+          self.options,
           self.file_path,
           &self.current_json_path,
           value,

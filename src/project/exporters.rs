@@ -108,7 +108,7 @@ impl ExportedFragment {
       original_text: f.original_text().share_rc(),
       flags: Some(f.flags().share_rc()),
       best_translation: f.get_best_translation().map(|t| ExportedTranslation::new(&t)),
-      translations: f.translations().iter().map(|t| ExportedTranslation::new(&t)).collect(),
+      translations: f.translations().iter().map(|t| ExportedTranslation::new(t)).collect(),
     }
   }
 }
@@ -251,7 +251,7 @@ impl Exporter for LocalizeMeTrPackExporter {
       is_first_entry = false;
       {
         fmt.begin_string(writer)?;
-        json::format_escaped_str_contents(writer, fmt, &localize_me_file_path)?;
+        json::format_escaped_str_contents(writer, fmt, localize_me_file_path)?;
         fmt.write_string_fragment(writer, "/")?;
         json::format_escaped_str_contents(writer, fmt, &fragment.json_path)?;
         fmt.end_string(writer)?;
