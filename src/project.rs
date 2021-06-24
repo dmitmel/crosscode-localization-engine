@@ -1,5 +1,29 @@
 // TODO: Remove unneeded weakrefs to the parent objects.
 
+// The list of translation flags used in the crosscode-ru project:
+//
+// - votePlz
+// - fromBackup
+// - fromGTable
+// - needsCheck
+// - notChecked
+// - overflow
+// - DICH
+// - no_YOU
+//
+// Screenshots (sorted chronologically):
+//
+// <https://cdn.discordapp.com/attachments/632559919375187978/663140282417545226/unknown.png>
+// <https://discord.com/channels/500980710870614019/632559919375187978/663140282417545228>
+// <https://cdn.discordapp.com/attachments/632559919375187978/663847660154781710/unknown.png>
+// <https://discord.com/channels/500980710870614019/632559919375187978/663847660637257731>
+// <https://cdn.discordapp.com/attachments/500980711466074123/664124094928650261/unknown.png>
+// <https://discord.com/channels/500980710870614019/500980711466074123/664124095444680753>
+// <https://cdn.discordapp.com/attachments/664054535391674379/668126299331493898/unknown.png>
+// <https://discord.com/channels/500980710870614019/664054535391674379/668126299629420597>
+// <https://cdn.discordapp.com/attachments/632559919375187978/666763321906823179/unknown.png>
+// <https://discord.com/channels/500980710870614019/632559919375187978/666763321906823180>
+
 pub mod exporters;
 pub mod importers;
 pub mod splitters;
