@@ -3,13 +3,10 @@ use crate::backend::{self, Backend};
 use crate::impl_prelude::*;
 use crate::progress::ProgressReporter;
 
-use linkme::distributed_slice;
-
 #[derive(Debug)]
 pub struct BackendCommand;
 
-#[distributed_slice(super::RAW_COMMANDS_REGISTRY)]
-fn register() -> Box<dyn super::Command> { Box::new(BackendCommand) }
+inventory::submit!(&BackendCommand as &dyn super::Command);
 
 impl super::Command for BackendCommand {
   fn name(&self) -> &'static str { "backend" }

@@ -3,15 +3,13 @@ use crate::progress::ProgressReporter;
 use crate::project::Project;
 use crate::rc_string::RcString;
 
-use linkme::distributed_slice;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct StatusCommand;
 
-#[distributed_slice(super::RAW_COMMANDS_REGISTRY)]
-fn register() -> Box<dyn super::Command> { Box::new(StatusCommand) }
+inventory::submit!(&StatusCommand as &dyn super::Command);
 
 impl super::Command for StatusCommand {
   fn name(&self) -> &'static str { "status" }

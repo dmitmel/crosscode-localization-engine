@@ -10,7 +10,6 @@ use crate::utils::json;
 use crate::utils::{self, RcExt};
 
 use indexmap::IndexMap;
-use linkme::distributed_slice;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -19,8 +18,7 @@ use std::rc::Rc;
 #[derive(Debug)]
 pub struct ConvertCommand;
 
-#[distributed_slice(super::RAW_COMMANDS_REGISTRY)]
-fn register() -> Box<dyn super::Command> { Box::new(ConvertCommand) }
+inventory::submit!(&ConvertCommand as &dyn super::Command);
 
 impl super::Command for ConvertCommand {
   fn name(&self) -> &'static str { "convert" }

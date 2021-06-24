@@ -12,7 +12,6 @@ pub mod status;
 use crate::impl_prelude::*;
 use crate::progress::ProgressReporter;
 
-use linkme::distributed_slice;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -94,15 +93,13 @@ pub trait Command {
   ) -> AnyResult<()>;
 }
 
-#[distributed_slice]
-pub static RAW_COMMANDS_REGISTRY: [fn() -> Box<dyn Command>] = [..];
+inventory::collect!(&'static dyn Command);
 
 pub fn create_complete_arg_parser<'help>(
-) -> (clap::App<'help>, HashMap<&'static str, Box<dyn Command>>) {
+) -> (clap::App<'help>, HashMap<&'static str, &'static dyn Command>) {
   let mut arg_parser = GlobalOpts::create_arg_parser();
-  let mut all_commands_map = HashMap::with_capacity(RAW_COMMANDS_REGISTRY.len());
-  for command_fn in RAW_COMMANDS_REGISTRY {
-    let command: Box<dyn Command> = command_fn();
+  let mut all_commands_map = HashMap::new();
+  for &command in inventory::iter::<&dyn Command> {
     arg_parser = arg_parser.subcommand(command.create_arg_parser(clap::App::new(command.name())));
     all_commands_map.insert(command.name(), command);
   }

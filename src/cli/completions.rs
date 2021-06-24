@@ -5,14 +5,12 @@ use crate::progress::ProgressReporter;
 
 use clap_generate::generate;
 use clap_generate::generators;
-use linkme::distributed_slice;
-use std::io;
+use std::io::{self, Write};
 
 #[derive(Debug)]
 pub struct CompletionsCommand;
 
-#[distributed_slice(super::RAW_COMMANDS_REGISTRY)]
-fn register() -> Box<dyn super::Command> { Box::new(CompletionsCommand) }
+inventory::submit!(&CompletionsCommand as &dyn super::Command);
 
 impl super::Command for CompletionsCommand {
   fn name(&self) -> &'static str { "completions" }
@@ -48,7 +46,10 @@ impl super::Command for CompletionsCommand {
       "zsh" => generate::<generators::Zsh, _>,
       _ => unreachable!(),
     };
-    chosen_generator(&mut arg_parser, env!("CARGO_BIN_NAME"), &mut io::stdout());
+    let mut out = io::stdout();
+    chosen_generator(&mut arg_parser, env!("CARGO_BIN_NAME"), &mut out);
+    out.write_all(b"\n")?;
+    out.flush()?;
 
     Ok(())
   }

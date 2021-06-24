@@ -5,7 +5,6 @@ use crate::project::{self, Project, Translation};
 use crate::rc_string::RcString;
 use crate::utils;
 
-use linkme::distributed_slice;
 use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::fs;
@@ -16,8 +15,7 @@ use std::rc::Rc;
 #[derive(Debug)]
 pub struct ImportCommand;
 
-#[distributed_slice(super::RAW_COMMANDS_REGISTRY)]
-fn register() -> Box<dyn super::Command> { Box::new(ImportCommand) }
+inventory::submit!(&ImportCommand as &dyn super::Command);
 
 impl super::Command for ImportCommand {
   fn name(&self) -> &'static str { "import" }

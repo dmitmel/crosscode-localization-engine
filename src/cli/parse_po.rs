@@ -5,7 +5,6 @@ use crate::utils;
 use crate::utils::json;
 use crate::utils::parsing::ParsingError;
 
-use linkme::distributed_slice;
 use std::borrow::Cow;
 use std::fs;
 use std::io::{self, Read, Write};
@@ -14,8 +13,7 @@ use std::path::PathBuf;
 #[derive(Debug)]
 pub struct ParsePoCommand;
 
-#[distributed_slice(super::RAW_COMMANDS_REGISTRY)]
-fn register() -> Box<dyn super::Command> { Box::new(ParsePoCommand) }
+inventory::submit!(&ParsePoCommand as &dyn super::Command);
 
 impl super::Command for ParsePoCommand {
   fn name(&self) -> &'static str { "parse-po" }
