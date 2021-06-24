@@ -95,7 +95,7 @@ pub enum ResponseMessageType {
     modification_timestamp: Timestamp,
     game_version: RcString,
     original_locale: RcString,
-    reference_locales: Rc<Vec<RcString>>,
+    reference_locales: Rc<HashSet<RcString>>,
     translation_locale: RcString,
     translations_dir: RcString,
     splitter: MaybeStaticStr,
@@ -120,8 +120,8 @@ pub struct ListedFragment {
   pub description: Rc<Vec<RcString>>,
   #[serde(rename = "orig")]
   pub original_text: RcString,
-  // #[serde(rename = "refs", skip_serializing_if = "HashMap::is_empty")]
-  // pub reference_texts: Rc<HashMap<RcString, RcString>>,
+  #[serde(rename = "refs", skip_serializing_if = "HashMap::is_empty")]
+  pub reference_texts: Rc<HashMap<RcString, RcString>>,
   #[serde(skip_serializing_if = "HashSet::is_empty")]
   pub flags: Rc<HashSet<RcString>>,
   #[serde(skip_serializing_if = "Vec::is_empty", rename = "tr")]
@@ -350,7 +350,7 @@ impl Backend {
             lang_uid: f.lang_uid(),
             description: f.description().share_rc(),
             original_text: f.original_text().share_rc(),
-            // reference_texts: f.reference_texts().share_rc(),
+            reference_texts: f.reference_texts().share_rc(),
             flags: f.flags().share_rc(),
 
             translations: f

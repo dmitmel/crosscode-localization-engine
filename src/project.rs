@@ -15,7 +15,7 @@ use once_cell::sync::Lazy;
 use once_cell::unsync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::cell::{Cell, Ref, RefCell, RefMut};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak as RcWeak};
 use uuid::Uuid;
@@ -33,7 +33,7 @@ pub struct ProjectMetaSerde {
   pub modification_timestamp: Timestamp,
   pub game_version: RcString,
   pub original_locale: RcString,
-  pub reference_locales: Rc<Vec<RcString>>,
+  pub reference_locales: Rc<HashSet<RcString>>,
   pub translation_locale: RcString,
   pub translations_dir: RcString,
   pub splitter: RcString,
@@ -68,8 +68,8 @@ pub struct FragmentSerde {
   pub description: Rc<Vec<RcString>>,
   #[serde(with = "utils::serde::MultilineStringHelper", rename = "orig")]
   pub original_text: RcString,
-  // #[serde(default)]
-  // pub reference_texts: Rc<HashMap<RcString, Vec<RcString>>>,
+  #[serde(default, rename = "refs")]
+  pub reference_texts: Rc<HashMap<RcString, RcString>>,
   #[serde(default)]
   pub flags: Rc<HashSet<RcString>>,
   #[serde(rename = "tr")]
@@ -130,7 +130,7 @@ pub struct ProjectMeta {
   modification_timestamp: Cell<Timestamp>, // TODO
   game_version: RcString,
   original_locale: RcString,
-  reference_locales: Rc<Vec<RcString>>,
+  reference_locales: Rc<HashSet<RcString>>,
   translation_locale: RcString,
   translations_dir: RcString,
   splitter: RefCell<Box<dyn Splitter>>,
@@ -150,7 +150,7 @@ pub struct ProjectMetaInitOpts {
   pub modification_timestamp: Timestamp,
   pub game_version: RcString,
   pub original_locale: RcString,
-  pub reference_locales: Rc<Vec<RcString>>,
+  pub reference_locales: Rc<HashSet<RcString>>,
   pub translation_locale: RcString,
   pub translations_dir: RcString,
   pub splitter: RcString,
@@ -172,7 +172,7 @@ impl ProjectMeta {
   #[inline(always)]
   pub fn original_locale(&self) -> &RcString { &self.original_locale }
   #[inline(always)]
-  pub fn reference_locales(&self) -> &Rc<Vec<RcString>> { &self.reference_locales }
+  pub fn reference_locales(&self) -> &Rc<HashSet<RcString>> { &self.reference_locales }
   #[inline(always)]
   pub fn translation_locale(&self) -> &RcString { &self.translation_locale }
   #[inline(always)]
@@ -318,6 +318,7 @@ impl Project {
             lang_uid: fragment_raw.lang_uid,
             description: fragment_raw.description,
             original_text: fragment_raw.original_text,
+            reference_texts: fragment_raw.reference_texts,
             flags: fragment_raw.flags,
           });
 
@@ -636,7 +637,7 @@ pub struct FragmentInitOpts {
   pub lang_uid: i32,
   pub description: Rc<Vec<RcString>>,
   pub original_text: RcString,
-  // pub reference_texts: Rc<HashMap<RcString, RcString>>,
+  pub reference_texts: Rc<HashMap<RcString, RcString>>,
   pub flags: Rc<HashSet<RcString>>,
 }
 
@@ -663,8 +664,8 @@ pub struct Fragment {
   description: Rc<Vec<RcString>>,
   #[serde(with = "utils::serde::MultilineStringHelper", rename = "orig")]
   original_text: RcString,
-  // #[serde(skip_serializing_if = "HashMap::is_empty")]
-  // reference_texts: RefCell<Rc<HashMap<RcString, RcString>>>,
+  #[serde(skip_serializing_if = "utils::IsEmpty::is_empty", rename = "refs")]
+  reference_texts: RefCell<Rc<HashMap<RcString, RcString>>>,
   #[serde(skip_serializing_if = "utils::IsEmpty::is_empty")]
   flags: RefCell<Rc<HashSet<RcString>>>,
 
@@ -695,8 +696,10 @@ impl Fragment {
   pub fn description(&self) -> &Rc<Vec<RcString>> { &self.description }
   #[inline(always)]
   pub fn original_text(&self) -> &RcString { &self.original_text }
-  // #[inline(always)]
-  // pub fn reference_texts(&self) -> &Rc<HashMap<RcString, RcString>> { &self.reference_texts }
+  #[inline(always)]
+  pub fn reference_texts(&self) -> Ref<Rc<HashMap<RcString, RcString>>> {
+    self.reference_texts.borrow()
+  }
   #[inline(always)]
   pub fn flags(&self) -> Ref<Rc<HashSet<RcString>>> { self.flags.borrow() }
   #[inline(always)]
@@ -722,7 +725,7 @@ impl Fragment {
       lang_uid: opts.lang_uid,
       description: opts.description,
       original_text: opts.original_text,
-      // reference_texts: RefCell::new(opts.reference_texts),
+      reference_texts: RefCell::new(opts.reference_texts),
       flags: RefCell::new(opts.flags),
 
       translations: RefCell::new(Vec::new()),

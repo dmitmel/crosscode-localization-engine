@@ -340,6 +340,7 @@ impl super::Command for ConvertCommand {
           lang_uid: Some(scan_fragment.lang_uid()),
           description: Some(scan_fragment.description().share_rc()),
           original_text: f.original_text,
+          reference_texts: None,
           flags: Some(scan_fragment.flags().share_rc()),
           best_translation,
           translations,

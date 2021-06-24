@@ -32,7 +32,7 @@ pub struct ExporterConfig {
 //   #[inline(always)]
 //   fn original_locale(&self) -> Option<RcString> { None }
 //   #[inline(always)]
-//   fn reference_locales(&self) -> Option<Rc<Vec<RcString>>> { None }
+//   fn reference_locales(&self) -> Option<Rc<HashSet<RcString>>> { None }
 //   #[inline(always)]
 //   fn translation_locale(&self) -> Option<RcString> { None }
 // }
@@ -49,7 +49,7 @@ pub struct ExporterConfig {
 //   #[inline(always)]
 //   fn original_locale(&self) -> Option<RcString> { Some(self.original_locale().share_rc()) }
 //   #[inline(always)]
-//   fn reference_locales(&self) -> Option<Rc<Vec<RcString>>> {
+//   fn reference_locales(&self) -> Option<Rc<HashSet<RcString>>> {
 //     Some(self.reference_locales().share_rc())
 //   }
 //   #[inline(always)]
@@ -63,7 +63,7 @@ pub struct ExportedProjectMeta {
   pub modification_timestamp: Option<Timestamp>,
   pub game_version: Option<RcString>,
   pub original_locale: Option<RcString>,
-  pub reference_locales: Option<Rc<Vec<RcString>>>,
+  pub reference_locales: Option<Rc<HashSet<RcString>>>,
   pub translation_locale: Option<RcString>,
 }
 
@@ -90,7 +90,7 @@ pub struct ExportedFragment {
   pub lang_uid: Option<i32>,
   pub description: Option<Rc<Vec<RcString>>>,
   pub original_text: RcString,
-  // pub reference_texts: Option<Rc<HashMap<RcString, RcString>>>,
+  pub reference_texts: Option<Rc<HashMap<RcString, RcString>>>,
   pub flags: Option<Rc<HashSet<RcString>>>,
   pub best_translation: Option<ExportedTranslation>,
   pub translations: Vec<ExportedTranslation>,
@@ -106,6 +106,7 @@ impl ExportedFragment {
       lang_uid: Some(f.lang_uid()),
       description: Some(f.description().share_rc()),
       original_text: f.original_text().share_rc(),
+      reference_texts: Some(f.reference_texts().share_rc()),
       flags: Some(f.flags().share_rc()),
       best_translation: f.get_best_translation().map(|t| ExportedTranslation::new(&t)),
       translations: f.translations().iter().map(|t| ExportedTranslation::new(t)).collect(),

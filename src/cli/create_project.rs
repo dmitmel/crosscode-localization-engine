@@ -6,6 +6,7 @@ use crate::rc_string::RcString;
 use crate::scan;
 use crate::utils::{self, RcExt};
 
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -110,9 +111,9 @@ impl super::Command for CreateProjectCommand {
       .values_of_os("extra_scan_dbs")
       .map_or_else(Vec::new, |values| values.map(PathBuf::from).collect());
     let opt_original_locale = RcString::from(matches.value_of("original_locale").unwrap());
-    let opt_reference_locales: Vec<_> = matches
+    let opt_reference_locales: HashSet<_> = matches
       .values_of("reference_locales")
-      .map_or_else(Vec::new, |values| values.map(RcString::from).collect());
+      .map_or_else(HashSet::new, |values| values.map(RcString::from).collect());
     let opt_translation_locale = RcString::from(matches.value_of("translation_locale").unwrap());
     let opt_splitter = RcString::from(matches.value_of("splitter").unwrap());
     let opt_translations_dir = RcString::from(matches.value_of("translations_dir").unwrap());
@@ -160,6 +161,7 @@ impl super::Command for CreateProjectCommand {
 
     info!("Generating project translation files");
 
+    let project_meta = project.meta();
     for scan_db in scan_dbs {
       for scan_game_file in scan_db.game_files().values() {
         let global_tr_file_path: Option<RcString> = project
@@ -169,14 +171,21 @@ impl super::Command for CreateProjectCommand {
           .map(RcString::from);
 
         for scan_fragment in scan_game_file.fragments().values() {
-          let original_text = match scan_fragment.text().get(project.meta().original_locale()) {
+          let original_text = match scan_fragment.text().get(project_meta.original_locale()) {
             Some(v) => v.share_rc(),
             None => continue,
           };
 
+          let mut reference_texts = HashMap::with_capacity(project_meta.reference_locales().len());
+          for locale in project_meta.reference_locales().iter() {
+            if let Some(v) = scan_fragment.text().get(locale) {
+              reference_texts.insert(locale.share_rc(), v.share_rc());
+            }
+          }
+
           let fragment_tr_file_path: RcString = match &global_tr_file_path {
             Some(v) => v.share_rc(),
-            None => RcString::from(project.meta().splitter_mut().get_tr_file_for_fragment(
+            None => RcString::from(project_meta.splitter_mut().get_tr_file_for_fragment(
               scan_fragment.file_asset_root(),
               scan_fragment.file_path(),
               scan_fragment.json_path(),
@@ -211,7 +220,7 @@ impl super::Command for CreateProjectCommand {
             lang_uid: scan_fragment.lang_uid(),
             description: scan_fragment.description().share_rc(),
             original_text,
-            // reference_texts: HashMap::new(),
+            reference_texts: Rc::new(reference_texts),
             flags: scan_fragment.flags().share_rc(),
           });
         }
