@@ -611,7 +611,8 @@ impl GameFileChunk {
 
   pub fn new_fragment(self: &Rc<Self>, opts: FragmentInitOpts) -> Rc<Fragment> {
     self.dirty_flag.set(true);
-    let fragment = Fragment::new(&self.project(), &self.tr_file(), self, opts);
+    let fragment =
+      Fragment::new(&self.project(), &self.tr_file(), self, &self.virtual_game_file, opts);
     let prev_fragment =
       self.fragments.borrow_mut().insert(fragment.json_path.share_rc(), fragment.share_rc());
     assert!(prev_fragment.is_none());
@@ -651,6 +652,8 @@ pub struct Fragment {
   tr_file: RcWeak<TrFile>,
   #[serde(skip)]
   game_file_chunk: RcWeak<GameFileChunk>,
+  #[serde(skip)]
+  virtual_game_file: RcWeak<VirtualGameFile>,
 
   #[serde(with = "utils::serde::CompactUuidHelper")]
   id: Uuid,
@@ -684,6 +687,10 @@ impl Fragment {
   pub fn tr_file(&self) -> Rc<TrFile> { self.tr_file.upgrade().unwrap() }
   #[inline]
   pub fn game_file_chunk(&self) -> Rc<GameFileChunk> { self.game_file_chunk.upgrade().unwrap() }
+  #[inline]
+  pub fn virtual_game_file(&self) -> Rc<VirtualGameFile> {
+    self.virtual_game_file.upgrade().unwrap()
+  }
   #[inline(always)]
   pub fn id(&self) -> Uuid { self.id }
   #[inline(always)]
@@ -711,6 +718,7 @@ impl Fragment {
     project: &Rc<Project>,
     tr_file: &Rc<TrFile>,
     game_file_chunk: &Rc<GameFileChunk>,
+    virtual_game_file: &Rc<VirtualGameFile>,
     opts: FragmentInitOpts,
   ) -> Rc<Self> {
     Rc::new(Self {
@@ -718,6 +726,7 @@ impl Fragment {
       project: project.share_rc_weak(),
       tr_file: tr_file.share_rc_weak(),
       game_file_chunk: game_file_chunk.share_rc_weak(),
+      virtual_game_file: virtual_game_file.share_rc_weak(),
 
       id: opts.id,
       file_path: game_file_chunk.path.share_rc(),

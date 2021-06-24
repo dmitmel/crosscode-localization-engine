@@ -2,6 +2,8 @@ pub mod backend;
 pub mod completions;
 pub mod convert;
 pub mod create_project;
+pub mod dump_common;
+pub mod dump_project;
 pub mod dump_scan;
 pub mod export;
 pub mod import;
