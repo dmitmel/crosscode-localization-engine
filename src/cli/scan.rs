@@ -111,13 +111,21 @@ impl super::Command for ScanCommand {
       // If it does, then the file will be created anyway. However, this check
       // will fail (be a false-negative) when the output path points to a
       // symlink to a non-existent file, so TODO.
-      Err(e) if e.kind() == io::ErrorKind::NotFound => match opt_output.parent() {
-        Some(output_dir) => !output_dir.exists(),
-        // We are at the FS root (the parent is None), but it (the root)
-        // doesn't exist? But anyway, the root is always a directory to my
-        // knowledge, so we shouldn't be able to write to it as a file anyways.
-        None => true,
-      },
+      Err(e) if e.kind() == io::ErrorKind::NotFound => {
+        // These checks are really getting out of hand. normalize_path may fail
+        // on symlinks (i.e. `/a/../b` will not always be equivalent to `/b`),
+        // I may want to do some probing by trying to create an empty file.
+        // Anyway, the concatenation with the path `.` will be ignored on
+        // absolute paths and on relative ones the subsequent `parent()`
+        // invocation will return the current directory as a fallback.
+        match Path::new(".").join(utils::normalize_path(&opt_output)).parent() {
+          Some(output_dir) => !output_dir.exists(),
+          // We are at the FS root (the parent is None), but it (the root)
+          // doesn't exist? But anyway, the root is always a directory to my
+          // knowledge, so we shouldn't be able to write to it as a file anyways.
+          None => true,
+        }
+      }
       Err(_) => true,
     } {
       warn!("The output location is not writable, this may result in a crash");

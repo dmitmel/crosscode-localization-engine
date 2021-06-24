@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Component as PathComponent, Path, PathBuf};
 use std::rc::{Rc, Weak as RcWeak};
 use std::sync::{Arc, Weak as ArcWeak};
 use std::time::SystemTime;
@@ -299,6 +299,33 @@ impl<T: IsEmpty> IsEmpty for RefCell<T> {
 impl<T: IsEmpty> IsEmpty for Rc<T> {
   #[inline(always)]
   fn is_empty(&self) -> bool { (**self).is_empty() }
+}
+
+/// Copied from <https://github.com/rust-lang/cargo/blob/4c27c96645e235d81f6c8dfff03ff9ebaf0ef71d/crates/cargo-util/src/paths.rs#L73-L106>.
+pub fn normalize_path(path: &Path) -> PathBuf {
+  let mut components = path.components().peekable();
+  let mut ret = if let Some(c @ PathComponent::Prefix(..)) = components.peek().cloned() {
+    components.next();
+    PathBuf::from(c.as_os_str())
+  } else {
+    PathBuf::new()
+  };
+  for component in components {
+    match component {
+      PathComponent::Prefix(..) => unreachable!(),
+      PathComponent::RootDir => {
+        ret.push(component.as_os_str());
+      }
+      PathComponent::CurDir => {}
+      PathComponent::ParentDir => {
+        ret.pop();
+      }
+      PathComponent::Normal(c) => {
+        ret.push(c);
+      }
+    }
+  }
+  ret
 }
 
 #[cfg(test)]
