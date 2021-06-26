@@ -115,6 +115,7 @@ dependencies = [
  "inventory",
  "libc",
  "log",
+ "memmap2",
  "once_cell",
  "serde",
  "serde_json",
@@ -293,6 +294,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "memmap2"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "723e3ebdcdc5c023db1df315364573789f8857c11b631a2fdfad7c00f5c046b4"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

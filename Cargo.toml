@@ -38,6 +38,7 @@ time = { version = "0.2.25" }
 atty = { version = "0.2.14" }
 threadpool = "1.8.1"
 inventory = "0.1.10"
+memmap2 = "0.2.2"
 
 [target.'cfg(unix)'.dependencies]
 libc = { version = "0.2" }

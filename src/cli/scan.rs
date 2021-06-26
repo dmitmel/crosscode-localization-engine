@@ -1,3 +1,4 @@
+use crate::cli::MmapPreference;
 use crate::impl_prelude::*;
 use crate::progress::ProgressReporter;
 use crate::rc_string::RcString;
@@ -88,7 +89,7 @@ impl super::Command for ScanCommand {
 
   fn run(
     &self,
-    _global_opts: super::GlobalOpts,
+    global_opts: super::GlobalOpts,
     matches: &clap::ArgMatches,
     mut progress: Box<dyn ProgressReporter>,
   ) -> AnyResult<()> {
@@ -176,10 +177,11 @@ impl super::Command for ScanCommand {
       let lang_labels_tx = lang_labels_tx.clone();
       let opt_assets_dir = opt_assets_dir.clone();
       let extractor_opts = extractor_opts.clone();
+      let opt_mmap_preference = global_opts.mmap_preference;
 
       pool.execute(move || {
         let abs_path = opt_assets_dir.join(&found_file.path);
-        let json_data: json::Value = match utils::json::read_file(&abs_path, &mut Vec::new()) {
+        let json_data: json::Value = match read_json_file(&abs_path, opt_mmap_preference) {
           Ok(v) => v,
           Err(e) => {
             crate::report_error(
@@ -401,4 +403,28 @@ fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &FoundJsonFile) -> 
   }
 
   false
+}
+
+pub fn read_json_file(path: &Path, mmap_preference: MmapPreference) -> io::Result<json::Value> {
+  let mut use_mmap = false;
+  if let MmapPreference::Auto = mmap_preference {
+    // <https://github.com/BurntSushi/ripgrep/blob/0958837ee104985412f08e81b6f08df1e5291042/src/worker.rs#L353-L360>
+    if path.metadata()?.len() > 0 {
+      use_mmap = true;
+    }
+  }
+
+  let bytes_mmap: memmap2::Mmap;
+  let bytes_non_mmap: Vec<u8>;
+  let bytes: &[u8] = if use_mmap {
+    let file = fs::File::open(path)?;
+    bytes_mmap = unsafe { memmap2::MmapOptions::new().populate().map(&file)? };
+    &bytes_mmap
+  } else {
+    bytes_non_mmap = fs::read(path)?;
+    &bytes_non_mmap
+  };
+
+  let value = serde_json::from_slice(bytes)?;
+  Ok(value)
 }
