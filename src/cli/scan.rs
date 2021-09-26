@@ -55,7 +55,7 @@ impl super::Command for ScanCommand {
         clap::Arg::new("locales")
           .value_name("LOCALE")
           .value_hint(clap::ValueHint::Other)
-          .multiple(true)
+          .multiple_values(true)
           .number_of_values(1)
           .short('l')
           .long("locales")

@@ -34,7 +34,6 @@ impl super::Command for ConvertCommand {
           .value_hint(clap::ValueHint::FilePath)
           .long("scan")
           .required(true)
-          //
           .about(
             "A scan database to use for referencing data like fragment descriptions if the \
             input format doesn't contain it.",
@@ -45,7 +44,6 @@ impl super::Command for ConvertCommand {
           .value_name("LOCALE")
           .value_hint(clap::ValueHint::Other)
           .long("original-locale")
-          //
           .about(
             "Locale of the original strings in the input files, used for warning about staleness \
             of the translations. Normally, during exports, this is determined from the project \
@@ -56,7 +54,7 @@ impl super::Command for ConvertCommand {
         clap::Arg::new("inputs")
           .value_name("INPUT_PATH")
           .value_hint(clap::ValueHint::AnyPath)
-          .multiple(true)
+          .multiple_values(true)
           .required(true)
           .conflicts_with("inputs_file")
           .about("Paths to the input files."),
@@ -66,7 +64,6 @@ impl super::Command for ConvertCommand {
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
           .short('i')
-          //
           .about(
             "Read paths to input files from a file. If there are other paths specified via \
             command-line arguments, then those will be used instead and the inputs file will be \
@@ -138,7 +135,6 @@ impl super::Command for ConvertCommand {
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
           .long("mapping-output")
-          //
           .about(
             "Write a JSON file containing a mapping table from game files to the translation \
             files containg their strings.",

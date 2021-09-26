@@ -37,7 +37,7 @@ impl super::Command for ImportCommand {
         clap::Arg::new("inputs")
           .value_name("IMPORT_PATH")
           .value_hint(clap::ValueHint::AnyPath)
-          .multiple(true)
+          .multiple_values(true)
           .required(true)
           .conflicts_with("inputs_file")
           .about("Path to files to import translations from."),
@@ -47,7 +47,6 @@ impl super::Command for ImportCommand {
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
           .short('i')
-          //
           .about(
             "Read paths to input files from a file. If there are other paths specified via \
             command-line arguments, then those will be used instead and the inputs file will be \
@@ -107,7 +106,7 @@ impl super::Command for ImportCommand {
           .value_name("FLAG")
           .value_hint(clap::ValueHint::Other)
           .long("add-flag")
-          .multiple(true)
+          .multiple_values(true)
           .number_of_values(1)
           .about("Add flags to the imported translations."),
       )

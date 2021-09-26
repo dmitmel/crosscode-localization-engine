@@ -44,8 +44,9 @@ impl GlobalOpts {
       .version(crate::CRATE_NICE_VERSION)
       .about("CrossCode Localization Engine command-line tool")
       .global_setting(clap::AppSettings::ColoredHelp)
-      .global_setting(clap::AppSettings::VersionlessSubcommands)
+      .global_setting(clap::AppSettings::DisableVersionForSubcommands)
       .global_setting(clap::AppSettings::AllowLeadingHyphen)
+      .global_setting(clap::AppSettings::AllowInvalidUtf8) // just in case, for file paths
       .setting(clap::AppSettings::SubcommandRequiredElseHelp)
       .arg(
         clap::Arg::new("verbose")

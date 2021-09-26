@@ -39,8 +39,7 @@ impl super::Command for CreateProjectCommand {
         clap::Arg::new("extra_scan_dbs")
           .value_name("EXTRA_SCAN_DB_PATHS")
           .value_hint(clap::ValueHint::FilePath)
-          .multiple(true)
-          //
+          .multiple_values(true)
           .about(
             "Paths to extra scan databases from which additional fragments will be read. Keep \
             in mind that the metadata only of the main database will be used.",
@@ -58,7 +57,7 @@ impl super::Command for CreateProjectCommand {
         clap::Arg::new("reference_locales")
           .value_name("LOCALE")
           .value_hint(clap::ValueHint::Other)
-          .multiple(true)
+          .multiple_values(true)
           .number_of_values(1)
           .long("reference-locales")
           .about("Other original locales to include for reference."),

@@ -24,7 +24,6 @@ impl super::Command for CompletionsCommand {
           .value_name("SHELL")
           .value_hint(clap::ValueHint::Other)
           .required(true)
-          //
           .possible_values(&["bash", "elvish", "fish", "powershell", "zsh"]),
       )
   }
