@@ -86,15 +86,15 @@ pub fn encode_compact_uuid(uuid: &Uuid) -> CompactUuid {
 
 /// This function should compile down to assembly without branching or panics.
 /// Optimized variant of <https://github.com/andreasots/base32/blob/d901ddebf9254d5730a64ca7286df47f0fd78bdb/src/lib.rs#L55-L101>.
-pub fn decode_compact_uuid(compact_uuid: &CompactUuid) -> Option<Uuid> {
+pub fn decode_compact_uuid(compact_uuid: &CompactUuid) -> Result<Uuid, usize> {
   let encoded: &[u8; COMPACT_UUID_BYTE_LEN] = compact_uuid;
   let mut encoded_padded = [0u8; BASE32_ENCODED_BLOCK_SIZE * 4];
   encoded_padded[..COMPACT_UUID_BYTE_LEN].copy_from_slice(encoded);
 
-  for byte in &mut encoded_padded[..COMPACT_UUID_BYTE_LEN] {
+  for (idx, byte) in encoded_padded[..COMPACT_UUID_BYTE_LEN].iter_mut().enumerate() {
     let value: i8 = BASE32_INV_ALPHABET[*byte as usize];
     if value < 0 {
-      return None;
+      return Err(idx);
     }
     *byte = value as u8;
   }
@@ -116,7 +116,7 @@ pub fn decode_compact_uuid(compact_uuid: &CompactUuid) -> Option<Uuid> {
 
   let mut decoded: uuid::Bytes = [0; UUID_BYTE_LEN];
   decoded.copy_from_slice(&out_buffer[..UUID_BYTE_LEN]);
-  Some(Uuid::from_bytes(decoded))
+  Ok(Uuid::from_bytes(decoded))
 }
 
 pub type Timestamp = i64;

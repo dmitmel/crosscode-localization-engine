@@ -1,10 +1,12 @@
 // TODO: Apparently automatic borrowing via deserialization of Cow doesn't
 // work. I need to implement the visitors myself.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::de::{self, Deserialize, Deserializer, Error as DeError};
+use serde::ser::{self, Serialize, Serializer};
 use std::borrow::Cow;
 use std::cell::{Ref, RefCell, RefMut};
 use std::convert::TryFrom;
+use std::fmt;
 use std::str;
 use uuid::Uuid;
 
@@ -91,29 +93,78 @@ impl RefMutHelper {
 #[derive(Debug)]
 pub struct CompactUuidHelper;
 
-// TODO: Handle direct (de)serialization (from) to byte arrays without
-// encoding, like here:
-// <https://github.com/uuid-rs/uuid/blob/34a4f1c65b63b29e828a078566bd3a7c5e042c76/src/serde_support.rs>.
 impl CompactUuidHelper {
+  /// Based on <https://github.com/uuid-rs/uuid/blob/0.8.2/src/serde_support.rs#L16-L28>.
   pub fn serialize<S>(value: &Uuid, serializer: S) -> Result<S::Ok, S::Error>
   where
     S: Serializer,
   {
-    let bytes = super::encode_compact_uuid(value);
-    str::from_utf8(&bytes).unwrap().serialize(serializer)
+    if serializer.is_human_readable() {
+      let bytes = super::encode_compact_uuid(value);
+      serializer.serialize_str(str::from_utf8(&bytes).unwrap())
+    } else {
+      serializer.serialize_bytes(value.as_bytes())
+    }
   }
 
+  /// Based on <https://github.com/uuid-rs/uuid/blob/0.8.2/src/serde_support.rs#L30-L91>.
   pub fn deserialize<'de, D>(deserializer: D) -> Result<Uuid, D::Error>
   where
     D: Deserializer<'de>,
   {
-    let text = Cow::<'de, str>::deserialize(deserializer)?;
-    match try {
-      let bytes = <[u8; super::COMPACT_UUID_BYTE_LEN]>::try_from(text.as_bytes()).ok()?;
-      super::decode_compact_uuid(&bytes)?
-    } {
-      Some(v) => Ok(v),
-      None => Err(serde::de::Error::custom("compact UUID parsing failed")),
+    fn de_error<E: DeError>(e: impl fmt::Display) -> E {
+      E::custom(format_args!("Compact UUID parsing failed: {}", e))
+    }
+
+    if deserializer.is_human_readable() {
+      struct UuidStringVisitor;
+
+      impl<'vi> de::Visitor<'vi> for UuidStringVisitor {
+        type Value = Uuid;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+          formatter.write_str("a UUID string")
+        }
+
+        fn visit_str<E: de::Error>(self, value: &str) -> Result<Uuid, E> {
+          match <[u8; super::COMPACT_UUID_BYTE_LEN]>::try_from(value.as_bytes()) {
+            Ok(bytes) => match super::decode_compact_uuid(&bytes) {
+              Ok(uuid) => Ok(uuid),
+              Err(error_idx) => Err(de_error(format_args!(
+                "invalid byte {:?} at index {}",
+                bytes[error_idx] as char, error_idx
+              ))),
+            },
+            Err(_) => Err(de_error(format_args!(
+              "length doesn't match: expected {}, found {}",
+              super::COMPACT_UUID_BYTE_LEN,
+              value.len(),
+            ))),
+          }
+        }
+
+        fn visit_bytes<E: de::Error>(self, value: &[u8]) -> Result<Uuid, E> {
+          Uuid::from_slice(value).map_err(de_error)
+        }
+      }
+
+      deserializer.deserialize_str(UuidStringVisitor)
+    } else {
+      struct UuidBytesVisitor;
+
+      impl<'vi> de::Visitor<'vi> for UuidBytesVisitor {
+        type Value = Uuid;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+          formatter.write_str("bytes")
+        }
+
+        fn visit_bytes<E: de::Error>(self, value: &[u8]) -> Result<Uuid, E> {
+          Uuid::from_slice(value).map_err(de_error)
+        }
+      }
+
+      deserializer.deserialize_bytes(UuidBytesVisitor)
     }
   }
 }
