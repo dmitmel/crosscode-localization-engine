@@ -128,12 +128,14 @@ impl<'src> Lexer<'src> {
     Ok(None)
   }
 
+  #[inline(never)]
   fn skip_whitespace(&mut self) {
-    while self.peek_char().map_or(false, |c| {
+    while matches!(
+      self.peek_char(),
       // Note that is_ascii_whitespace doesn't match \v which GNU gettext
       // considers whitespace
-      matches!(c, '\t' | '\n' | /* \v */ '\x0B' | /* \f */ '\x0C' | '\r' | ' ')
-    }) {
+      Some('\t' | '\n' | /* \v */ '\x0B' | /* \f */ '\x0C' | '\r' | ' ')
+    ) {
       self.next_char();
     }
   }

@@ -55,7 +55,7 @@ pub extern "C" fn crosslocale_message_free(
 pub struct crosslocale_backend_t {
   message_sender: Option<mpsc::Sender<String>>,
   message_receiver: mpsc::Receiver<String>,
-  backend_thread: thread::JoinHandle<()>,
+  _backend_thread: thread::JoinHandle<()>,
 }
 
 pub type crosslocale_result_t = u32;
@@ -101,7 +101,7 @@ pub extern "C" fn crosslocale_backend_new(
     let ffi_backend = Box::into_raw(Box::new(crosslocale_backend_t {
       message_sender: Some(incoming_send),
       message_receiver: outgoing_recv,
-      backend_thread,
+      _backend_thread: backend_thread,
     }));
     unsafe { *out = ffi_backend };
 

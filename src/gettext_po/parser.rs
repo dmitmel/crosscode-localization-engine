@@ -138,7 +138,7 @@ impl<'src> Parser<'src> {
 
   fn parse_prev_string_list(&mut self, out: &mut Vec<Cow<'src, str>>) -> Result<(), ParsingError> {
     let mut found_any_strings = false;
-    while self.peek_token()?.map_or(false, |t| matches!(t, TokenType::PrevString(..))) {
+    while matches!(self.peek_token()?, Some(TokenType::PrevString(..))) {
       if let Some(TokenType::PrevString(text)) = self.next_token()? {
         out.push(text);
         found_any_strings = true;
@@ -152,7 +152,7 @@ impl<'src> Parser<'src> {
 
   fn parse_string_list(&mut self, out: &mut Vec<Cow<'src, str>>) -> Result<(), ParsingError> {
     let mut found_any_strings = false;
-    while self.peek_token()?.map_or(false, |t| matches!(t, TokenType::String(..))) {
+    while matches!(self.peek_token()?, Some(TokenType::String(..))) {
       if let Some(TokenType::String(text)) = self.next_token()? {
         out.push(text);
         found_any_strings = true;
@@ -165,7 +165,7 @@ impl<'src> Parser<'src> {
   }
 
   fn parse_comments_block(&mut self, out: &mut ParsedMessage<'src>) -> Result<(), ParsingError> {
-    while self.peek_token()?.map_or(false, |t| matches!(t, TokenType::Comment(..))) {
+    while matches!(self.peek_token()?, Some(TokenType::Comment(..))) {
       if let Some(TokenType::Comment(type_, text)) = self.next_token()? {
         let list = match type_ {
           CommentType::Translator => &mut out.translator_comments,
