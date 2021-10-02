@@ -4,8 +4,9 @@ use crate::utils;
 
 use once_cell::sync::Lazy;
 use std::ffi::OsStr;
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
-use std::{fs, io};
 
 static DATA_DIR: Lazy<&'static Path> = Lazy::new(|| Path::new("data"));
 static EXTENSIONS_DIR: Lazy<&'static Path> = Lazy::new(|| Path::new("extension"));

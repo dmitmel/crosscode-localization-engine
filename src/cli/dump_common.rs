@@ -12,7 +12,7 @@ pub struct DumpCommandCommonOpts {
 }
 
 impl DumpCommandCommonOpts {
-  pub fn add_to_arg_parser(app: clap::App) -> clap::App {
+  pub fn add_only_formatting_to_arg_parser(app: clap::App) -> clap::App {
     app
       .arg(
         clap::Arg::new("compact_output")
@@ -33,6 +33,10 @@ impl DumpCommandCommonOpts {
           .possible_values(&["0", "1", "2", "3", "4", "5", "6", "7", "8", "tab"])
           .default_value("2"),
       )
+  }
+
+  pub fn add_to_arg_parser(app: clap::App) -> clap::App {
+    Self::add_only_formatting_to_arg_parser(app)
       .arg(
         clap::Arg::new("unbuffered")
           .long("unbuffered")

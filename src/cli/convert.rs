@@ -63,7 +63,8 @@ impl super::Command for ConvertCommand {
         clap::Arg::new("inputs_file")
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
-          .short('i')
+          .short('I')
+          .long("read-inputs")
           .about(
             "Read paths to input files from a file. If there are other paths specified via \
             command-line arguments, then those will be used instead and the inputs file will be \
@@ -196,10 +197,15 @@ impl super::Command for ConvertCommand {
     let mut all_imported_fragments =
       IndexMap::<RcString, Vec<(Rc<PathBuf>, ImportedFragment)>>::new();
 
-    let inputs = super::import::collect_input_files(&opt_inputs, &opt_inputs_file, &*importer)?;
+    let inputs = super::import::collect_input_files(
+      &opt_inputs,
+      &opt_inputs_file,
+      importer.file_extension(),
+    )?;
 
     let inputs_len = inputs.len();
-    for (i, input_path) in inputs.into_iter().enumerate() {
+    for (i, (_, input_entry)) in inputs.into_iter().enumerate() {
+      let input_path = Rc::new(input_entry.into_path());
       trace!("[{}/{}] {:?}", i + 1, inputs_len, input_path);
 
       let input = fs::read_to_string(&*input_path)

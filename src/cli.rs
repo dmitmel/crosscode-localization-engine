@@ -7,6 +7,7 @@ pub mod dump_project;
 pub mod dump_scan;
 pub mod export;
 pub mod import;
+pub mod mass_json_format;
 pub mod parse_po;
 pub mod scan;
 pub mod status;
@@ -15,7 +16,7 @@ use crate::impl_prelude::*;
 use crate::progress::ProgressReporter;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct GlobalOpts {
@@ -105,6 +106,18 @@ impl GlobalOpts {
         "never" => MmapPreference::Never,
         _ => unreachable!(),
       },
+    }
+  }
+}
+
+impl MmapPreference {
+  pub fn should_actually_use(self, path: &Path) -> bool {
+    match self {
+      Self::Never => false,
+      Self::Auto => {
+        // <https://github.com/BurntSushi/ripgrep/blob/0958837ee104985412f08e81b6f08df1e5291042/src/worker.rs#L353-L360>
+        path.metadata().map_or(0, |m| m.len()) > 0
+      }
     }
   }
 }

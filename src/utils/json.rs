@@ -169,7 +169,7 @@ where
 
 pub const DEFAULT_INDENT: &str = "  ";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UltimateFormatterConfig<'a> {
   pub compact: bool,
   pub indent: Option<&'a str>,

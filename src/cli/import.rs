@@ -3,7 +3,7 @@ use crate::progress::ProgressReporter;
 use crate::project::importers;
 use crate::project::{self, Project, Translation};
 use crate::rc_string::RcString;
-use crate::utils;
+use crate::utils::{self, RcExt};
 
 use std::collections::HashSet;
 use std::ffi::OsStr;
@@ -46,7 +46,8 @@ impl super::Command for ImportCommand {
         clap::Arg::new("inputs_file")
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
-          .short('i')
+          .short('I')
+          .long("read-inputs")
           .about(
             "Read paths to input files from a file. If there are other paths specified via \
             command-line arguments, then those will be used instead and the inputs file will be \
@@ -143,10 +144,11 @@ impl super::Command for ImportCommand {
       importers::create_by_id(&opt_format).context("Failed to create the importer")?;
     let mut total_imported_fragments_count = 0;
 
-    let inputs = collect_input_files(&opt_inputs, &opt_inputs_file, &*importer)?;
+    let inputs = collect_input_files(&opt_inputs, &opt_inputs_file, importer.file_extension())?;
 
     let inputs_len = inputs.len();
-    for (i, input_path) in inputs.into_iter().enumerate() {
+    for (i, (_, input_entry)) in inputs.into_iter().enumerate() {
+      let input_path = input_entry.into_path();
       trace!("[{}/{}] {:?}", i + 1, inputs_len, input_path);
 
       let input = fs::read_to_string(&*input_path)
@@ -263,8 +265,8 @@ impl super::Command for ImportCommand {
 pub fn collect_input_files(
   opt_inputs: &[PathBuf],
   opt_inputs_file: &Option<PathBuf>,
-  importer: &dyn importers::Importer,
-) -> AnyResult<Vec<Rc<PathBuf>>> {
+  expected_file_ext: &str,
+) -> AnyResult<Vec<(Rc<PathBuf>, walkdir::DirEntry)>> {
   let mut inputs_from_inputs_file: Vec<PathBuf>;
   // Redeclaration of opt_inputs makes the lifetime of the reference short
   // enough that it can be substituted with a reference to
@@ -285,14 +287,23 @@ pub fn collect_input_files(
     opt_inputs
   };
 
-  let imported_file_ext = OsStr::new(importer.file_extension());
-  let mut input_files: Vec<Rc<PathBuf>> = Vec::new();
+  let expected_file_ext = OsStr::new(expected_file_ext);
+  let mut input_files: Vec<(Rc<PathBuf>, walkdir::DirEntry)> = Vec::new();
   for input_path in opt_inputs {
-    for entry in walkdir::WalkDir::new(&input_path).into_iter() {
-      let entry =
-        entry.with_context(|| format!("Failed to list all files in dir {:?}", input_path))?;
-      if entry.file_type().is_file() && entry.path().extension() == Some(imported_file_ext) {
-        input_files.push(Rc::new(entry.path().to_owned()));
+    let input_path_rc = Rc::new(input_path.to_owned());
+    for entry in walkdir::WalkDir::new(input_path).into_iter() {
+      let entry = match entry {
+        // Note that this branch will also catch cases when e.path() is None.
+        Err(ref e) if e.path() != Some(input_path) => {
+          entry.context(format!("Failed to list all files under path {:?}", input_path))?
+        }
+        // The error already contains the path, and it points to input_path,
+        // and the error's Display implementation will show it, so no point in
+        // duplicating the same path in the context.
+        _ => entry?,
+      };
+      if !entry.file_type().is_dir() && entry.path().extension() == Some(expected_file_ext) {
+        input_files.push((input_path_rc.share_rc(), entry));
       }
     }
   }

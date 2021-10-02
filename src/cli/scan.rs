@@ -257,7 +257,7 @@ impl super::Command for ScanCommand {
 
     let mut total_fragments_count: usize = 0;
     let mut ignored_lang_labels_count: usize = 0;
-    // This loop isn't actually slow.
+    // This loop isn't actually a bottleneck.
     for task_result in sorted_results.into_iter() {
       let task_result = task_result.unwrap();
       ignored_lang_labels_count += task_result.ignored_lang_labels_count;
@@ -405,18 +405,14 @@ fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &FoundJsonFile) -> 
   false
 }
 
+// TODO: Remove memory mapping as we are not using it with optimized data
+// structures and instead have to read (relatively sequentially) the whole file
+// into memory, as such its performance difference is negligible (or
+// non-existent) compared to regular file I/O.
 pub fn read_json_file(path: &Path, mmap_preference: MmapPreference) -> io::Result<json::Value> {
-  let mut use_mmap = false;
-  if let MmapPreference::Auto = mmap_preference {
-    // <https://github.com/BurntSushi/ripgrep/blob/0958837ee104985412f08e81b6f08df1e5291042/src/worker.rs#L353-L360>
-    if path.metadata()?.len() > 0 {
-      use_mmap = true;
-    }
-  }
-
   let bytes_mmap: memmap2::Mmap;
   let bytes_non_mmap: Vec<u8>;
-  let bytes: &[u8] = if use_mmap {
+  let bytes: &[u8] = if mmap_preference.should_actually_use(path) {
     let file = fs::File::open(path)?;
     bytes_mmap = unsafe { memmap2::MmapOptions::new().populate().map(&file)? };
     &bytes_mmap
