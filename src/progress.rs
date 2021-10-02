@@ -140,7 +140,8 @@ impl ProgressReporter for TuiProgresReporter {
     }
 
     left_str.push_str("  ");
-    write!(left_str, "{:3}%", (100 * current / total).clamp(0, 100)).unwrap();
+    let done_percent = if total != 0 { (100 * current / total).clamp(0, 100) } else { 100 };
+    write!(left_str, "{:3}%", done_percent).unwrap();
     left_str.push_str("[");
 
     let mut right_str = String::with_capacity(1);
@@ -169,7 +170,11 @@ impl ProgressReporter for TuiProgresReporter {
       .unwrap();
 
     let total_bar_width = term_width - left_str.chars().count() - right_str.chars().count();
-    let mut filled_bar_width = total_bar_width * current / total;
+    let mut filled_bar_width = if total != 0 {
+      (total_bar_width * current / total).clamp(0, total_bar_width)
+    } else {
+      total_bar_width
+    };
     let mut bar_str = String::with_capacity(total_bar_width);
     bar_str.push_str(&"=".repeat(filled_bar_width));
     if current < total {
