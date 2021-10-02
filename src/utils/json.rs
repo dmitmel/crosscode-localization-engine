@@ -80,7 +80,7 @@ pub fn write_file<T: serde::Serialize>(
 /// Copied from <https://github.com/serde-rs/json/blob/9b64e0b17ca73e7fbecace37758ff19bc35dea05/src/ser.rs#L2066-L2075>.
 pub fn format_escaped_str<W, F>(writer: &mut W, formatter: &mut F, value: &str) -> io::Result<()>
 where
-  W: ?Sized + io::Write,
+  W: ?Sized + Write,
   F: ?Sized + Formatter,
 {
   formatter.begin_string(writer)?;
@@ -96,7 +96,7 @@ pub fn format_escaped_str_contents<W, F>(
   value: &str,
 ) -> io::Result<()>
 where
-  W: ?Sized + io::Write,
+  W: ?Sized + Write,
   F: ?Sized + Formatter,
 {
   let bytes = value.as_bytes();
@@ -170,44 +170,49 @@ where
 pub const DEFAULT_INDENT: &str = "  ";
 
 #[derive(Debug, Clone)]
-pub struct UltimateFormatterConfig<'a> {
+pub struct UltimateFormatterConfig {
   pub compact: bool,
-  pub indent: Option<&'a str>,
+  pub indent: Option<&'static str>,
   pub trailing_commas: bool,
 }
 
-impl<'a> UltimateFormatterConfig<'a> {
-  #[inline]
-  pub fn pretty() -> Self {
-    Self { compact: false, indent: Some(DEFAULT_INDENT), trailing_commas: false }
-  }
-
-  #[inline]
-  pub fn compact() -> Self { Self { compact: true, indent: None, trailing_commas: false } }
+impl UltimateFormatterConfig {
+  pub const PRETTY: Self = Self {
+    //
+    compact: false,
+    indent: Some(DEFAULT_INDENT),
+    trailing_commas: false,
+  };
+  pub const COMPACT: Self = Self {
+    //
+    compact: true,
+    indent: None,
+    trailing_commas: false,
+  };
 }
 
-impl<'a> Default for UltimateFormatterConfig<'a> {
+impl Default for UltimateFormatterConfig {
   #[inline(always)]
-  fn default() -> Self { Self::pretty() }
+  fn default() -> Self { Self::PRETTY }
 }
 
 /// Based on [`serde_json::ser::PrettyFormatter`].
 #[derive(Debug)]
-pub struct UltimateFormatter<'a> {
+pub struct UltimateFormatter {
   current_indent: usize,
   has_value: bool,
-  config: UltimateFormatterConfig<'a>,
+  config: UltimateFormatterConfig,
 }
 
-impl<'a> UltimateFormatter<'a> {
+impl UltimateFormatter {
   #[inline]
-  pub fn new(config: UltimateFormatterConfig<'a>) -> Self {
+  pub fn new(config: UltimateFormatterConfig) -> Self {
     UltimateFormatter { current_indent: 0, has_value: false, config }
   }
 
   fn indent<W>(wr: &mut W, n: usize, s: &str) -> io::Result<()>
   where
-    W: ?Sized + io::Write,
+    W: ?Sized + Write,
   {
     for _ in 0..n {
       wr.write_all(s.as_bytes())?;
@@ -216,11 +221,11 @@ impl<'a> UltimateFormatter<'a> {
   }
 }
 
-impl<'a> Formatter for UltimateFormatter<'a> {
+impl Formatter for UltimateFormatter {
   #[inline]
   fn begin_array<W>(&mut self, writer: &mut W) -> io::Result<()>
   where
-    W: ?Sized + io::Write,
+    W: ?Sized + Write,
   {
     self.current_indent += 1;
     self.has_value = false;
@@ -230,7 +235,7 @@ impl<'a> Formatter for UltimateFormatter<'a> {
   #[inline]
   fn end_array<W>(&mut self, writer: &mut W) -> io::Result<()>
   where
-    W: ?Sized + io::Write,
+    W: ?Sized + Write,
   {
     self.current_indent -= 1;
 
@@ -251,7 +256,7 @@ impl<'a> Formatter for UltimateFormatter<'a> {
   #[inline]
   fn begin_array_value<W>(&mut self, writer: &mut W, first: bool) -> io::Result<()>
   where
-    W: ?Sized + io::Write,
+    W: ?Sized + Write,
   {
     if !first {
       writer.write_all(b",")?;
@@ -268,7 +273,7 @@ impl<'a> Formatter for UltimateFormatter<'a> {
   #[inline]
   fn end_array_value<W>(&mut self, _writer: &mut W) -> io::Result<()>
   where
-    W: ?Sized + io::Write,
+    W: ?Sized + Write,
   {
     self.has_value = true;
     Ok(())
@@ -277,7 +282,7 @@ impl<'a> Formatter for UltimateFormatter<'a> {
   #[inline]
   fn begin_object<W>(&mut self, writer: &mut W) -> io::Result<()>
   where
-    W: ?Sized + io::Write,
+    W: ?Sized + Write,
   {
     self.current_indent += 1;
     self.has_value = false;
@@ -287,7 +292,7 @@ impl<'a> Formatter for UltimateFormatter<'a> {
   #[inline]
   fn end_object<W>(&mut self, writer: &mut W) -> io::Result<()>
   where
-    W: ?Sized + io::Write,
+    W: ?Sized + Write,
   {
     self.current_indent -= 1;
 
@@ -308,7 +313,7 @@ impl<'a> Formatter for UltimateFormatter<'a> {
   #[inline]
   fn begin_object_key<W>(&mut self, writer: &mut W, first: bool) -> io::Result<()>
   where
-    W: ?Sized + io::Write,
+    W: ?Sized + Write,
   {
     if !first {
       writer.write_all(b",")?;
@@ -325,7 +330,7 @@ impl<'a> Formatter for UltimateFormatter<'a> {
   #[inline]
   fn begin_object_value<W>(&mut self, writer: &mut W) -> io::Result<()>
   where
-    W: ?Sized + io::Write,
+    W: ?Sized + Write,
   {
     writer.write_all(if self.config.compact { b":" } else { b": " })
   }
@@ -333,7 +338,7 @@ impl<'a> Formatter for UltimateFormatter<'a> {
   #[inline]
   fn end_object_value<W>(&mut self, _writer: &mut W) -> io::Result<()>
   where
-    W: ?Sized + io::Write,
+    W: ?Sized + Write,
   {
     self.has_value = true;
     Ok(())

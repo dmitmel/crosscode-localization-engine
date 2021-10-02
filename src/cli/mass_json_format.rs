@@ -3,6 +3,7 @@ use crate::impl_prelude::*;
 use crate::progress::ProgressReporter;
 use crate::rc_string::RcString;
 use crate::utils::json;
+use crate::utils::serde as serde_utils;
 use crate::utils::RcExt;
 
 use std::convert::TryFrom;
@@ -147,13 +148,14 @@ impl super::Command for MassJsonFormatCommand {
           &input_ro_mmap
         };
 
-        let json_data: json::Value = serde_json::from_slice(input_bytes)?;
-        let mut output_bytes = Vec::with_capacity(input_bytes.len());
+        let mut output_bytes: Vec<u8> = Vec::with_capacity(input_bytes.len());
+        let mut deserializer = serde_json::Deserializer::from_slice(input_bytes);
         let mut serializer = serde_json::Serializer::with_formatter(
           &mut output_bytes,
           json::UltimateFormatter::new(json_config.clone()),
         );
-        serde::Serialize::serialize(&json_data, &mut serializer)?;
+        serde_utils::OnTheFlyConverter::convert(&mut serializer, &mut deserializer)?;
+        deserializer.end()?;
         if !output_bytes.ends_with(b"\n") {
           output_bytes.push(b'\n');
         }

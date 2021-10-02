@@ -191,7 +191,7 @@ pub fn create(id: &str, config: ExporterConfig) -> AnyResult<Box<dyn Exporter>> 
 
 #[derive(Debug)]
 pub struct LocalizeMeTrPackExporter {
-  json_fmt: json::UltimateFormatter<'static>,
+  json_fmt: json::UltimateFormatter,
 }
 
 impl LocalizeMeTrPackExporter {

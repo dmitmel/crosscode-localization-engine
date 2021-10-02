@@ -401,9 +401,9 @@ impl super::Command for ConvertCommand {
           &mapping_file_path,
           &exported_files_mapping,
           if opt_compact {
-            json::UltimateFormatterConfig::compact()
+            json::UltimateFormatterConfig::COMPACT
           } else {
-            json::UltimateFormatterConfig::pretty()
+            json::UltimateFormatterConfig::PRETTY
           },
         )
         .with_context(|| format!("Failed to write the mapping file to {:?}", mapping_file_path))?;

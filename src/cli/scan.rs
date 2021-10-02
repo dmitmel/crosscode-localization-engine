@@ -294,9 +294,9 @@ impl super::Command for ScanCommand {
 
     info!("Writing the scan database");
     let json_config = if opt_compact {
-      json::UltimateFormatterConfig::compact()
+      json::UltimateFormatterConfig::COMPACT
     } else {
-      json::UltimateFormatterConfig::pretty()
+      json::UltimateFormatterConfig::PRETTY
     };
     scan_db.write(json_config).context("Failed to write the scan database")?;
 
