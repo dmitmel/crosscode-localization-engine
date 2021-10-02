@@ -73,7 +73,7 @@ impl super::Command for MassJsonFormatCommand {
 
   fn run(
     &self,
-    global_opts: super::GlobalOpts,
+    _global_opts: super::GlobalOpts,
     matches: &clap::ArgMatches,
     mut progress: Box<dyn ProgressReporter>,
   ) -> anyhow::Result<()> {
@@ -82,7 +82,7 @@ impl super::Command for MassJsonFormatCommand {
       .map_or_else(Vec::new, |values| values.map(PathBuf::from).collect());
     let opt_inputs_file = matches.value_of_os("inputs_file").map(PathBuf::from);
     let opt_output = matches.value_of_os("output").map(PathBuf::from);
-    let opt_in_place = matches.is_present("in_place");
+    let _opt_in_place = matches.is_present("in_place");
     let dump_common_opt = dump_common::DumpCommandCommonOpts::from_matches(matches);
 
     let inputs = super::import::collect_input_files(&opt_inputs, &opt_inputs_file, "json")?;
@@ -111,45 +111,31 @@ impl super::Command for MassJsonFormatCommand {
       progress.set_task_progress(i)?;
 
       let output_path = match &opt_output {
-        Some(opt_output) if treat_output_as_regular_file => opt_output.share_rc(),
+        Some(opt_output) if treat_output_as_regular_file => Some(opt_output.share_rc()),
         Some(opt_output) => {
           let input_rel_path = input_path
             .strip_prefix(input_entry_arg.parent().unwrap_or(&*input_entry_arg))
             .unwrap();
-          Rc::new(opt_output.join(input_rel_path))
+          Some(Rc::new(opt_output.join(input_rel_path)))
         }
-        None => input_path.share_rc(),
+        None => None,
       };
 
       if let Err(e) = try_any_result!({
         let mut input_file = fs::OpenOptions::new()
           .read(true)
-          .write(opt_in_place)
+          .write(output_path.is_none())
           .truncate(false)
           .open(&*input_path)?;
 
-        let mut input_non_mmap_bytes: Vec<u8>;
-        let mut input_rw_mmap: Option<memmap2::MmapMut> = None;
-        let input_ro_mmap: memmap2::Mmap;
-        let use_mmap = global_opts.mmap_preference.should_actually_use(&input_path);
-        let input_bytes: &[u8] = if !use_mmap {
-          input_non_mmap_bytes = Vec::with_capacity(
-            // See <https://github.com/rust-lang/rust/blob/1.55.0/library/std/src/fs.rs#L201-L207>.
-            input_file.metadata().map_or(0, |m| m.len() as usize + 1),
-          );
-          input_file.read_to_end(&mut input_non_mmap_bytes)?;
-          &input_non_mmap_bytes
-        } else if opt_in_place {
-          input_rw_mmap =
-            Some(unsafe { memmap2::MmapOptions::new().populate().map_mut(&input_file)? });
-          input_rw_mmap.as_ref().unwrap()
-        } else {
-          input_ro_mmap = unsafe { memmap2::MmapOptions::new().populate().map(&input_file)? };
-          &input_ro_mmap
-        };
+        let mut input_bytes = Vec::with_capacity(
+          // See <https://github.com/rust-lang/rust/blob/1.55.0/library/std/src/fs.rs#L201-L207>.
+          input_file.metadata().map_or(0, |m| m.len() as usize + 1),
+        );
+        input_file.read_to_end(&mut input_bytes)?;
 
         let mut output_bytes: Vec<u8> = Vec::with_capacity(input_bytes.len());
-        let mut deserializer = serde_json::Deserializer::from_slice(input_bytes);
+        let mut deserializer = serde_json::Deserializer::from_slice(&input_bytes);
         let mut serializer = serde_json::Serializer::with_formatter(
           &mut output_bytes,
           json::UltimateFormatter::new(json_config.clone()),
@@ -160,43 +146,29 @@ impl super::Command for MassJsonFormatCommand {
           output_bytes.push(b'\n');
         }
 
-        if let Err(e) = try_any_result!({
-          let mut output_file = if !opt_in_place {
-            if let Some(entry_output_dir) = output_path.parent() {
-              fs::create_dir_all(entry_output_dir)
-                .with_context(|| format!("Failed to create directory {:?}", entry_output_dir))?;
+        try_any_result!({
+          let mut output_file = if let Some(output_path) = &output_path {
+            if let Some(output_dir) = output_path.parent() {
+              fs::create_dir_all(output_dir)
+                .with_context(|| format!("Failed to create directory {:?}", output_dir))?;
             }
-            fs::OpenOptions::new()
-              .read(use_mmap) // Apparently required for mmaping?
-              .write(true)
-              .create(true)
-              .truncate(false)
-              .open(&*output_path)?
+            fs::OpenOptions::new().write(true).create(true).truncate(false).open(&**output_path)?
           } else {
             input_file.seek(io::SeekFrom::Start(0))?;
             input_file
           };
 
           output_file.set_len(u64::try_from(output_bytes.len()).unwrap())?;
-          if use_mmap {
-            let mut output_mmap = if !opt_in_place {
-              unsafe { memmap2::MmapOptions::new().map_mut(&output_file)? }
-            } else {
-              input_rw_mmap.unwrap()
-            };
-            output_mmap.copy_from_slice(&output_bytes);
-            // output_mmap.flush_async()?;
-          } else {
-            output_file.write_all(&output_bytes)?;
-          }
+          output_file.write_all(&output_bytes)?;
           output_file.flush()?;
-        }) {
-          Err(if !opt_in_place {
+        })
+        .map_err(|e| {
+          if let Some(output_path) = output_path {
             e.context(format!("Error while writing to output file {:?}", output_path))
           } else {
             e.context("Failed to write")
-          })?
-        }
+          }
+        })
       }) {
         crate::report_error(e.context(format!("Failed to format file {:?}", input_path)));
         errors_count += 1;

@@ -16,26 +16,19 @@ use crate::impl_prelude::*;
 use crate::progress::ProgressReporter;
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct GlobalOpts {
   pub verbose: bool,
   pub progress_mode: ProgressMode,
   pub cd: Option<PathBuf>,
-  pub mmap_preference: MmapPreference,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum ProgressMode {
   Auto,
   Always,
-  Never,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum MmapPreference {
-  Auto,
   Never,
 }
 
@@ -76,19 +69,6 @@ impl GlobalOpts {
           .about("Change the working directory first before doing anything.")
           .global(true),
       )
-      .arg(
-        clap::Arg::new("mmap_preference")
-          .value_name("MODE")
-          .value_hint(clap::ValueHint::Other)
-          .long("mmap")
-          .about(
-            "Whether to allow usage memory-mapping for reading files which may (???) result in \
-            faster performance. Disabled by default though.",
-          )
-          .possible_values(&["auto", "never"])
-          .default_value("never")
-          .global(true),
-      )
   }
 
   pub fn from_matches(matches: &clap::ArgMatches) -> Self {
@@ -101,23 +81,6 @@ impl GlobalOpts {
         _ => unreachable!(),
       },
       cd: matches.value_of_os("cd").map(PathBuf::from),
-      mmap_preference: match matches.value_of("mmap_preference").unwrap() {
-        "auto" => MmapPreference::Auto,
-        "never" => MmapPreference::Never,
-        _ => unreachable!(),
-      },
-    }
-  }
-}
-
-impl MmapPreference {
-  pub fn should_actually_use(self, path: &Path) -> bool {
-    match self {
-      Self::Never => false,
-      Self::Auto => {
-        // <https://github.com/BurntSushi/ripgrep/blob/0958837ee104985412f08e81b6f08df1e5291042/src/worker.rs#L353-L360>
-        path.metadata().map_or(0, |m| m.len()) > 0
-      }
     }
   }
 }

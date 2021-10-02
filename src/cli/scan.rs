@@ -1,4 +1,3 @@
-use crate::cli::MmapPreference;
 use crate::impl_prelude::*;
 use crate::progress::ProgressReporter;
 use crate::rc_string::RcString;
@@ -89,7 +88,7 @@ impl super::Command for ScanCommand {
 
   fn run(
     &self,
-    global_opts: super::GlobalOpts,
+    _global_opts: super::GlobalOpts,
     matches: &clap::ArgMatches,
     mut progress: Box<dyn ProgressReporter>,
   ) -> AnyResult<()> {
@@ -177,11 +176,10 @@ impl super::Command for ScanCommand {
       let lang_labels_tx = lang_labels_tx.clone();
       let opt_assets_dir = opt_assets_dir.clone();
       let extractor_opts = extractor_opts.clone();
-      let opt_mmap_preference = global_opts.mmap_preference;
 
       pool.execute(move || {
         let abs_path = opt_assets_dir.join(&found_file.path);
-        let json_data: json::Value = match read_json_file(&abs_path, opt_mmap_preference) {
+        let json_data: json::Value = match utils::json::read_file(&abs_path, &mut Vec::new()) {
           Ok(v) => v,
           Err(e) => {
             crate::report_error(
@@ -313,6 +311,7 @@ struct ChangelogFileRef<'a> {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct ChangelogEntryRef<'a> {
   #[serde(borrow)]
   name: Cow<'a, str>,
@@ -403,24 +402,4 @@ fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &FoundJsonFile) -> 
   }
 
   false
-}
-
-// TODO: Remove memory mapping as we are not using it with optimized data
-// structures and instead have to read (relatively sequentially) the whole file
-// into memory, as such its performance difference is negligible (or
-// non-existent) compared to regular file I/O.
-pub fn read_json_file(path: &Path, mmap_preference: MmapPreference) -> io::Result<json::Value> {
-  let bytes_mmap: memmap2::Mmap;
-  let bytes_non_mmap: Vec<u8>;
-  let bytes: &[u8] = if mmap_preference.should_actually_use(path) {
-    let file = fs::File::open(path)?;
-    bytes_mmap = unsafe { memmap2::MmapOptions::new().populate().map(&file)? };
-    &bytes_mmap
-  } else {
-    bytes_non_mmap = fs::read(path)?;
-    &bytes_non_mmap
-  };
-
-  let value = serde_json::from_slice(bytes)?;
-  Ok(value)
 }
