@@ -302,7 +302,9 @@ pub fn collect_input_files(
         // duplicating the same path in the context.
         _ => entry?,
       };
-      if !entry.file_type().is_dir() && entry.path().extension() == Some(expected_file_ext) {
+      if !entry.file_type().is_dir()
+        && (entry.path() == input_path || entry.path().extension() == Some(expected_file_ext))
+      {
         input_files.push((input_path_rc.share_rc(), entry));
       }
     }

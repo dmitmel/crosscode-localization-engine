@@ -34,8 +34,6 @@ impl super::Command for MassJsonFormatCommand {
             .value_name("INPUT_PATH")
             .value_hint(clap::ValueHint::AnyPath)
             .multiple_values(true)
-            .required(true)
-            .conflicts_with("inputs_file")
             .about(
               "Files to format. Directories may be passed as well, in which case all .json files \
               contained within the directory will be formatted recursively.",
@@ -68,7 +66,26 @@ impl super::Command for MassJsonFormatCommand {
             //
             .about("Format files in-place."),
         )
-        .group(clap::ArgGroup::new("write_mode").arg("output").arg("in_place").required(true))
+        .arg(
+          clap::Arg::new("pipe")
+            .short('P')
+            .long("pipe")
+            .about("Use the program as a filter in shell pipes."),
+        )
+        .group(
+          clap::ArgGroup::new("read_mode")
+            .arg("inputs")
+            .arg("inputs_file")
+            .arg("pipe")
+            .required(true),
+        )
+        .group(
+          clap::ArgGroup::new("write_mode")
+            .arg("output")
+            .arg("in_place")
+            .arg("pipe")
+            .required(true),
+        )
         .arg(
           clap::Arg::new("jobs")
             .short('j')
@@ -95,8 +112,21 @@ impl super::Command for MassJsonFormatCommand {
     let opt_inputs_file = matches.value_of_os("inputs_file").map(PathBuf::from);
     let opt_output = matches.value_of_os("output").map(PathBuf::from);
     let _opt_in_place = matches.is_present("in_place");
+    let opt_pipe = matches.is_present("pipe");
     let dump_common_opt = dump_common::DumpCommandCommonOpts::from_matches(matches);
     let opt_jobs = usize::from_str(matches.value_of("jobs").unwrap()).unwrap();
+
+    let json_config = dump_common_opt.ultimate_formatter_config();
+
+    if opt_pipe {
+      let mut input_bytes = Vec::new();
+      let (mut stdin, mut stdout) = (io::stdin(), io::stdout());
+      stdin.read_to_end(&mut input_bytes)?;
+      let output_bytes = format_buffer(&input_bytes, json_config)?;
+      stdout.write_all(&output_bytes)?;
+      stdout.flush()?;
+      return Ok(());
+    }
 
     let inputs = super::import::collect_input_files(&opt_inputs, &opt_inputs_file, "json")?;
     if inputs.is_empty() {
@@ -111,8 +141,6 @@ impl super::Command for MassJsonFormatCommand {
       // Many entries
       _ => false,
     };
-
-    let json_config = dump_common_opt.ultimate_formatter_config();
 
     // The implementation of multithreading is based on the code in the scan
     // command, see the comments there.
@@ -174,17 +202,7 @@ impl super::Command for MassJsonFormatCommand {
           );
           input_file.read_to_end(&mut input_bytes)?;
 
-          let mut output_bytes: Vec<u8> = Vec::with_capacity(input_bytes.len());
-          let mut deserializer = serde_json::Deserializer::from_slice(&input_bytes);
-          let mut serializer = serde_json::Serializer::with_formatter(
-            &mut output_bytes,
-            json::UltimateFormatter::new(json_config),
-          );
-          serde_utils::OnTheFlyConverter::convert(&mut serializer, &mut deserializer)?;
-          deserializer.end()?;
-          if !output_bytes.ends_with(b"\n") {
-            output_bytes.push(b'\n');
-          }
+          let output_bytes: Vec<u8> = format_buffer(&input_bytes, json_config)?;
 
           try_any_result!({
             let mut output_file = if let Some(output_path) = output_path {
@@ -192,13 +210,19 @@ impl super::Command for MassJsonFormatCommand {
                 fs::create_dir_all(output_dir)
                   .with_context(|| format!("Failed to create directory {:?}", output_dir))?;
               }
-              fs::OpenOptions::new().write(true).create(true).truncate(false).open(output_path)?
+              fs::OpenOptions::new().write(true).create(true).truncate(true).open(output_path)?
             } else {
               input_file.seek(io::SeekFrom::Start(0))?;
               input_file
             };
 
-            output_file.set_len(u64::try_from(output_bytes.len()).unwrap())?;
+            // Not every file can be truncated, e.g. /dev/stdout, and even if
+            // set_len errors errors on a legitimate file, it can be safely
+            // ignoredd because of truncate(true) when opening it. This call
+            // does speed up I/O though because the OS gets a chance to
+            // pre-allocate the entire file, and it is essential for in-place
+            // writing.
+            let _ = output_file.set_len(u64::try_from(output_bytes.len()).unwrap());
             output_file.write_all(&output_bytes)?;
             output_file.flush()?;
           })
@@ -208,7 +232,7 @@ impl super::Command for MassJsonFormatCommand {
             } else {
               e.context("Failed to write")
             }
-          })
+          })?;
         }) {
           crate::report_error(e.context(format!("Failed to format file {:?}", input_path)));
           success = false;
@@ -245,4 +269,22 @@ impl super::Command for MassJsonFormatCommand {
     info!("Successfully formatted {} files", all_inputs_len);
     Ok(())
   }
+}
+
+fn format_buffer(
+  input_bytes: &[u8],
+  json_config: json::UltimateFormatterConfig,
+) -> AnyResult<Vec<u8>> {
+  let mut output_bytes: Vec<u8> = Vec::with_capacity(input_bytes.len());
+  let mut deserializer = serde_json::Deserializer::from_slice(input_bytes);
+  let mut serializer = serde_json::Serializer::with_formatter(
+    &mut output_bytes,
+    json::UltimateFormatter::new(json_config),
+  );
+  serde_utils::OnTheFlyConverter::convert(&mut serializer, &mut deserializer)?;
+  deserializer.end()?;
+  if !output_bytes.ends_with(b"\n") {
+    output_bytes.push(b'\n');
+  }
+  Ok(output_bytes)
 }
