@@ -23,6 +23,7 @@ pub struct GlobalOpts {
   pub verbose: bool,
   pub progress_mode: ProgressMode,
   pub cd: Option<PathBuf>,
+  pub no_banner_message: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -69,6 +70,12 @@ impl GlobalOpts {
           .about("Change the working directory first before doing anything.")
           .global(true),
       )
+      .arg(
+        clap::Arg::new("no_banner_message")
+          .long("no-banner-message")
+          .about("Don't print the banner message with the program information when starting.")
+          .global(true),
+      )
   }
 
   pub fn from_matches(matches: &clap::ArgMatches) -> Self {
@@ -81,6 +88,7 @@ impl GlobalOpts {
         _ => unreachable!(),
       },
       cd: matches.value_of_os("cd").map(PathBuf::from),
+      no_banner_message: matches.is_present("no_banner_message"),
     }
   }
 }

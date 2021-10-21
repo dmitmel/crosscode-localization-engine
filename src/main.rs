@@ -34,6 +34,9 @@ pub fn try_main() -> AnyResult<()> {
   let matches = arg_parser.get_matches();
   let global_opts = cli::GlobalOpts::from_matches(&matches);
 
+  if !global_opts.no_banner_message {
+    print_banner_message();
+  }
   log::set_max_level({
     let log_level_from_options =
       if global_opts.verbose { log::LevelFilter::Trace } else { log::LevelFilter::Debug };

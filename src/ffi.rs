@@ -29,6 +29,7 @@ pub static CROSSLOCALE_PROTOCOL_VERSION: u32 = crate::backend::PROTOCOL_VERSION;
 pub extern "C" fn crosslocale_init_logging() -> crosslocale_result_t {
   match panic::catch_unwind(AssertUnwindSafe(move || {
     crate::init_logging();
+    crate::print_banner_message();
     CROSSLOCALE_OK
   })) {
     Ok(v) => v,
