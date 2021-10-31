@@ -33,6 +33,7 @@ impl super::Command for MassJsonFormatCommand {
           clap::Arg::new("inputs")
             .value_name("INPUT_PATH")
             .value_hint(clap::ValueHint::AnyPath)
+            .setting(clap::ArgSettings::AllowInvalidUtf8)
             .multiple_values(true)
             .about(
               "Files to format. Directories may be passed as well, in which case all .json files \
@@ -43,6 +44,7 @@ impl super::Command for MassJsonFormatCommand {
           clap::Arg::new("inputs_file")
             .value_name("PATH")
             .value_hint(clap::ValueHint::FilePath)
+            .setting(clap::ArgSettings::AllowInvalidUtf8)
             .short('I')
             .long("read-inputs")
             .about(
@@ -55,6 +57,7 @@ impl super::Command for MassJsonFormatCommand {
           clap::Arg::new("output")
             .value_name("PATH")
             .value_hint(clap::ValueHint::AnyPath)
+            .setting(clap::ArgSettings::AllowInvalidUtf8)
             .short('o')
             .long("output")
             .about("Path to the destination file or directory."),

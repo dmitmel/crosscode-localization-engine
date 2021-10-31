@@ -22,6 +22,7 @@ impl super::Command for StatusCommand {
         clap::Arg::new("project_dir")
           .value_name("PROJECT")
           .value_hint(clap::ValueHint::DirPath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
           .required(true)
           .about("Path to the project directory."),
       )

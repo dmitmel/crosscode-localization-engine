@@ -23,7 +23,7 @@ impl super::Command for BackendCommand {
           .value_hint(clap::ValueHint::Other)
           .required(true)
           .long("protocol-version")
-          .possible_value(&backend::PROTOCOL_VERSION_STR),
+          .possible_value(backend::PROTOCOL_VERSION_STR.as_str()),
       )
       .arg(
         clap::Arg::new("transport")

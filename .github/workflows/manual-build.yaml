@@ -3,7 +3,7 @@ on: [workflow_dispatch]
 
 env:
   CARGO_TERM_COLOR: always
-  MACOSX_DEPLOYMENT_TARGET: 10.7
+  MACOSX_DEPLOYMENT_TARGET: 10.11
 
 jobs:
   manual_build:
@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-10.14]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         include:
           - os: ubuntu-latest
             exe_prefix: ''
@@ -24,7 +24,7 @@ jobs:
             exe_suffix: '.exe'
             dylib_prefix: ''
             dylib_suffix: '.dll'
-          - os: macos-10.14
+          - os: macos-latest
             exe_prefix: ''
             exe_suffix: ''
             dylib_prefix: 'lib'

@@ -28,6 +28,7 @@ impl super::Command for DumpScanCommand {
           clap::Arg::new("scan_db")
             .value_name("SCAN_DB_PATH")
             .value_hint(clap::ValueHint::FilePath)
+            .setting(clap::ArgSettings::AllowInvalidUtf8)
             .required(true)
             .about("Path to a scan database to dump."),
         ),

@@ -38,10 +38,8 @@ impl GlobalOpts {
     clap::App::new(crate::CRATE_TITLE)
       .version(crate::CRATE_NICE_VERSION)
       .about("CrossCode Localization Engine command-line tool")
-      .global_setting(clap::AppSettings::ColoredHelp)
-      .global_setting(clap::AppSettings::DisableVersionForSubcommands)
       .global_setting(clap::AppSettings::AllowLeadingHyphen)
-      .global_setting(clap::AppSettings::AllowInvalidUtf8) // just in case, for file paths
+      .global_setting(clap::AppSettings::NextLineHelp)
       .setting(clap::AppSettings::SubcommandRequiredElseHelp)
       .arg(
         clap::Arg::new("verbose")
@@ -65,6 +63,7 @@ impl GlobalOpts {
         clap::Arg::new("cd")
           .value_name("DIR")
           .value_hint(clap::ValueHint::DirPath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
           .short('C')
           .long("cd")
           .about("Change the working directory first before doing anything.")

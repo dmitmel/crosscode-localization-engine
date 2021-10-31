@@ -30,6 +30,7 @@ impl super::Command for ImportCommand {
         clap::Arg::new("project_dir")
           .value_name("PROJECT")
           .value_hint(clap::ValueHint::DirPath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
           .required(true)
           .about("Path to the project directory."),
       )
@@ -37,6 +38,7 @@ impl super::Command for ImportCommand {
         clap::Arg::new("inputs")
           .value_name("IMPORT_PATH")
           .value_hint(clap::ValueHint::AnyPath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
           .multiple_values(true)
           .required(true)
           .conflicts_with("inputs_file")
@@ -46,6 +48,7 @@ impl super::Command for ImportCommand {
         clap::Arg::new("inputs_file")
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
           .short('I')
           .long("read-inputs")
           .about(

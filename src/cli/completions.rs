@@ -3,8 +3,7 @@
 use crate::impl_prelude::*;
 use crate::progress::ProgressReporter;
 
-use clap_generate::generate;
-use clap_generate::generators;
+use clap_generate::Shell;
 use std::io::{self, Write};
 
 #[derive(Debug)]
@@ -37,16 +36,16 @@ impl super::Command for CompletionsCommand {
     let opt_shell = matches.value_of("shell").unwrap();
 
     let (mut arg_parser, _) = crate::cli::create_complete_arg_parser();
-    let chosen_generator: fn(&mut clap::App, &'static str, &mut dyn io::Write) = match opt_shell {
-      "bash" => generate::<generators::Bash, _>,
-      "elvish" => generate::<generators::Elvish, _>,
-      "fish" => generate::<generators::Fish, _>,
-      "powershell" => generate::<generators::PowerShell, _>,
-      "zsh" => generate::<generators::Zsh, _>,
+    let shell = match opt_shell {
+      "bash" => Shell::Bash,
+      "elvish" => Shell::Elvish,
+      "fish" => Shell::Fish,
+      "powershell" => Shell::PowerShell,
+      "zsh" => Shell::Zsh,
       _ => unreachable!(),
     };
     let mut out = io::stdout();
-    chosen_generator(&mut arg_parser, env!("CARGO_BIN_NAME"), &mut out);
+    clap_generate::generate(shell, &mut arg_parser, env!("CARGO_BIN_NAME"), &mut out);
     out.write_all(b"\n")?;
     out.flush()?;
 

@@ -31,6 +31,7 @@ impl super::Command for ExportCommand {
         clap::Arg::new("project_dir")
           .value_name("PROJECT")
           .value_hint(clap::ValueHint::DirPath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
           .required(true)
           .about("Path to the project directory."),
       )
@@ -38,6 +39,7 @@ impl super::Command for ExportCommand {
         clap::Arg::new("output")
           .value_name("PATH")
           .value_hint(clap::ValueHint::AnyPath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
           .short('o')
           .long("output")
           .required(true)
@@ -76,8 +78,9 @@ impl super::Command for ExportCommand {
       .arg(
         clap::Arg::new("mapping_output")
           .value_name("PATH")
-          .long("mapping-output")
           .value_hint(clap::ValueHint::FilePath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .long("mapping-output")
           .about(
             "Write a JSON file containing a mapping table from game files to the translation \
             files containg their strings.",

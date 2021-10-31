@@ -38,6 +38,7 @@ impl super::Command for ScanCommand {
         clap::Arg::new("assets_dir")
           .value_name("ASSETS")
           .value_hint(clap::ValueHint::DirPath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
           .required(true)
           .about("Path to the assets directory."),
       )
@@ -45,6 +46,7 @@ impl super::Command for ScanCommand {
         clap::Arg::new("output")
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
           .short('o')
           .long("output")
           .required(true)

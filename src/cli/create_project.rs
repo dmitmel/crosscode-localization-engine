@@ -25,6 +25,7 @@ impl super::Command for CreateProjectCommand {
         clap::Arg::new("project_dir")
           .value_name("PROJECT")
           .value_hint(clap::ValueHint::DirPath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
           .required(true)
           .about("Path to the project directory."),
       )
@@ -32,6 +33,7 @@ impl super::Command for CreateProjectCommand {
         clap::Arg::new("main_scan_db")
           .value_name("MAIN_SCAN_DB_PATH")
           .value_hint(clap::ValueHint::FilePath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
           .required(true)
           .about("Path to the main scan database from which the project will be generated."),
       )
@@ -39,6 +41,7 @@ impl super::Command for CreateProjectCommand {
         clap::Arg::new("extra_scan_dbs")
           .value_name("EXTRA_SCAN_DB_PATHS")
           .value_hint(clap::ValueHint::FilePath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
           .multiple_values(true)
           .about(
             "Paths to extra scan databases from which additional fragments will be read. Keep \

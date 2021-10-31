@@ -33,6 +33,7 @@ impl super::Command for ConvertCommand {
           .value_name("SCAN_DB_PATH")
           .value_hint(clap::ValueHint::FilePath)
           .long("scan")
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
           .required(true)
           .about(
             "A scan database to use for referencing data like fragment descriptions if the \
@@ -54,6 +55,7 @@ impl super::Command for ConvertCommand {
         clap::Arg::new("inputs")
           .value_name("INPUT_PATH")
           .value_hint(clap::ValueHint::AnyPath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
           .multiple_values(true)
           .required(true)
           .conflicts_with("inputs_file")
@@ -63,6 +65,7 @@ impl super::Command for ConvertCommand {
         clap::Arg::new("inputs_file")
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
           .short('I')
           .long("read-inputs")
           .about(
@@ -75,6 +78,7 @@ impl super::Command for ConvertCommand {
         clap::Arg::new("output")
           .value_name("PATH")
           .value_hint(clap::ValueHint::AnyPath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
           .short('o')
           .long("output")
           .required(true)
@@ -135,6 +139,7 @@ impl super::Command for ConvertCommand {
         clap::Arg::new("mapping_output")
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
           .long("mapping-output")
           .about(
             "Write a JSON file containing a mapping table from game files to the translation \
