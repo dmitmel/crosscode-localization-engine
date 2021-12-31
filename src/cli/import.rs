@@ -32,7 +32,7 @@ impl super::Command for ImportCommand {
           .value_hint(clap::ValueHint::DirPath)
           .setting(clap::ArgSettings::AllowInvalidUtf8)
           .required(true)
-          .about("Path to the project directory."),
+          .help("Path to the project directory."),
       )
       .arg(
         clap::Arg::new("inputs")
@@ -42,7 +42,7 @@ impl super::Command for ImportCommand {
           .multiple_values(true)
           .required(true)
           .conflicts_with("inputs_file")
-          .about("Path to files to import translations from."),
+          .help("Path to files to import translations from."),
       )
       .arg(
         clap::Arg::new("inputs_file")
@@ -51,7 +51,7 @@ impl super::Command for ImportCommand {
           .setting(clap::ArgSettings::AllowInvalidUtf8)
           .short('I')
           .long("read-inputs")
-          .about(
+          .help(
             "Read paths to input files from a file. If there are other paths specified via \
             command-line arguments, then those will be used instead and the inputs file will be \
             ignored.",
@@ -65,7 +65,7 @@ impl super::Command for ImportCommand {
           .long("format")
           .possible_values(importers::IMPORTERS_IDS)
           .required(true)
-          .about("Format to import from."),
+          .help("Format to import from."),
       )
       .arg(
         clap::Arg::new("default_author")
@@ -73,7 +73,7 @@ impl super::Command for ImportCommand {
           .value_hint(clap::ValueHint::Username)
           .long("default-author")
           .default_value("__import")
-          .about(
+          .help(
             "The default username to add translations with when the real author can't be \
             determined, for example if the input format simply doesn't store such data.",
           ),
@@ -84,13 +84,13 @@ impl super::Command for ImportCommand {
           .value_hint(clap::ValueHint::Other)
           .long("marker-flag")
           .default_value("imported")
-          .about("Name of the flag used for marking automatically imported translations."),
+          .help("Name of the flag used for marking automatically imported translations."),
       )
       .arg(
         clap::Arg::new("delete_other_translations")
           .long("delete-other-translations")
           //
-          .about(
+          .help(
             "Delete other translations (by other users) on fragments before adding the imported \
             translation.",
           ),
@@ -99,7 +99,7 @@ impl super::Command for ImportCommand {
         clap::Arg::new("always_add_new_translations")
           .long("always-add-new-translations")
           //
-          .about(
+          .help(
             "Always add new translations instead of editing the translations created from \
             previous imports. The import marker flag is used for determining if a translation \
             was imported.",
@@ -112,7 +112,7 @@ impl super::Command for ImportCommand {
           .long("add-flag")
           .multiple_values(true)
           .number_of_values(1)
-          .about("Add flags to the imported translations."),
+          .help("Add flags to the imported translations."),
       )
   }
 

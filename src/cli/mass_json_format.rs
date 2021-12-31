@@ -35,7 +35,7 @@ impl super::Command for MassJsonFormatCommand {
             .value_hint(clap::ValueHint::AnyPath)
             .setting(clap::ArgSettings::AllowInvalidUtf8)
             .multiple_values(true)
-            .about(
+            .help(
               "Files to format. Directories may be passed as well, in which case all .json files \
               contained within the directory will be formatted recursively.",
             ),
@@ -47,7 +47,7 @@ impl super::Command for MassJsonFormatCommand {
             .setting(clap::ArgSettings::AllowInvalidUtf8)
             .short('I')
             .long("read-inputs")
-            .about(
+            .help(
               "Read paths to input files from a file. If there are other paths specified via \
               command-line arguments, then those will be used instead and the inputs file will be \
               ignored.",
@@ -60,20 +60,20 @@ impl super::Command for MassJsonFormatCommand {
             .setting(clap::ArgSettings::AllowInvalidUtf8)
             .short('o')
             .long("output")
-            .about("Path to the destination file or directory."),
+            .help("Path to the destination file or directory."),
         )
         .arg(
           clap::Arg::new("in_place")
             .short('i')
             .long("in-place")
             //
-            .about("Format files in-place."),
+            .help("Format files in-place."),
         )
         .arg(
           clap::Arg::new("pipe")
             .short('P')
             .long("pipe")
-            .about("Use the program as a filter in shell pipes."),
+            .help("Use the program as a filter in shell pipes."),
         )
         .group(
           clap::ArgGroup::new("read_mode")
@@ -93,7 +93,7 @@ impl super::Command for MassJsonFormatCommand {
           clap::Arg::new("jobs")
             .short('j')
             .long("jobs")
-            .about(
+            .help(
               "The number of parallel worker threads allocated for formatting. Zero means using \
               as many threads as there are CPU cores available.",
             )

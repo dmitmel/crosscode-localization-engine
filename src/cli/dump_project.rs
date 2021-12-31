@@ -32,7 +32,7 @@ impl super::Command for DumpProjectCommand {
             .value_hint(clap::ValueHint::DirPath)
             .setting(clap::ArgSettings::AllowInvalidUtf8)
             .required(true)
-            .about("Path to the project directory."),
+            .help("Path to the project directory."),
         ),
     )
   }

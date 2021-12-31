@@ -19,7 +19,7 @@ impl DumpCommandCommonOpts {
           .long("compat-output")
           .short('c')
           //
-          .about(
+          .help(
             "Does exactly the same thing as jq's option of the same name: turns off pretty-\
             printing of the resulting JSON.",
           ),
@@ -29,7 +29,7 @@ impl DumpCommandCommonOpts {
           .value_name("INDENT")
           .value_hint(clap::ValueHint::Other)
           .long("indent")
-          .about("Selects what to use for indentation.")
+          .help("Selects what to use for indentation.")
           .possible_values(&["0", "1", "2", "3", "4", "5", "6", "7", "8", "tab"])
           .default_value("2"),
       )
@@ -41,7 +41,7 @@ impl DumpCommandCommonOpts {
         clap::Arg::new("unbuffered")
           .long("unbuffered")
           //
-          .about(
+          .help(
             "Does exactly the same thing as the corresponding jq's option: flushes the output \
             stream after each JSON object is printed.",
           ),
@@ -51,7 +51,7 @@ impl DumpCommandCommonOpts {
           .long("wrap-array")
           .short('w')
           //
-          .about(
+          .help(
             "Wrap the resulting JSON entries in a one big array. Alternatively, jq's --slurp \
             option can be used to achieve the same.",
           ),

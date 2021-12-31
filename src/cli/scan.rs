@@ -40,7 +40,7 @@ impl super::Command for ScanCommand {
           .value_hint(clap::ValueHint::DirPath)
           .setting(clap::ArgSettings::AllowInvalidUtf8)
           .required(true)
-          .about("Path to the assets directory."),
+          .help("Path to the assets directory."),
       )
       .arg(
         clap::Arg::new("output")
@@ -50,7 +50,7 @@ impl super::Command for ScanCommand {
           .short('o')
           .long("output")
           .required(true)
-          .about("Path to the output JSON file."),
+          .help("Path to the output JSON file."),
       )
       .arg(
         clap::Arg::new("locales")
@@ -60,26 +60,26 @@ impl super::Command for ScanCommand {
           .number_of_values(1)
           .short('l')
           .long("locales")
-          .about("Locales to extract. By default only the main locale is extracted.")
+          .help("Locales to extract. By default only the main locale is extracted.")
           .default_values(&[lang_label_extractor::MAIN_LOCALE]),
       )
       .arg(
         clap::Arg::new("all_locales")
           .long("all-locales")
           .conflicts_with("locales")
-          .about("Extact absolutely all locales."),
+          .help("Extact absolutely all locales."),
       )
       .arg(
         clap::Arg::new("compact")
           .short('c')
           .long("compact")
-          .about("Disable pretty-printing of the resulting JSON file."),
+          .help("Disable pretty-printing of the resulting JSON file."),
       )
       .arg(
         clap::Arg::new("jobs")
           .short('j')
           .long("jobs")
-          .about(
+          .help(
             "The number of parallel worker threads allocated for the scanner. Zero means using as \
             many threads as there are CPU cores available.",
           )

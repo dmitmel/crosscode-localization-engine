@@ -35,7 +35,7 @@ impl super::Command for ConvertCommand {
           .long("scan")
           .setting(clap::ArgSettings::AllowInvalidUtf8)
           .required(true)
-          .about(
+          .help(
             "A scan database to use for referencing data like fragment descriptions if the \
             input format doesn't contain it.",
           ),
@@ -45,7 +45,7 @@ impl super::Command for ConvertCommand {
           .value_name("LOCALE")
           .value_hint(clap::ValueHint::Other)
           .long("original-locale")
-          .about(
+          .help(
             "Locale of the original strings in the input files, used for warning about staleness \
             of the translations. Normally, during exports, this is determined from the project \
             meta file.",
@@ -59,7 +59,7 @@ impl super::Command for ConvertCommand {
           .multiple_values(true)
           .required(true)
           .conflicts_with("inputs_file")
-          .about("Paths to the input files."),
+          .help("Paths to the input files."),
       )
       .arg(
         clap::Arg::new("inputs_file")
@@ -68,7 +68,7 @@ impl super::Command for ConvertCommand {
           .setting(clap::ArgSettings::AllowInvalidUtf8)
           .short('I')
           .long("read-inputs")
-          .about(
+          .help(
             "Read paths to input files from a file. If there are other paths specified via \
             command-line arguments, then those will be used instead and the inputs file will be \
             ignored.",
@@ -82,7 +82,7 @@ impl super::Command for ConvertCommand {
           .short('o')
           .long("output")
           .required(true)
-          .about(
+          .help(
             "Path to the destination file or directory. A directory is used when a splitter is \
             specified.",
           ),
@@ -95,7 +95,7 @@ impl super::Command for ConvertCommand {
           .long("format")
           .possible_values(importers::IMPORTERS_IDS)
           .required(true)
-          .about("The format to convert from."),
+          .help("The format to convert from."),
       )
       .arg(
         clap::Arg::new("output_format")
@@ -105,7 +105,7 @@ impl super::Command for ConvertCommand {
           .long("output-format")
           .possible_values(exporters::EXPORTERS_IDS)
           .required(true)
-          .about("The format to convert to."),
+          .help("The format to convert to."),
       )
       .arg(
         clap::Arg::new("default_author")
@@ -113,7 +113,7 @@ impl super::Command for ConvertCommand {
           .value_hint(clap::ValueHint::Username)
           .long("default-author")
           .default_value("__convert")
-          .about(
+          .help(
             "The default username to add translations with when the real author can't be \
             determined, for example if the input format simply doesn't store such data.",
           ),
@@ -124,13 +124,13 @@ impl super::Command for ConvertCommand {
           .value_hint(clap::ValueHint::Other)
           .long("splitter")
           .possible_values(splitters::SPLITTERS_IDS)
-          .about("Strategy used for splitting the output files."),
+          .help("Strategy used for splitting the output files."),
       )
       .arg(
         clap::Arg::new("remove_untranslated")
           .long("remove-untranslated")
           //
-          .about(
+          .help(
             "Whether to remove untranslated fragments when converting. Note that some formats \
             and/or tasks may still need the empty translations.",
           ),
@@ -141,7 +141,7 @@ impl super::Command for ConvertCommand {
           .value_hint(clap::ValueHint::FilePath)
           .setting(clap::ArgSettings::AllowInvalidUtf8)
           .long("mapping-output")
-          .about(
+          .help(
             "Write a JSON file containing a mapping table from game files to the translation \
             files containg their strings.",
           ),
@@ -149,13 +149,13 @@ impl super::Command for ConvertCommand {
       .arg(
         clap::Arg::new("mapping_lm_paths")
           .long("mapping-lm-paths")
-          .about("Use Localize Me-style paths of game files in the mapping table."),
+          .help("Use Localize Me-style paths of game files in the mapping table."),
       )
       .arg(
         clap::Arg::new("compact")
           .long("compact")
           //
-          .about(
+          .help(
             "Write output files compactly, for example before packaging them for distribution. \
             Note that this will mean different things depending on the output format.",
           ),

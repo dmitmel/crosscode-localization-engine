@@ -27,7 +27,7 @@ impl super::Command for CreateProjectCommand {
           .value_hint(clap::ValueHint::DirPath)
           .setting(clap::ArgSettings::AllowInvalidUtf8)
           .required(true)
-          .about("Path to the project directory."),
+          .help("Path to the project directory."),
       )
       .arg(
         clap::Arg::new("main_scan_db")
@@ -35,7 +35,7 @@ impl super::Command for CreateProjectCommand {
           .value_hint(clap::ValueHint::FilePath)
           .setting(clap::ArgSettings::AllowInvalidUtf8)
           .required(true)
-          .about("Path to the main scan database from which the project will be generated."),
+          .help("Path to the main scan database from which the project will be generated."),
       )
       .arg(
         clap::Arg::new("extra_scan_dbs")
@@ -43,7 +43,7 @@ impl super::Command for CreateProjectCommand {
           .value_hint(clap::ValueHint::FilePath)
           .setting(clap::ArgSettings::AllowInvalidUtf8)
           .multiple_values(true)
-          .about(
+          .help(
             "Paths to extra scan databases from which additional fragments will be read. Keep \
             in mind that the metadata only of the main database will be used.",
           ),
@@ -54,7 +54,7 @@ impl super::Command for CreateProjectCommand {
           .value_hint(clap::ValueHint::Other)
           .long("original-locale")
           .default_value("en_US")
-          .about("Locale to translate from."),
+          .help("Locale to translate from."),
       )
       .arg(
         clap::Arg::new("reference_locales")
@@ -63,7 +63,7 @@ impl super::Command for CreateProjectCommand {
           .multiple_values(true)
           .number_of_values(1)
           .long("reference-locales")
-          .about("Other original locales to include for reference."),
+          .help("Other original locales to include for reference."),
       )
       .arg(
         clap::Arg::new("translation_locale")
@@ -71,7 +71,7 @@ impl super::Command for CreateProjectCommand {
           .value_hint(clap::ValueHint::Other)
           .long("translation-locale")
           .required(true)
-          .about("Locale of the translation."),
+          .help("Locale of the translation."),
       )
       .arg(
         clap::Arg::new("splitter")
@@ -80,7 +80,7 @@ impl super::Command for CreateProjectCommand {
           .long("splitter")
           .possible_values(splitters::SPLITTERS_IDS)
           .default_value(splitters::NextGenerationSplitter::ID)
-          .about(
+          .help(
             "Strategy used for assigning game files (and individual fragments in them) to \
             translation storage files.",
           ),
@@ -97,7 +97,7 @@ impl super::Command for CreateProjectCommand {
             Ok(())
           })
           .default_value("tr")
-          .about("Path to project's translation storage files, relative to project's directory."),
+          .help("Path to project's translation storage files, relative to project's directory."),
       )
   }
 

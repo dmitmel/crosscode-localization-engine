@@ -33,7 +33,7 @@ impl super::Command for ExportCommand {
           .value_hint(clap::ValueHint::DirPath)
           .setting(clap::ArgSettings::AllowInvalidUtf8)
           .required(true)
-          .about("Path to the project directory."),
+          .help("Path to the project directory."),
       )
       .arg(
         clap::Arg::new("output")
@@ -43,7 +43,7 @@ impl super::Command for ExportCommand {
           .short('o')
           .long("output")
           .required(true)
-          .about(
+          .help(
             "Path to the destination file or directory for exporting. A directory is used when \
             a splitter is specified.",
           ),
@@ -56,7 +56,7 @@ impl super::Command for ExportCommand {
           .long("format")
           .possible_values(exporters::EXPORTERS_IDS)
           .required(true)
-          .about("Format to export to."),
+          .help("Format to export to."),
       )
       .arg(
         clap::Arg::new("splitter")
@@ -64,13 +64,13 @@ impl super::Command for ExportCommand {
           .value_hint(clap::ValueHint::Other)
           .long("splitter")
           .possible_values(splitters::SPLITTERS_IDS)
-          .about("Strategy used for splitting the exported files."),
+          .help("Strategy used for splitting the exported files."),
       )
       .arg(
         clap::Arg::new("remove_untranslated")
           .long("remove-untranslated")
           //
-          .about(
+          .help(
             "Whether to remove untranslated strings from the exported files. Note that some \
             formats and/or tasks may still need the empty translations.",
           ),
@@ -81,7 +81,7 @@ impl super::Command for ExportCommand {
           .value_hint(clap::ValueHint::FilePath)
           .setting(clap::ArgSettings::AllowInvalidUtf8)
           .long("mapping-output")
-          .about(
+          .help(
             "Write a JSON file containing a mapping table from game files to the translation \
             files containg their strings.",
           ),
@@ -89,13 +89,13 @@ impl super::Command for ExportCommand {
       .arg(
         clap::Arg::new("mapping_lm_paths")
           .long("mapping-lm-paths")
-          .about("Use Localize Me-style paths of game files in the mapping table."),
+          .help("Use Localize Me-style paths of game files in the mapping table."),
       )
       .arg(
         clap::Arg::new("compact")
           .long("compact")
           //
-          .about(
+          .help(
             "Write exported files compactly, for example before packaging them for distribution. \
             Note that this will mean different things depending on the output format.",
           ),

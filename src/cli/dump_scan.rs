@@ -30,7 +30,7 @@ impl super::Command for DumpScanCommand {
             .value_hint(clap::ValueHint::FilePath)
             .setting(clap::ArgSettings::AllowInvalidUtf8)
             .required(true)
-            .about("Path to a scan database to dump."),
+            .help("Path to a scan database to dump."),
         ),
     )
   }

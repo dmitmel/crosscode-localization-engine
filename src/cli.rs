@@ -38,14 +38,14 @@ impl GlobalOpts {
     clap::App::new(crate::CRATE_TITLE)
       .version(crate::CRATE_NICE_VERSION)
       .about("CrossCode Localization Engine command-line tool")
-      .global_setting(clap::AppSettings::AllowLeadingHyphen)
+      .global_setting(clap::AppSettings::AllowHyphenValues)
       .global_setting(clap::AppSettings::NextLineHelp)
       .setting(clap::AppSettings::SubcommandRequiredElseHelp)
       .arg(
         clap::Arg::new("verbose")
           .short('v')
           .long("verbose")
-          .about("Print more logs, may be helpful for troubleshooting.")
+          .help("Print more logs, may be helpful for troubleshooting.")
           .global(true),
       )
       .arg(
@@ -54,7 +54,7 @@ impl GlobalOpts {
           .value_hint(clap::ValueHint::Other)
           .short('p')
           .long("progress")
-          .about("Enable the fancy progress bars.")
+          .help("Enable the fancy progress bars.")
           .possible_values(&["auto", "always", "never"])
           .default_value("auto")
           .global(true),
@@ -66,13 +66,13 @@ impl GlobalOpts {
           .setting(clap::ArgSettings::AllowInvalidUtf8)
           .short('C')
           .long("cd")
-          .about("Change the working directory first before doing anything.")
+          .help("Change the working directory first before doing anything.")
           .global(true),
       )
       .arg(
         clap::Arg::new("no_banner_message")
           .long("no-banner-message")
-          .about("Don't print the banner message with the program information when starting.")
+          .help("Don't print the banner message with the program information when starting.")
           .global(true),
       )
   }
