@@ -2,6 +2,8 @@ pub mod json;
 pub mod parsing;
 pub mod serde;
 
+use crate::impl_prelude::*;
+
 use indexmap::IndexMap;
 use std::borrow::Cow;
 use std::cell::RefCell;
@@ -9,6 +11,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fs;
 use std::io;
+use std::marker::PhantomData;
 use std::path::{Component as PathComponent, Path, PathBuf};
 use std::rc::{Rc, Weak as RcWeak};
 use std::sync::{Arc, Weak as ArcWeak};
@@ -358,4 +361,46 @@ mod tests {
       assert_eq!(current_uuid, initial_uuid);
     }
   }
+}
+
+#[derive(Debug)]
+pub struct StrategicalRegistry<A, R> {
+  ids: Vec<&'static str>,
+  map: HashMap<&'static str, fn(A) -> AnyResult<R>>,
+  _phantom: PhantomData<A>,
+  _phantom2: PhantomData<R>,
+}
+
+impl<A, R> StrategicalRegistry<A, R>
+where
+  StrategyDeclaration<A, R>: inventory::Collect,
+{
+  pub fn new() -> Self {
+    let mut ids = Vec::new();
+    let mut map = HashMap::new();
+    for decl in inventory::iter::<StrategyDeclaration<A, R>> {
+      ids.push(decl.id);
+      map.insert(decl.id, decl.ctor);
+    }
+    Self { ids, map, _phantom: PhantomData, _phantom2: PhantomData }
+  }
+
+  #[inline(always)]
+  pub fn ids(&self) -> &[&'static str] { &self.ids }
+  #[inline(always)]
+  pub fn map(&self) -> &HashMap<&'static str, fn(A) -> AnyResult<R>> { &self.map }
+
+  pub fn get_constructor(&self, id: &str) -> Option<&fn(A) -> AnyResult<R>> { self.map.get(id) }
+
+  pub fn create(&self, id: &str, args: A) -> AnyResult<R> {
+    let constructor =
+      self.map.get(id).ok_or_else(|| format_err!("strategy not found {:?}", id))?;
+    constructor(args)
+  }
+}
+
+#[derive(Debug)]
+pub struct StrategyDeclaration<A, R> {
+  pub id: &'static str,
+  pub ctor: fn(A) -> AnyResult<R>,
 }

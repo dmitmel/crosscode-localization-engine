@@ -7,7 +7,7 @@ use crate::utils;
 use crate::utils::Timestamp;
 
 use once_cell::sync::Lazy;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt;
 use std::path::Path;
 
@@ -29,8 +29,10 @@ pub struct ImportedTranslation {
   pub flags: HashSet<RcString>,
 }
 
+pub type ImporterDeclaration = utils::StrategyDeclaration<(), Box<dyn Importer>>;
+
 assert_trait_is_object_safe!(Importer);
-pub trait Importer: fmt::Debug {
+pub trait Importer: fmt::Debug + Send + Sync {
   fn id_static() -> &'static str
   where
     Self: Sized;
@@ -51,34 +53,23 @@ pub trait Importer: fmt::Debug {
     input: &str,
     imported_fragments: &mut Vec<ImportedFragment>,
   ) -> AnyResult<()>;
+
+  fn declaration() -> ImporterDeclaration
+  where
+    Self: Sized,
+  {
+    ImporterDeclaration { id: Self::id_static(), ctor: |_| Ok(Self::new_boxed()) }
+  }
 }
 
-macro_rules! importers_map {
-  ($($imp:ident,)+) => { importers_map![$($imp),+]; };
-  ($($imp:ident),*) => {
-    pub static IMPORTERS_IDS: &'static [&'static str] = &[$($imp::ID),+];
-    pub static IMPORTERS_MAP: Lazy<HashMap<&'static str, fn() -> Box<dyn Importer>>> =
-      Lazy::new(|| {
-        let _cap = count_exprs!($($imp),*);
-        // Don't ask me why the compiler requires the following type
-        // annotation.
-        let mut _map: HashMap<_, fn() -> _> = HashMap::with_capacity(_cap);
-        $(let _ = _map.insert($imp::ID, $imp::new_boxed);)*
-          _map
-      });
-  };
-}
+inventory::collect!(ImporterDeclaration);
 
-importers_map![LocalizeMeTrPackImporter, CcRuChapterFragmentsImporter, GettextPoImporter];
-
-pub fn create_by_id(id: &str) -> AnyResult<Box<dyn Importer>> {
-  let constructor: &fn() -> Box<dyn Importer> =
-    IMPORTERS_MAP.get(id).ok_or_else(|| format_err!("no such importer {:?}", id))?;
-  Ok(constructor())
-}
+pub static REGISTRY: Lazy<utils::StrategicalRegistry<(), Box<dyn Importer>>> =
+  Lazy::new(utils::StrategicalRegistry::new);
 
 #[derive(Debug)]
 pub struct LocalizeMeTrPackImporter;
+inventory::submit!(LocalizeMeTrPackImporter::declaration());
 
 impl LocalizeMeTrPackImporter {
   pub const ID: &'static str = "lm-tr-pack";
@@ -148,6 +139,7 @@ impl Importer for LocalizeMeTrPackImporter {
 
 #[derive(Debug)]
 pub struct CcRuChapterFragmentsImporter;
+inventory::submit!(CcRuChapterFragmentsImporter::declaration());
 
 impl CcRuChapterFragmentsImporter {
   pub const ID: &'static str = "cc-ru-chapter-fragments";
@@ -220,6 +212,7 @@ impl Importer for CcRuChapterFragmentsImporter {
 
 #[derive(Debug)]
 pub struct GettextPoImporter;
+inventory::submit!(GettextPoImporter::declaration());
 
 impl GettextPoImporter {
   pub const ID: &'static str = "po";

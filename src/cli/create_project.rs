@@ -78,7 +78,7 @@ impl super::Command for CreateProjectCommand {
           .value_name("NAME")
           .value_hint(clap::ValueHint::Other)
           .long("splitter")
-          .possible_values(splitters::SPLITTERS_IDS)
+          .possible_values(splitters::REGISTRY.ids())
           .default_value(splitters::NextGenerationSplitter::ID)
           .help(
             "Strategy used for assigning game files (and individual fragments in them) to \

@@ -140,8 +140,10 @@ impl ExportedTranslation {
   }
 }
 
+pub type ExporterDeclaration = utils::StrategyDeclaration<ExporterConfig, Box<dyn Exporter>>;
+
 assert_trait_is_object_safe!(Exporter);
-pub trait Exporter: fmt::Debug {
+pub trait Exporter: fmt::Debug + Send + Sync {
   fn id_static() -> &'static str
   where
     Self: Sized;
@@ -162,37 +164,25 @@ pub trait Exporter: fmt::Debug {
     fragments: &[ExportedFragment],
     writer: &mut dyn Write,
   ) -> AnyResult<()>;
+
+  fn declaration() -> ExporterDeclaration
+  where
+    Self: Sized,
+  {
+    ExporterDeclaration { id: Self::id_static(), ctor: |config| Ok(Self::new_boxed(config)) }
+  }
 }
 
-macro_rules! exporters_map {
-  ($($imp:ident,)+) => { exporters_map![$($imp),+]; };
-  ($($imp:ident),*) => {
-    pub static EXPORTERS_IDS: &'static [&'static str] = &[$($imp::ID),+];
-    pub static EXPORTERS_MAP: Lazy<
-      HashMap<&'static str, fn(config: ExporterConfig) -> Box<dyn Exporter>>,
-    > = Lazy::new(|| {
-      let _cap = count_exprs!($($imp),*);
-      // Don't ask me why the compiler requires the following type
-      // annotation.
-      let mut _map: HashMap<_, fn(config: ExporterConfig) -> _> = HashMap::with_capacity(_cap);
-      $(let _ = _map.insert($imp::ID, $imp::new_boxed);)*
-      _map
-    });
-  };
-}
+inventory::collect!(ExporterDeclaration);
 
-exporters_map![LocalizeMeTrPackExporter, GettextPoExporter];
-
-pub fn create(id: &str, config: ExporterConfig) -> AnyResult<Box<dyn Exporter>> {
-  let constructor: &fn(config: ExporterConfig) -> Box<dyn Exporter> =
-    EXPORTERS_MAP.get(id).ok_or_else(|| format_err!("no such exporter {:?}", id))?;
-  Ok(constructor(config))
-}
+pub static REGISTRY: Lazy<utils::StrategicalRegistry<ExporterConfig, Box<dyn Exporter>>> =
+  Lazy::new(utils::StrategicalRegistry::new);
 
 #[derive(Debug)]
 pub struct LocalizeMeTrPackExporter {
   json_fmt: json::UltimateFormatter,
 }
+inventory::submit!(LocalizeMeTrPackExporter::declaration());
 
 impl LocalizeMeTrPackExporter {
   pub const ID: &'static str = "lm-tr-pack";
@@ -304,6 +294,7 @@ impl Exporter for LocalizeMeTrPackExporter {
 
 #[derive(Debug)]
 pub struct GettextPoExporter;
+inventory::submit!(GettextPoExporter::declaration());
 
 impl GettextPoExporter {
   pub const ID: &'static str = "po";

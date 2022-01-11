@@ -221,7 +221,7 @@ impl ProjectMeta {
       translations_dir: opts.translations_dir,
 
       splitter: RefCell::new(
-        splitters::create_by_id(&opts.splitter).context("Failed to create the splitter")?,
+        splitters::REGISTRY.create(&opts.splitter, ()).context("Failed to create the splitter")?,
       ),
       translation_files_link: project.share_rc_weak(),
     })

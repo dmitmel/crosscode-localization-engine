@@ -54,7 +54,7 @@ impl super::Command for ExportCommand {
           .value_hint(clap::ValueHint::Other)
           .short('f')
           .long("format")
-          .possible_values(exporters::EXPORTERS_IDS)
+          .possible_values(exporters::REGISTRY.ids())
           .required(true)
           .help("Format to export to."),
       )
@@ -63,7 +63,7 @@ impl super::Command for ExportCommand {
           .value_name("NAME")
           .value_hint(clap::ValueHint::Other)
           .long("splitter")
-          .possible_values(splitters::SPLITTERS_IDS)
+          .possible_values(splitters::REGISTRY.ids())
           .help("Strategy used for splitting the exported files."),
       )
       .arg(
@@ -80,6 +80,7 @@ impl super::Command for ExportCommand {
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
           .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .requires("splitter")
           .long("mapping-output")
           .help(
             "Write a JSON file containing a mapping table from game files to the translation \
@@ -88,6 +89,7 @@ impl super::Command for ExportCommand {
       )
       .arg(
         clap::Arg::new("mapping_lm_paths")
+          .requires("mapping_output")
           .long("mapping-lm-paths")
           .help("Use Localize Me-style paths of game files in the mapping table."),
       )
@@ -123,13 +125,15 @@ impl super::Command for ExportCommand {
     );
 
     let project = Project::open(opt_project_dir).context("Failed to open the project")?;
-    let mut exporter =
-      exporters::create(&opt_format, exporters::ExporterConfig { compact: opt_compact })
-        .context("Failed to create the exporter")?;
+    let mut exporter = exporters::REGISTRY
+      .create(&opt_format, exporters::ExporterConfig { compact: opt_compact })
+      .context("Failed to create the exporter")?;
 
     #[allow(clippy::manual_map)]
     let mut splitter = match opt_splitter {
-      Some(id) => Some(splitters::create_by_id(&id).context("Failed to create the splitter")?),
+      Some(id) => {
+        Some(splitters::REGISTRY.create(&id, ()).context("Failed to create the splitter")?)
+      }
       _ => None,
     };
 
@@ -237,25 +241,18 @@ impl super::Command for ExportCommand {
     }
 
     if let Some(mapping_file_path) = opt_mapping_output {
-      if splitter.is_some() {
-        json::write_file(
-          &mapping_file_path,
-          &exported_files_mapping,
-          if opt_compact {
-            json::UltimateFormatterConfig::COMPACT
-          } else {
-            json::UltimateFormatterConfig::PRETTY
-          },
-        )
-        .with_context(|| format!("Failed to write the mapping file to {:?}", mapping_file_path))?;
+      json::write_file(
+        &mapping_file_path,
+        &exported_files_mapping,
+        if opt_compact {
+          json::UltimateFormatterConfig::COMPACT
+        } else {
+          json::UltimateFormatterConfig::PRETTY
+        },
+      )
+      .with_context(|| format!("Failed to write the mapping file to {:?}", mapping_file_path))?;
 
-        info!("Written the mapping file with {} entries", exported_files_mapping.len());
-      } else {
-        warn!(
-          "Mapping output file was specified, but splitter wasn't. A mapping file doesn't make \
-          sense without splitting."
-        );
-      }
+      info!("Written the mapping file with {} entries", exported_files_mapping.len());
     }
 
     Ok(())

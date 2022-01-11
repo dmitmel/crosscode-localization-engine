@@ -1,14 +1,15 @@
-use crate::impl_prelude::*;
 use crate::localize_me;
 use crate::rc_string::MaybeStaticStr;
 use crate::utils;
 
 use once_cell::sync::Lazy;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt;
 
+pub type SplitterDeclaration = utils::StrategyDeclaration<(), Box<dyn Splitter>>;
+
 assert_trait_is_object_safe!(Splitter);
-pub trait Splitter: fmt::Debug {
+pub trait Splitter: fmt::Debug + Send + Sync {
   fn id_static() -> &'static str
   where
     Self: Sized;
@@ -33,7 +34,19 @@ pub trait Splitter: fmt::Debug {
   ) -> MaybeStaticStr {
     self.get_tr_file_for_entire_game_file(asset_root, file_path).unwrap()
   }
+
+  fn declaration() -> SplitterDeclaration
+  where
+    Self: Sized,
+  {
+    SplitterDeclaration { id: Self::id_static(), ctor: |_| Ok(Self::new_boxed()) }
+  }
 }
+
+inventory::collect!(SplitterDeclaration);
+
+pub static REGISTRY: Lazy<utils::StrategicalRegistry<(), Box<dyn Splitter>>> =
+  Lazy::new(utils::StrategicalRegistry::new);
 
 impl<'de> serde::Deserialize<'de> for Box<dyn Splitter> {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -41,7 +54,7 @@ impl<'de> serde::Deserialize<'de> for Box<dyn Splitter> {
     D: serde::Deserializer<'de>,
   {
     let id = <&str>::deserialize(deserializer)?;
-    create_by_id(id).map_err(|_| serde::de::Error::unknown_variant(id, SPLITTERS_IDS))
+    REGISTRY.create(id, ()).map_err(|_| serde::de::Error::unknown_variant(id, REGISTRY.ids()))
   }
 }
 
@@ -54,38 +67,9 @@ impl serde::Serialize for Box<dyn Splitter> {
   }
 }
 
-macro_rules! splitters_map {
-  ($($imp:ident,)+) => { splitters_map![$($imp),+]; };
-  ($($imp:ident),*) => {
-    pub static SPLITTERS_IDS: &'static [&'static str] = &[$($imp::ID),+];
-    pub static SPLITTERS_MAPS: Lazy<HashMap<&'static str, fn() -> Box<dyn Splitter>>> =
-      Lazy::new(|| {
-        let _cap = count_exprs!($($imp),*);
-        // Don't ask me why the compiler requires the following type
-        // annotation.
-        let mut _map: HashMap<_, fn() -> _> = HashMap::with_capacity(_cap);
-        $(let _ = _map.insert($imp::ID, $imp::new_boxed);)*
-        _map
-      });
-  };
-}
-
-splitters_map![
-  MonolithicFileSplitter,
-  SameFileTreeSplitter,
-  LocalizeMeFileTreeSplitter,
-  NotabenoidChaptersSplitter,
-  NextGenerationSplitter,
-];
-
-pub fn create_by_id(id: &str) -> AnyResult<Box<dyn Splitter>> {
-  let constructor: &fn() -> Box<dyn Splitter> =
-    SPLITTERS_MAPS.get(id).ok_or_else(|| format_err!("no such splitter {:?}", id))?;
-  Ok(constructor())
-}
-
 #[derive(Debug)]
 pub struct MonolithicFileSplitter;
+inventory::submit!(MonolithicFileSplitter::declaration());
 
 impl MonolithicFileSplitter {
   pub const ID: &'static str = "monolithic-file";
@@ -122,6 +106,7 @@ impl Splitter for MonolithicFileSplitter {
 
 #[derive(Debug)]
 pub struct SameFileTreeSplitter;
+inventory::submit!(SameFileTreeSplitter::declaration());
 
 impl SameFileTreeSplitter {
   pub const ID: &'static str = "same-file-tree";
@@ -159,6 +144,7 @@ impl Splitter for SameFileTreeSplitter {
 
 #[derive(Debug)]
 pub struct LocalizeMeFileTreeSplitter;
+inventory::submit!(LocalizeMeFileTreeSplitter::declaration());
 
 impl LocalizeMeFileTreeSplitter {
   pub const ID: &'static str = "lm-file-tree";
@@ -197,6 +183,7 @@ impl Splitter for LocalizeMeFileTreeSplitter {
 
 #[derive(Debug)]
 pub struct NotabenoidChaptersSplitter;
+inventory::submit!(NotabenoidChaptersSplitter::declaration());
 
 impl NotabenoidChaptersSplitter {
   pub const ID: &'static str = "notabenoid-chapters";
@@ -301,6 +288,7 @@ impl Splitter for NotabenoidChaptersSplitter {
 
 #[derive(Debug)]
 pub struct NextGenerationSplitter;
+inventory::submit!(NextGenerationSplitter::declaration());
 
 impl NextGenerationSplitter {
   pub const ID: &'static str = "next-generation";

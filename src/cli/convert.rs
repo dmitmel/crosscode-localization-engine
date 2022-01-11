@@ -93,7 +93,7 @@ impl super::Command for ConvertCommand {
           .value_hint(clap::ValueHint::Other)
           .short('f')
           .long("format")
-          .possible_values(importers::IMPORTERS_IDS)
+          .possible_values(importers::REGISTRY.ids())
           .required(true)
           .help("The format to convert from."),
       )
@@ -103,7 +103,7 @@ impl super::Command for ConvertCommand {
           .value_hint(clap::ValueHint::Other)
           .short('F')
           .long("output-format")
-          .possible_values(exporters::EXPORTERS_IDS)
+          .possible_values(exporters::REGISTRY.ids())
           .required(true)
           .help("The format to convert to."),
       )
@@ -123,7 +123,7 @@ impl super::Command for ConvertCommand {
           .value_name("SPLITTER")
           .value_hint(clap::ValueHint::Other)
           .long("splitter")
-          .possible_values(splitters::SPLITTERS_IDS)
+          .possible_values(splitters::REGISTRY.ids())
           .help("Strategy used for splitting the output files."),
       )
       .arg(
@@ -140,6 +140,7 @@ impl super::Command for ConvertCommand {
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
           .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .requires("splitter")
           .long("mapping-output")
           .help(
             "Write a JSON file containing a mapping table from game files to the translation \
@@ -148,6 +149,7 @@ impl super::Command for ConvertCommand {
       )
       .arg(
         clap::Arg::new("mapping_lm_paths")
+          .requires("mapping_output")
           .long("mapping-lm-paths")
           .help("Use Localize Me-style paths of game files in the mapping table."),
       )
@@ -186,14 +188,17 @@ impl super::Command for ConvertCommand {
 
     info!("Converting files from {:?} to {:?}", opt_input_format, opt_output_format);
 
-    let mut importer =
-      importers::create_by_id(&opt_input_format).context("Failed to create the importer")?;
-    let mut exporter =
-      exporters::create(&opt_output_format, exporters::ExporterConfig { compact: opt_compact })
-        .context("Failed to create the exporter")?;
+    let mut importer = importers::REGISTRY
+      .create(&opt_input_format, ())
+      .context("Failed to create the importer")?;
+    let mut exporter = exporters::REGISTRY
+      .create(&opt_output_format, exporters::ExporterConfig { compact: opt_compact })
+      .context("Failed to create the exporter")?;
     #[allow(clippy::manual_map)]
     let mut splitter = match opt_splitter {
-      Some(id) => Some(splitters::create_by_id(&id).context("Failed to create the splitter")?),
+      Some(id) => {
+        Some(splitters::REGISTRY.create(&id, ()).context("Failed to create the splitter")?)
+      }
       _ => None,
     };
     let scan_db = scan::ScanDb::open(opt_scan_db).context("Failed to open the scan database")?;
@@ -267,7 +272,7 @@ impl super::Command for ConvertCommand {
           if *real_original_text != f.original_text {
             warn!(
               "Import {:?}:\n\
-              fragment {:?} {:?}: stale original text, translation are likely outdated",
+              fragment {:?} {:?}: stale original text, translations are likely outdated",
               input_path, f.file_path, f.json_path,
             );
           }
@@ -401,25 +406,18 @@ impl super::Command for ConvertCommand {
     }
 
     if let Some(mapping_file_path) = opt_mapping_output {
-      if splitter.is_some() {
-        json::write_file(
-          &mapping_file_path,
-          &exported_files_mapping,
-          if opt_compact {
-            json::UltimateFormatterConfig::COMPACT
-          } else {
-            json::UltimateFormatterConfig::PRETTY
-          },
-        )
-        .with_context(|| format!("Failed to write the mapping file to {:?}", mapping_file_path))?;
+      json::write_file(
+        &mapping_file_path,
+        &exported_files_mapping,
+        if opt_compact {
+          json::UltimateFormatterConfig::COMPACT
+        } else {
+          json::UltimateFormatterConfig::PRETTY
+        },
+      )
+      .with_context(|| format!("Failed to write the mapping file to {:?}", mapping_file_path))?;
 
-        info!("Written the mapping file with {} entries", exported_files_mapping.len());
-      } else {
-        warn!(
-          "Mapping output file was specified, but splitter wasn't. A mapping file doesn't make \
-          sense without splitting."
-        );
-      }
+      info!("Written the mapping file with {} entries", exported_files_mapping.len());
     }
 
     info!("Done!");

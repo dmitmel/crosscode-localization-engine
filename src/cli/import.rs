@@ -63,7 +63,7 @@ impl super::Command for ImportCommand {
           .value_hint(clap::ValueHint::Other)
           .short('f')
           .long("format")
-          .possible_values(importers::IMPORTERS_IDS)
+          .possible_values(importers::REGISTRY.ids())
           .required(true)
           .help("Format to import from."),
       )
@@ -144,7 +144,7 @@ impl super::Command for ImportCommand {
 
     let project = Project::open(opt_project_dir).context("Failed to open the project")?;
     let mut importer =
-      importers::create_by_id(&opt_format).context("Failed to create the importer")?;
+      importers::REGISTRY.create(&opt_format, ()).context("Failed to create the importer")?;
     let mut total_imported_fragments_count = 0;
 
     let inputs = collect_input_files(&opt_inputs, &opt_inputs_file, importer.file_extension())?;
@@ -179,7 +179,7 @@ impl super::Command for ImportCommand {
         if *fragment.original_text() != imported_fragment.original_text {
           warn!(
             "Import {:?}:\n\
-            fragment {:?} {:?}: stale original text, translation are likely outdated",
+            fragment {:?} {:?}: stale original text, translations are likely outdated",
             input_path, imported_fragment.file_path, imported_fragment.json_path,
           );
         }
