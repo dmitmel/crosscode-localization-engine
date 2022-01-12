@@ -60,6 +60,7 @@ for (let [request_index, request] of [
     type: 'VirtualGameFile/list_fragments',
     project_id: 1,
     file_path: 'data/maps/hideout/entrance.json',
+    fragment_fields: ['id', 'game_file_path', 'json_path'],
   },
 ].entries()) {
   let message = {

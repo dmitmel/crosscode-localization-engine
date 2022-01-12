@@ -174,6 +174,18 @@ impl CompactUuidHelper {
   }
 }
 
+#[derive(Debug)]
+pub struct CompactUuidSerializer(pub Uuid);
+
+impl Serialize for CompactUuidSerializer {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    CompactUuidHelper::serialize(&self.0, serializer)
+  }
+}
+
 #[allow(missing_debug_implementations)]
 pub struct OnTheFlyConverter<S: Serializer> {
   ser: S,
@@ -401,5 +413,34 @@ impl<'de, D: Deserializer<'de>> Serialize for ConverterFinalApproachHelper<'de, 
   {
     let de = self.de.borrow_mut().take().unwrap();
     DeserializeSeed::deserialize(OnTheFlyConverter { ser }, de).map_err(S::Error::custom)
+  }
+}
+
+#[derive(Debug)]
+pub struct SerializeSeqIterator<I: IntoIterator>
+where
+  I::Item: Serialize,
+{
+  iter: RefCell<Option<I>>,
+}
+
+impl<I: IntoIterator> SerializeSeqIterator<I>
+where
+  I::Item: Serialize,
+{
+  #[inline(always)]
+  pub fn new(iter: I) -> Self { Self { iter: RefCell::new(Some(iter)) } }
+}
+
+impl<I: IntoIterator> Serialize for SerializeSeqIterator<I>
+where
+  I::Item: Serialize,
+{
+  #[inline(always)]
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    serializer.collect_seq(self.iter.borrow_mut().take().unwrap())
   }
 }

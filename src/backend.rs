@@ -2,11 +2,12 @@ pub mod transports;
 
 use self::transports::Transport;
 use crate::impl_prelude::*;
-use crate::project::Project;
+use crate::project::{Comment, Fragment, Project, Translation};
 use crate::rc_string::{MaybeStaticStr, RcString};
 use crate::utils::{self, RcExt, Timestamp};
 
 use once_cell::sync::Lazy;
+use serde::ser::SerializeSeq as _;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -70,6 +71,22 @@ pub enum RequestMessageType {
     file_path: String,
     start: Option<usize>,
     end: Option<usize>,
+    fragment_fields: Rc<Vec<FragmentField>>,
+    #[serde(default)]
+    translation_fields: Rc<Vec<TranslationField>>,
+    #[serde(default)]
+    comment_fields: Rc<Vec<CommentField>>,
+  },
+  #[serde(rename = "VirtualGameFile/get_fragment", skip_serializing)]
+  VirtualGameFileGetFragment {
+    project_id: u32,
+    file_path: String,
+    json_paths: Vec<RcString>,
+    fragment_fields: Rc<Vec<FragmentField>>,
+    #[serde(default)]
+    translation_fields: Rc<Vec<TranslationField>>,
+    #[serde(default)]
+    comment_fields: Rc<Vec<CommentField>>,
   },
 }
 
@@ -106,60 +123,170 @@ pub enum ResponseMessageType {
   ProjectListVirtualGameFiles { paths: Vec<RcString> },
   #[serde(rename = "VirtualGameFile/list_fragments", skip_deserializing)]
   VirtualGameFileListFragments { fragments: Vec<ListedFragment> },
+  #[serde(rename = "VirtualGameFile/get_fragment", skip_deserializing)]
+  VirtualGameFileGetFragment { fragments: Vec<ListedFragment> },
 }
 
-#[derive(Debug, Clone, Serialize)]
+macro_rules! backend_fields_enum {
+  ({$($tt:tt)+}) => { backend_fields_enum! { $($tt)+ } };
+
+  (
+    $(#[$enum_meta:meta])* $visibility:vis enum $enum_name:ident {
+      $($(#[$variant_meta:meta])* $field_name:ident),+ $(,)?
+    }
+  ) => {
+    #[derive(Debug, Clone, Copy, Deserialize)]
+    #[allow(non_camel_case_types)]
+    $(#[$enum_meta])*
+    $visibility enum $enum_name {
+      $($(#[$variant_meta])* $field_name,)+
+    }
+
+    impl $enum_name {
+      $visibility const ALL: &'static [Self] = &[$(Self::$field_name),+];
+    }
+  };
+}
+
+backend_fields_enum!({
+  pub enum FragmentField {
+    id,
+    tr_file_path,
+    game_file_path,
+    json_path,
+    lang_uid,
+    description,
+    original_text,
+    reference_texts,
+    flags,
+    translations,
+    comments,
+  }
+});
+
+#[derive(Debug, Clone)]
 pub struct ListedFragment {
-  #[serde(with = "utils::serde::CompactUuidHelper")]
-  pub id: Uuid,
-  #[serde(rename = "json")]
-  pub json_path: RcString,
-  #[serde(skip_serializing_if = "utils::is_default", rename = "luid")]
-  pub lang_uid: i32,
-  #[serde(skip_serializing_if = "Vec::is_empty", rename = "desc")]
-  pub description: Rc<Vec<RcString>>,
-  #[serde(rename = "orig")]
-  pub original_text: RcString,
-  #[serde(rename = "refs", skip_serializing_if = "HashMap::is_empty")]
-  pub reference_texts: Rc<HashMap<RcString, RcString>>,
-  #[serde(skip_serializing_if = "HashSet::is_empty")]
-  pub flags: Rc<HashSet<RcString>>,
-  #[serde(skip_serializing_if = "Vec::is_empty", rename = "tr")]
-  pub translations: Vec<ListedTranslation>,
-  #[serde(skip_serializing_if = "Vec::is_empty", rename = "cm")]
-  pub comments: Vec<ListedComment>,
+  pub fragment: Rc<Fragment>,
+  pub fragment_fields: Rc<Vec<FragmentField>>,
+  pub translation_fields: Rc<Vec<TranslationField>>,
+  pub comment_fields: Rc<Vec<CommentField>>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+impl serde::Serialize for ListedFragment {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    let mut seq = serializer.serialize_seq(Some(self.fragment_fields.len()))?;
+    for field in self.fragment_fields.iter() {
+      use FragmentField as F;
+      let f = &self.fragment;
+      match field {
+        F::id => seq.serialize_element(&utils::serde::CompactUuidSerializer(f.id()))?,
+        F::tr_file_path => seq.serialize_element(f.tr_file().relative_path())?,
+        F::game_file_path => seq.serialize_element(f.virtual_game_file().path())?,
+        F::json_path => seq.serialize_element(f.json_path())?,
+        F::lang_uid => seq.serialize_element(&f.lang_uid())?,
+        F::description => seq.serialize_element(f.description())?,
+        F::original_text => seq.serialize_element(f.original_text())?,
+        F::reference_texts => seq.serialize_element(&*f.reference_texts())?,
+        F::flags => seq.serialize_element(&*f.flags())?,
+        F::translations => seq.serialize_element(&utils::serde::SerializeSeqIterator::new(
+          f.translations().iter().map(|t| ListedTranslation {
+            translation: t.share_rc(),
+            translation_fields: self.translation_fields.share_rc(),
+          }),
+        ))?,
+        F::comments => seq.serialize_element(&utils::serde::SerializeSeqIterator::new(
+          f.comments().iter().map(|c| ListedComment {
+            comment: c.share_rc(),
+            comment_fields: self.comment_fields.share_rc(),
+          }),
+        ))?,
+      }
+    }
+    seq.end()
+  }
+}
+
+backend_fields_enum!({
+  pub enum TranslationField {
+    id,
+    author_username,
+    editor_username,
+    creation_timestamp,
+    modification_timestamp,
+    text,
+    flags,
+  }
+});
+
+#[derive(Debug, Clone)]
 pub struct ListedTranslation {
-  #[serde(with = "utils::serde::CompactUuidHelper")]
-  pub id: Uuid,
-  #[serde(rename = "author")]
-  pub author_username: RcString,
-  #[serde(rename = "editor")]
-  pub editor_username: RcString,
-  #[serde(rename = "ctime")]
-  pub creation_timestamp: Timestamp,
-  #[serde(rename = "mtime")]
-  pub modification_timestamp: Timestamp,
-  pub text: RcString,
-  #[serde(skip_serializing_if = "HashSet::is_empty")]
-  pub flags: Rc<HashSet<RcString>>,
+  pub translation: Rc<Translation>,
+  pub translation_fields: Rc<Vec<TranslationField>>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+impl serde::Serialize for ListedTranslation {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    let mut seq = serializer.serialize_seq(Some(self.translation_fields.len()))?;
+    for field in self.translation_fields.iter() {
+      use TranslationField as F;
+      let t = &self.translation;
+      match field {
+        F::id => seq.serialize_element(&utils::serde::CompactUuidSerializer(t.id()))?,
+        F::author_username => seq.serialize_element(t.author_username())?,
+        F::editor_username => seq.serialize_element(&*t.editor_username())?,
+        F::creation_timestamp => seq.serialize_element(&t.creation_timestamp())?,
+        F::modification_timestamp => seq.serialize_element(&t.modification_timestamp())?,
+        F::text => seq.serialize_element(&*t.text())?,
+        F::flags => seq.serialize_element(&*t.flags())?,
+      }
+    }
+    seq.end()
+  }
+}
+
+backend_fields_enum!({
+  pub enum CommentField {
+    id,
+    author_username,
+    editor_username,
+    creation_timestamp,
+    modification_timestamp,
+    text,
+  }
+});
+
+#[derive(Debug, Clone)]
 pub struct ListedComment {
-  #[serde(with = "utils::serde::CompactUuidHelper")]
-  pub id: Uuid,
-  #[serde(rename = "author")]
-  pub author_username: RcString,
-  #[serde(rename = "editor")]
-  pub editor_username: RcString,
-  #[serde(rename = "ctime")]
-  pub creation_timestamp: Timestamp,
-  #[serde(rename = "mtime")]
-  pub modification_timestamp: Timestamp,
-  pub text: RcString,
+  pub comment: Rc<Comment>,
+  pub comment_fields: Rc<Vec<CommentField>>,
+}
+
+impl serde::Serialize for ListedComment {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    let mut seq = serializer.serialize_seq(Some(self.comment_fields.len()))?;
+    for field in self.comment_fields.iter() {
+      use CommentField as F;
+      let c = &self.comment;
+      match field {
+        F::id => seq.serialize_element(&utils::serde::CompactUuidSerializer(c.id()))?,
+        F::author_username => seq.serialize_element(c.author_username())?,
+        F::editor_username => seq.serialize_element(&*c.editor_username())?,
+        F::creation_timestamp => seq.serialize_element(&c.creation_timestamp())?,
+        F::modification_timestamp => seq.serialize_element(&c.modification_timestamp())?,
+        F::text => seq.serialize_element(&*c.text())?,
+      }
+    }
+    seq.end()
+  }
 }
 
 macro_rules! backend_nice_error {
@@ -329,60 +456,73 @@ impl Backend {
         Ok(ResponseMessageType::ProjectListVirtualGameFiles { paths })
       }
 
-      RequestMessageType::VirtualGameFileListFragments { project_id, file_path, start, end } => {
+      RequestMessageType::VirtualGameFileListFragments {
+        project_id,
+        file_path,
+        start,
+        end,
+        fragment_fields,
+        translation_fields,
+        comment_fields,
+      } => {
         let project = match self.projects.get(project_id) {
           Some(v) => v,
           None => backend_nice_error!("project ID not found"),
         };
-        let virt_file = match project.get_virtual_game_file(file_path) {
+        let game_file = match project.get_virtual_game_file(file_path) {
           Some(v) => v,
           None => backend_nice_error!("virtual game file not found"),
         };
-        let all_fragments = virt_file.fragments();
+        let all_fragments = game_file.fragments();
         let (start, end) = Self::validate_range(all_fragments.len(), (*start, *end))?;
         let mut listed_fragments = Vec::with_capacity(end.checked_sub(start).unwrap());
 
         for i in start..end {
           let (_, f) = all_fragments.get_index(i).unwrap();
           listed_fragments.push(ListedFragment {
-            id: f.id(),
-            json_path: f.json_path().share_rc(),
-            lang_uid: f.lang_uid(),
-            description: f.description().share_rc(),
-            original_text: f.original_text().share_rc(),
-            reference_texts: f.reference_texts().share_rc(),
-            flags: f.flags().share_rc(),
-
-            translations: f
-              .translations()
-              .iter()
-              .map(|t| ListedTranslation {
-                id: t.id(),
-                author_username: t.author_username().share_rc(),
-                editor_username: t.editor_username().share_rc(),
-                creation_timestamp: t.creation_timestamp(),
-                modification_timestamp: t.modification_timestamp(),
-                text: t.text().share_rc(),
-                flags: t.flags().share_rc(),
-              })
-              .collect(),
-
-            comments: f
-              .comments()
-              .iter()
-              .map(|t| ListedComment {
-                id: t.id(),
-                author_username: t.author_username().share_rc(),
-                editor_username: t.editor_username().share_rc(),
-                creation_timestamp: t.creation_timestamp(),
-                modification_timestamp: t.modification_timestamp(),
-                text: t.text().share_rc(),
-              })
-              .collect(),
+            fragment: f.share_rc(),
+            fragment_fields: fragment_fields.share_rc(),
+            translation_fields: translation_fields.share_rc(),
+            comment_fields: comment_fields.share_rc(),
           });
         }
 
         Ok(ResponseMessageType::VirtualGameFileListFragments { fragments: listed_fragments })
+      }
+
+      RequestMessageType::VirtualGameFileGetFragment {
+        project_id,
+        file_path,
+        json_paths,
+        fragment_fields,
+        translation_fields,
+        comment_fields,
+      } => {
+        let project = match self.projects.get(project_id) {
+          Some(v) => v,
+          None => backend_nice_error!("project ID not found"),
+        };
+        let game_file = match project.get_virtual_game_file(file_path) {
+          Some(v) => v,
+          None => backend_nice_error!("virtual game file not found"),
+        };
+        let all_fragments = game_file.fragments();
+        let mut listed_fragments = Vec::with_capacity(json_paths.len());
+
+        for json_path in json_paths {
+          let f = match all_fragments.get(json_path) {
+            Some(v) => v,
+            None => backend_nice_error!("fragment not found"),
+          };
+          listed_fragments.push(ListedFragment {
+            fragment: f.share_rc(),
+            fragment_fields: fragment_fields.share_rc(),
+            translation_fields: translation_fields.share_rc(),
+            comment_fields: comment_fields.share_rc(),
+          });
+        }
+
+        Ok(ResponseMessageType::VirtualGameFileGetFragment { fragments: listed_fragments })
       }
     }
   }
