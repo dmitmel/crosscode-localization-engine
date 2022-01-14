@@ -124,7 +124,7 @@ pub enum ResponseMessageType {
   #[serde(rename = "VirtualGameFile/list_fragments", skip_deserializing)]
   VirtualGameFileListFragments { fragments: Vec<ListedFragment> },
   #[serde(rename = "VirtualGameFile/get_fragment", skip_deserializing)]
-  VirtualGameFileGetFragment { fragments: Vec<ListedFragment> },
+  VirtualGameFileGetFragment { fragments: Vec<Option<ListedFragment>> },
 }
 
 macro_rules! backend_fields_enum {
@@ -510,16 +510,12 @@ impl Backend {
         let mut listed_fragments = Vec::with_capacity(json_paths.len());
 
         for json_path in json_paths {
-          let f = match all_fragments.get(json_path) {
-            Some(v) => v,
-            None => backend_nice_error!("fragment not found"),
-          };
-          listed_fragments.push(ListedFragment {
+          listed_fragments.push(all_fragments.get(json_path).map(|f| ListedFragment {
             fragment: f.share_rc(),
             fragment_fields: fragment_fields.share_rc(),
             translation_fields: translation_fields.share_rc(),
             comment_fields: comment_fields.share_rc(),
-          });
+          }))
         }
 
         Ok(ResponseMessageType::VirtualGameFileGetFragment { fragments: listed_fragments })
