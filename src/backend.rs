@@ -71,22 +71,14 @@ pub enum RequestMessageType {
     file_path: String,
     start: Option<usize>,
     end: Option<usize>,
-    fragment_fields: Rc<Vec<FragmentField>>,
-    #[serde(default)]
-    translation_fields: Rc<Vec<TranslationField>>,
-    #[serde(default)]
-    comment_fields: Rc<Vec<CommentField>>,
+    select_fields: Rc<FieldsSelection>,
   },
   #[serde(rename = "VirtualGameFile/get_fragment", skip_serializing)]
   VirtualGameFileGetFragment {
     project_id: u32,
     file_path: String,
     json_paths: Vec<RcString>,
-    fragment_fields: Rc<Vec<FragmentField>>,
-    #[serde(default)]
-    translation_fields: Rc<Vec<TranslationField>>,
-    #[serde(default)]
-    comment_fields: Rc<Vec<CommentField>>,
+    select_fields: Rc<FieldsSelection>,
   },
 }
 
@@ -127,6 +119,16 @@ pub enum ResponseMessageType {
   VirtualGameFileGetFragment { fragments: Vec<Option<ListedFragment>> },
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct FieldsSelection {
+  #[serde(default)]
+  fragments: Vec<FragmentField>,
+  #[serde(default)]
+  translations: Vec<TranslationField>,
+  #[serde(default)]
+  comments: Vec<CommentField>,
+}
+
 macro_rules! backend_fields_enum {
   ({$($tt:tt)+}) => { backend_fields_enum! { $($tt)+ } };
 
@@ -135,7 +137,7 @@ macro_rules! backend_fields_enum {
       $($(#[$variant_meta:meta])* $field_name:ident),+ $(,)?
     }
   ) => {
-    #[derive(Debug, Clone, Copy, Deserialize)]
+    #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
     #[allow(non_camel_case_types)]
     $(#[$enum_meta])*
     $visibility enum $enum_name {
@@ -167,9 +169,7 @@ backend_fields_enum!({
 #[derive(Debug, Clone)]
 pub struct ListedFragment {
   pub fragment: Rc<Fragment>,
-  pub fragment_fields: Rc<Vec<FragmentField>>,
-  pub translation_fields: Rc<Vec<TranslationField>>,
-  pub comment_fields: Rc<Vec<CommentField>>,
+  pub select_fields: Rc<FieldsSelection>,
 }
 
 impl serde::Serialize for ListedFragment {
@@ -177,8 +177,9 @@ impl serde::Serialize for ListedFragment {
   where
     S: serde::Serializer,
   {
-    let mut seq = serializer.serialize_seq(Some(self.fragment_fields.len()))?;
-    for field in self.fragment_fields.iter() {
+    let fields = &self.select_fields.fragments;
+    let mut seq = serializer.serialize_seq(Some(fields.len()))?;
+    for field in fields.iter() {
       use FragmentField as F;
       let f = &self.fragment;
       match field {
@@ -194,13 +195,13 @@ impl serde::Serialize for ListedFragment {
         F::translations => seq.serialize_element(&utils::serde::SerializeSeqIterator::new(
           f.translations().iter().map(|t| ListedTranslation {
             translation: t.share_rc(),
-            translation_fields: self.translation_fields.share_rc(),
+            select_fields: self.select_fields.share_rc(),
           }),
         ))?,
         F::comments => seq.serialize_element(&utils::serde::SerializeSeqIterator::new(
           f.comments().iter().map(|c| ListedComment {
             comment: c.share_rc(),
-            comment_fields: self.comment_fields.share_rc(),
+            select_fields: self.select_fields.share_rc(),
           }),
         ))?,
       }
@@ -224,7 +225,7 @@ backend_fields_enum!({
 #[derive(Debug, Clone)]
 pub struct ListedTranslation {
   pub translation: Rc<Translation>,
-  pub translation_fields: Rc<Vec<TranslationField>>,
+  pub select_fields: Rc<FieldsSelection>,
 }
 
 impl serde::Serialize for ListedTranslation {
@@ -232,8 +233,9 @@ impl serde::Serialize for ListedTranslation {
   where
     S: serde::Serializer,
   {
-    let mut seq = serializer.serialize_seq(Some(self.translation_fields.len()))?;
-    for field in self.translation_fields.iter() {
+    let fields = &self.select_fields.translations;
+    let mut seq = serializer.serialize_seq(Some(fields.len()))?;
+    for field in fields.iter() {
       use TranslationField as F;
       let t = &self.translation;
       match field {
@@ -264,7 +266,7 @@ backend_fields_enum!({
 #[derive(Debug, Clone)]
 pub struct ListedComment {
   pub comment: Rc<Comment>,
-  pub comment_fields: Rc<Vec<CommentField>>,
+  pub select_fields: Rc<FieldsSelection>,
 }
 
 impl serde::Serialize for ListedComment {
@@ -272,8 +274,9 @@ impl serde::Serialize for ListedComment {
   where
     S: serde::Serializer,
   {
-    let mut seq = serializer.serialize_seq(Some(self.comment_fields.len()))?;
-    for field in self.comment_fields.iter() {
+    let fields = &self.select_fields.comments;
+    let mut seq = serializer.serialize_seq(Some(fields.len()))?;
+    for field in fields.iter() {
       use CommentField as F;
       let c = &self.comment;
       match field {
@@ -461,9 +464,7 @@ impl Backend {
         file_path,
         start,
         end,
-        fragment_fields,
-        translation_fields,
-        comment_fields,
+        select_fields,
       } => {
         let project = match self.projects.get(project_id) {
           Some(v) => v,
@@ -481,9 +482,7 @@ impl Backend {
           let (_, f) = all_fragments.get_index(i).unwrap();
           listed_fragments.push(ListedFragment {
             fragment: f.share_rc(),
-            fragment_fields: fragment_fields.share_rc(),
-            translation_fields: translation_fields.share_rc(),
-            comment_fields: comment_fields.share_rc(),
+            select_fields: select_fields.share_rc(),
           });
         }
 
@@ -494,9 +493,7 @@ impl Backend {
         project_id,
         file_path,
         json_paths,
-        fragment_fields,
-        translation_fields,
-        comment_fields,
+        select_fields,
       } => {
         let project = match self.projects.get(project_id) {
           Some(v) => v,
@@ -512,9 +509,7 @@ impl Backend {
         for json_path in json_paths {
           listed_fragments.push(all_fragments.get(json_path).map(|f| ListedFragment {
             fragment: f.share_rc(),
-            fragment_fields: fragment_fields.share_rc(),
-            translation_fields: translation_fields.share_rc(),
-            comment_fields: comment_fields.share_rc(),
+            select_fields: select_fields.share_rc(),
           }))
         }
 
