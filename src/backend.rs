@@ -77,7 +77,7 @@ pub enum RequestMessageType {
   VirtualGameFileGetFragment {
     project_id: u32,
     file_path: String,
-    json_paths: Vec<RcString>,
+    json_path: String,
     select_fields: Rc<FieldsSelection>,
   },
 }
@@ -116,7 +116,7 @@ pub enum ResponseMessageType {
   #[serde(rename = "VirtualGameFile/list_fragments", skip_deserializing)]
   VirtualGameFileListFragments { fragments: Vec<ListedFragment> },
   #[serde(rename = "VirtualGameFile/get_fragment", skip_deserializing)]
-  VirtualGameFileGetFragment { fragments: Vec<Option<ListedFragment>> },
+  VirtualGameFileGetFragment { fragment: ListedFragment },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -492,7 +492,7 @@ impl Backend {
       RequestMessageType::VirtualGameFileGetFragment {
         project_id,
         file_path,
-        json_paths,
+        json_path,
         select_fields,
       } => {
         let project = match self.projects.get(project_id) {
@@ -503,17 +503,17 @@ impl Backend {
           Some(v) => v,
           None => backend_nice_error!("virtual game file not found"),
         };
-        let all_fragments = game_file.fragments();
-        let mut listed_fragments = Vec::with_capacity(json_paths.len());
+        let f = match game_file.get_fragment(json_path) {
+          Some(v) => v,
+          None => backend_nice_error!("virtual game file not found"),
+        };
 
-        for json_path in json_paths {
-          listed_fragments.push(all_fragments.get(json_path).map(|f| ListedFragment {
+        Ok(ResponseMessageType::VirtualGameFileGetFragment {
+          fragment: ListedFragment {
             fragment: f.share_rc(),
             select_fields: select_fields.share_rc(),
-          }))
-        }
-
-        Ok(ResponseMessageType::VirtualGameFileGetFragment { fragments: listed_fragments })
+          },
+        })
       }
     }
   }
