@@ -60,14 +60,13 @@ for (let [request_index, request] of [
     type: 'VirtualGameFile/list_fragments',
     project_id: 1,
     file_path: 'data/maps/hideout/entrance.json',
-    fragment_fields: ['id', 'game_file_path', 'json_path'],
+    select_fields: {
+      fragments: ['id', 'game_file_path', 'json_path'],
+    },
   },
 ].entries()) {
-  let message = {
-    type: 'req',
-    id: request_index + 1,
-    data: request,
-  };
+  let message = [1, request_index + 1, request.type, request];
+  delete request.type;
   let message_str = JSON.stringify(message);
   console.log(`send[${humanizeByteSize(Buffer.byteLength(message_str))}]`, inspect(message));
   backend.send_message(message_str);

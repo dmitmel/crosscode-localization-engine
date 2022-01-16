@@ -2,7 +2,7 @@ import ctypes
 import json
 from pprint import pprint
 
-lib = ctypes.CDLL("./target/debug/libcrosslocale.so")
+lib = ctypes.CDLL("./target/release/libcrosslocale.so")
 
 
 class crosslocale_backend_t(ctypes.Structure):
@@ -55,15 +55,15 @@ lib.crosslocale_init_logging()
 backend = ctypes.POINTER(crosslocale_backend_t)()
 lib.crosslocale_backend_new(ctypes.byref(backend))
 
-for request_index, request in enumerate(
+for request_index, (request_method, request_params) in enumerate(
     [
-        {"type": "Backend/info"},
-        {"type": "Project/open", "dir": "tmp"},
-        {"type": "Project/get_meta", "project_id": 1},
-        {"type": "Project/list_tr_files", "project_id": 1},
+        ("Backend/info", {}),
+        ("Project/open", {"dir": "tmp"}),
+        ("Project/get_meta", {"project_id": 1}),
+        ("Project/list_tr_files", {"project_id": 1}),
     ]
 ):
-    message_json = {"type": "req", "id": request_index + 1, "data": request}
+    message_json = [1, request_index + 1, request_method, request_params]
     pprint(message_json, sort_dicts=False)
     message = json.dumps(message_json)
 

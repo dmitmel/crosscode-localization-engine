@@ -367,8 +367,7 @@ mod tests {
 pub struct StrategicalRegistry<A, R> {
   ids: Vec<&'static str>,
   map: HashMap<&'static str, fn(A) -> AnyResult<R>>,
-  _phantom: PhantomData<A>,
-  _phantom2: PhantomData<R>,
+  _phantom: PhantomData<(A, R)>,
 }
 
 impl<A, R> StrategicalRegistry<A, R>
@@ -380,9 +379,11 @@ where
     let mut map = HashMap::new();
     for decl in inventory::iter::<StrategyDeclaration<A, R>> {
       ids.push(decl.id);
-      map.insert(decl.id, decl.ctor);
+      if map.insert(decl.id, decl.ctor).is_some() {
+        panic!("Duplicate strategy was registered for: {:?}", decl.id);
+      }
     }
-    Self { ids, map, _phantom: PhantomData, _phantom2: PhantomData }
+    Self { ids, map, _phantom: PhantomData }
   }
 
   #[inline(always)]
@@ -394,7 +395,7 @@ where
 
   pub fn create(&self, id: &str, args: A) -> AnyResult<R> {
     let constructor =
-      self.map.get(id).ok_or_else(|| format_err!("strategy not found {:?}", id))?;
+      self.map.get(id).ok_or_else(|| format_err!("Strategy not found: {:?}", id))?;
     constructor(args)
   }
 }

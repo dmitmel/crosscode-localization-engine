@@ -1,123 +1,126 @@
+#[macro_use]
+pub mod error;
+
+pub mod handlers;
 pub mod transports;
 
+use self::error::BackendNiceError;
 use self::transports::Transport;
 use crate::impl_prelude::*;
 use crate::project::{Comment, Fragment, Project, Translation};
-use crate::rc_string::{MaybeStaticStr, RcString};
-use crate::utils::{self, RcExt, Timestamp};
+use crate::rc_string::MaybeStaticStr;
+use crate::utils::json::Value as JsonValue;
+use crate::utils::{self, RcExt};
 
 use once_cell::sync::Lazy;
+use serde::de::DeserializeOwned;
 use serde::ser::SerializeSeq as _;
 use serde::{Deserialize, Serialize};
+use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt;
-use std::path::PathBuf;
 use std::rc::Rc;
-use uuid::Uuid;
 
 pub const PROTOCOL_VERSION: u32 = 0;
 pub static PROTOCOL_VERSION_STR: Lazy<String> = Lazy::new(|| PROTOCOL_VERSION.to_string());
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(u8)]
+enum MessageType {
+  Request = 1,
+  Response = 2,
+  ErrorResponse = 3,
+}
+
+impl MessageType {
+  fn from_int(n: u8) -> Option<Self> {
+    Some(match n {
+      1 => Self::Request,
+      2 => Self::Response,
+      3 => Self::ErrorResponse,
+      _ => return None,
+    })
+  }
+}
+
+#[derive(Debug, Clone)]
 pub enum Message {
-  #[serde(rename = "req")]
   Request(RequestMessage),
-  #[serde(rename = "res")]
   Response(ResponseMessage),
-  #[serde(rename = "err")]
   ErrorResponse(ErrorResponseMessage),
-  // Notification(NotificationMessage),
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+/// `u32`s are used because JS only has 32-bit integers. And 64-bit floats, but
+/// those aren't really convenient for storing IDs.
+pub type Id = u32;
+
+#[derive(Debug, Clone)]
 pub struct RequestMessage {
-  id: u32,
-  data: RequestMessageType,
+  id: Id,
+  method: MaybeStaticStr,
+  params: JsonValue,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone)]
 pub struct ResponseMessage {
-  id: u32,
-  data: ResponseMessageType,
+  id: Id,
+  result: JsonValue,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone)]
 pub struct ErrorResponseMessage {
-  id: Option<u32>,
+  id: Option<Id>,
   message: MaybeStaticStr,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "type")]
-pub enum RequestMessageType {
-  #[serde(rename = "Backend/info", skip_serializing)]
-  BackendInfo {},
-  #[serde(rename = "Project/open", skip_serializing)]
-  ProjectOpen { dir: PathBuf },
-  #[serde(rename = "Project/close", skip_serializing)]
-  ProjectClose { project_id: u32 },
-  #[serde(rename = "Project/get_meta", skip_serializing)]
-  ProjectGetMeta { project_id: u32 },
-  #[serde(rename = "Project/list_tr_files", skip_serializing)]
-  ProjectListTrFiles { project_id: u32 },
-  #[serde(rename = "Project/list_virtual_game_files", skip_serializing)]
-  ProjectListVirtualGameFiles { project_id: u32 },
-  #[serde(rename = "VirtualGameFile/list_fragments", skip_serializing)]
-  VirtualGameFileListFragments {
-    project_id: u32,
-    file_path: String,
-    start: Option<usize>,
-    end: Option<usize>,
-    select_fields: Rc<FieldsSelection>,
-  },
-  #[serde(rename = "VirtualGameFile/get_fragment", skip_serializing)]
-  VirtualGameFileGetFragment {
-    project_id: u32,
-    file_path: String,
-    json_path: String,
-    select_fields: Rc<FieldsSelection>,
-  },
+pub trait Method: Sized + DeserializeOwned + 'static {
+  fn name() -> &'static str;
+
+  type Result: Sized + Serialize + 'static;
+
+  fn handler(_backend: &mut Backend, _params: Self) -> AnyResult<Self::Result> {
+    backend_nice_error!("the backend doesn't handle this request")
+  }
+
+  fn declaration() -> MethodDeclaration {
+    MethodDeclaration {
+      name: Self::name(),
+      deserialize_request: |json| Ok(Box::new(serde_json::from_value::<Self>(json)?)),
+      serialize_response: |any| serde_json::to_value(any.downcast::<Self::Result>().unwrap()),
+      handle_call: |bk, any| Ok(Box::new(Self::handler(bk, *any.downcast::<Self>().unwrap())?)),
+    }
+  }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "type")]
-pub enum ResponseMessageType {
-  #[serde(rename = "ok", skip_deserializing)]
-  Ok,
-  #[serde(rename = "Backend/info", skip_deserializing)]
-  BackendInfo {
-    implementation_name: MaybeStaticStr,
-    implementation_version: MaybeStaticStr,
-    implementation_nice_version: MaybeStaticStr,
-  },
-  #[serde(rename = "Project/open", skip_deserializing)]
-  ProjectOpen { project_id: u32 },
-  #[serde(rename = "Project/get_meta", skip_deserializing)]
-  ProjectGetMeta {
-    root_dir: PathBuf,
-    #[serde(with = "utils::serde::CompactUuidHelper")]
-    id: Uuid,
-    creation_timestamp: Timestamp,
-    modification_timestamp: Timestamp,
-    game_version: RcString,
-    original_locale: RcString,
-    reference_locales: Rc<HashSet<RcString>>,
-    translation_locale: RcString,
-    translations_dir: RcString,
-    splitter: MaybeStaticStr,
-  },
-  #[serde(rename = "Project/list_tr_files", skip_deserializing)]
-  ProjectListTrFiles { paths: Vec<RcString> },
-  #[serde(rename = "Project/list_virtual_game_files", skip_deserializing)]
-  ProjectListVirtualGameFiles { paths: Vec<RcString> },
-  #[serde(rename = "VirtualGameFile/list_fragments", skip_deserializing)]
-  VirtualGameFileListFragments { fragments: Vec<ListedFragment> },
-  #[serde(rename = "VirtualGameFile/get_fragment", skip_deserializing)]
-  VirtualGameFileGetFragment { fragment: ListedFragment },
+#[allow(clippy::type_complexity)]
+#[derive(Clone)]
+pub struct MethodDeclaration {
+  pub name: &'static str,
+  pub deserialize_request: fn(JsonValue) -> serde_json::Result<Box<dyn Any>>,
+  pub serialize_response: fn(Box<dyn Any>) -> serde_json::Result<JsonValue>,
+  pub handle_call: fn(&'_ mut Backend, Box<dyn Any>) -> AnyResult<Box<dyn Any>>,
 }
+
+impl fmt::Debug for MethodDeclaration {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    f.debug_struct("MethodDeclaration")
+      .field("name", &self.name)
+      // <https://github.com/rust-lang/rust/blob/1.58.0/library/core/src/ptr/mod.rs#L1440-L1450>
+      .field("deserialize_request", &(self.deserialize_request as usize as *const ()))
+      .field("serialize_response", &(self.serialize_response as usize as *const ()))
+      .field("handle_call", &(self.handle_call as usize as *const ()))
+      .finish()
+  }
+}
+
+inventory::collect!(MethodDeclaration);
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub enum RequestMessageType {}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub enum ResponseMessageType {}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FieldsSelection {
@@ -292,41 +295,158 @@ impl serde::Serialize for ListedComment {
   }
 }
 
-macro_rules! backend_nice_error {
-  ($message:expr $(, $source:expr)? $(,)?) => {{
-    let message = $message;
-    #[allow(unused_mut)]
-    let mut err = BackendNiceError::from(message);
-    $(err.source = Some($source);)?
-    return Err(AnyError::from(err));
-  }};
-}
-
 #[derive(Debug)]
 pub struct Backend {
   transport: Box<dyn Transport>,
   project_id_alloc: IdAllocator,
-  projects: HashMap<u32, Rc<Project>>,
+  projects: HashMap<Id, Rc<Project>>,
+  methods_registry: HashMap<&'static str, &'static MethodDeclaration>,
 }
 
 impl Backend {
   pub fn new(transport: Box<dyn Transport>) -> Self {
+    let mut methods_registry = HashMap::new();
+    for decl in inventory::iter::<MethodDeclaration> {
+      let decl: &MethodDeclaration = decl;
+      if methods_registry.insert(decl.name, decl).is_some() {
+        panic!("Duplicate method registered for name: {:?}", decl.name);
+      }
+    }
+
     Self {
       transport,
       project_id_alloc: IdAllocator::new(),
       // I assume that at least one project will be opened because otherwise
       // (without opening a project) the backend is pretty much useless
       projects: HashMap::with_capacity(1),
+      methods_registry,
     }
   }
 
+  pub fn deserialize_message(buf: &str) -> serde_json::Result<Message> {
+    use serde::de::Error as DeError;
+
+    struct MessageVisitor {}
+
+    impl<'de> serde::de::Visitor<'de> for MessageVisitor {
+      type Value = Message;
+
+      fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("Message array")
+      }
+
+      #[inline]
+      fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+      where
+        A: serde::de::SeqAccess<'de>,
+      {
+        let msg_type = match seq.next_element::<u8>()? {
+          Some(v) => v,
+          None => return Err(DeError::invalid_length(0, &"message type")),
+        };
+
+        match MessageType::from_int(msg_type) {
+          Some(MessageType::Request) => {
+            let msg_id = match seq.next_element::<Id>()? {
+              Some(v) => v,
+              None => return Err(DeError::invalid_length(1, &"message ID")),
+            };
+            let method = match seq.next_element::<String>()? {
+              Some(v) => v,
+              None => return Err(DeError::invalid_length(2, &"request message method")),
+            };
+            let params = match seq.next_element::<JsonValue>()? {
+              Some(v) => v,
+              None => return Err(DeError::invalid_length(3, &"request message params")),
+            };
+            Ok(Message::Request(RequestMessage { id: msg_id, method: Cow::Owned(method), params }))
+          }
+
+          Some(MessageType::Response) => {
+            let msg_id = match seq.next_element::<Id>()? {
+              Some(v) => v,
+              None => return Err(DeError::invalid_length(1, &"message ID")),
+            };
+            let result = match seq.next_element::<JsonValue>()? {
+              Some(v) => v,
+              None => return Err(DeError::invalid_length(2, &"response message result")),
+            };
+            Ok(Message::Response(ResponseMessage { id: msg_id, result }))
+          }
+
+          Some(MessageType::ErrorResponse) => {
+            let msg_id = match seq.next_element::<Option<Id>>()? {
+              Some(v) => v,
+              None => return Err(DeError::invalid_length(1, &"message ID")),
+            };
+            let err_msg = match seq.next_element::<String>()? {
+              Some(v) => v,
+              None => return Err(DeError::invalid_length(2, &"error response message text")),
+            };
+            Ok(Message::ErrorResponse(ErrorResponseMessage {
+              id: msg_id,
+              message: Cow::Owned(err_msg),
+            }))
+          }
+
+          None => {
+            return Err(DeError::invalid_value(
+              serde::de::Unexpected::Unsigned(msg_type as u64),
+              &"message type 1 <= i <= 3",
+            ))
+          }
+        }
+      }
+    }
+
+    use serde::Deserializer;
+    let mut de = serde_json::Deserializer::from_str(buf);
+    let msg = de.deserialize_seq(MessageVisitor {})?;
+    de.end()?;
+    Ok(msg)
+  }
+
+  pub fn serialize_message(buf: &mut Vec<u8>, msg: Message) -> serde_json::Result<()> {
+    use serde::Serializer;
+    let mut ser = serde_json::Serializer::new(buf);
+
+    match msg {
+      Message::Request(msg) => {
+        let mut seq = ser.serialize_seq(Some(4))?;
+        seq.serialize_element(&(MessageType::Request as u8))?;
+        seq.serialize_element(&msg.id)?;
+        seq.serialize_element(&msg.method)?;
+        seq.serialize_element(&msg.params)?;
+        seq.end()?;
+      }
+
+      Message::Response(msg) => {
+        let mut seq = ser.serialize_seq(Some(3))?;
+        seq.serialize_element(&(MessageType::Response as u8))?;
+        seq.serialize_element(&msg.id)?;
+        seq.serialize_element(&msg.result)?;
+        seq.end()?;
+      }
+
+      Message::ErrorResponse(msg) => {
+        let mut seq = ser.serialize_seq(Some(3))?;
+        seq.serialize_element(&(MessageType::ErrorResponse as u8))?;
+        seq.serialize_element(&msg.id)?;
+        seq.serialize_element(&msg.message)?;
+        seq.end()?;
+      }
+    }
+
+    Ok(())
+  }
+
   pub fn start(&mut self) -> AnyResult<()> {
-    let mut message_index: u32 = 0;
+    let mut message_index: usize = 0;
     loop {
       let result = try_any_result!({
         let buf = self.transport.recv().context("Failed to receive message from the transport")?;
 
-        let in_msg: serde_json::Result<Message> = match serde_json::from_str::<Message>(&buf) {
+        let in_msg: serde_json::Result<Message> = match Self::deserialize_message(&buf) {
           Err(e) if !e.is_io() => {
             warn!("Failed to deserialize message(index={}): {}", message_index, e);
             Err(e)
@@ -343,11 +463,19 @@ impl Backend {
             match self.process_message(in_msg) {
               Ok(out_msg) => out_msg,
               Err(e) => {
-                let e: BackendNiceError = e.downcast()?;
-                if let Some(e2) = e.source {
-                  crate::report_error(e2);
+                let mut message = "internal backend error".into();
+                match e.downcast::<BackendNiceError>() {
+                  Ok(e) => {
+                    message = e.message;
+                    if let Some(e) = e.source {
+                      crate::report_error(e);
+                    }
+                  }
+                  Err(e) => {
+                    crate::report_error(e);
+                  }
                 }
-                Message::ErrorResponse(ErrorResponseMessage { id: in_msg_id, message: e.message })
+                Message::ErrorResponse(ErrorResponseMessage { id: in_msg_id, message })
               }
             }
           }
@@ -358,7 +486,7 @@ impl Backend {
         };
 
         let mut buf = Vec::new();
-        serde_json::to_writer(&mut buf, &out_msg).context("Failed to serialize")?;
+        Self::serialize_message(&mut buf, out_msg).context("Failed to serialize message")?;
         // Safe because serde_json doesn't emit invalid UTF-8, and besides JSON
         // files are required to be encoded as UTF-8 by the specification. See
         // <https://tools.ietf.org/html/rfc8259#section-8.1>.
@@ -373,6 +501,9 @@ impl Backend {
           warn!("The frontend has disconnected, exiting cleanly");
           break;
         }
+        Err(e) => {
+          crate::report_error(e);
+        }
         _ => {}
       }
 
@@ -383,163 +514,31 @@ impl Backend {
   }
 
   #[allow(clippy::unnecessary_wraps)]
-  fn process_message(&mut self, message: Message) -> AnyResult<Message> {
-    Ok(match message {
-      Message::Request(request_msg) => Message::Response(ResponseMessage {
-        id: request_msg.id,
-        data: self.process_request(request_msg.data)?,
-      }),
+  fn process_message(&mut self, msg: Message) -> AnyResult<Message> {
+    Ok(match msg {
+      Message::Request(msg) => {
+        let method_decl: &'static MethodDeclaration = match self.methods_registry.get(&*msg.method)
+        {
+          Some(v) => *v,
+          None => backend_nice_error!("unknown method"),
+        };
+        let params = (method_decl.deserialize_request)(msg.params)
+          .context("Failed to deserialize message parameters")?;
+        let result = (method_decl.handle_call)(self, params)?;
+        let json_result = (method_decl.serialize_response)(result)
+          .context("Failed to serialize message result")?;
+        Message::Response(ResponseMessage { id: msg.id, result: json_result })
+      }
       Message::Response(_) | Message::ErrorResponse(_) => {
         backend_nice_error!("the backend currently can't receive responses");
       }
     })
   }
-
-  #[allow(clippy::unnecessary_wraps)]
-  fn process_request(&mut self, message: RequestMessageType) -> AnyResult<ResponseMessageType> {
-    match &message {
-      RequestMessageType::BackendInfo {} => Ok(ResponseMessageType::BackendInfo {
-        implementation_name: Cow::Borrowed(crate::CRATE_NAME),
-        implementation_version: Cow::Borrowed(crate::CRATE_VERSION),
-        implementation_nice_version: Cow::Borrowed(crate::CRATE_NICE_VERSION),
-      }),
-
-      RequestMessageType::ProjectOpen { dir: project_dir } => {
-        let project = match Project::open(project_dir.clone())
-          .with_context(|| format!("Failed to open project in {:?}", project_dir))
-        {
-          Ok(v) => v,
-          Err(e) => backend_nice_error!("failed to open project", e),
-        };
-        let project_id = self.project_id_alloc.next().unwrap();
-        self.projects.insert(project_id, project);
-        Ok(ResponseMessageType::ProjectOpen { project_id })
-      }
-
-      RequestMessageType::ProjectClose { project_id } => match self.projects.remove(project_id) {
-        Some(_project) => Ok(ResponseMessageType::Ok),
-        None => backend_nice_error!("project ID not found"),
-      },
-
-      RequestMessageType::ProjectGetMeta { project_id } => {
-        let project = match self.projects.get(project_id) {
-          Some(v) => v,
-          None => backend_nice_error!("project ID not found"),
-        };
-        let meta = project.meta();
-        Ok(ResponseMessageType::ProjectGetMeta {
-          root_dir: project.root_dir().to_owned(),
-          id: meta.id(),
-          creation_timestamp: meta.creation_timestamp(),
-          modification_timestamp: meta.modification_timestamp(),
-          game_version: meta.game_version().share_rc(),
-          original_locale: meta.original_locale().share_rc(),
-          reference_locales: meta.reference_locales().share_rc(),
-          translation_locale: meta.translation_locale().share_rc(),
-          translations_dir: meta.translations_dir().share_rc(),
-          splitter: Cow::Borrowed(meta.splitter().id()),
-        })
-      }
-
-      RequestMessageType::ProjectListTrFiles { project_id } => {
-        let project = match self.projects.get(project_id) {
-          Some(v) => v,
-          None => backend_nice_error!("project ID not found"),
-        };
-        let paths: Vec<RcString> = project.tr_files().keys().cloned().collect();
-        Ok(ResponseMessageType::ProjectListTrFiles { paths })
-      }
-
-      RequestMessageType::ProjectListVirtualGameFiles { project_id } => {
-        let project = match self.projects.get(project_id) {
-          Some(v) => v,
-          None => backend_nice_error!("project ID not found"),
-        };
-        let paths: Vec<RcString> = project.virtual_game_files().keys().cloned().collect();
-        Ok(ResponseMessageType::ProjectListVirtualGameFiles { paths })
-      }
-
-      RequestMessageType::VirtualGameFileListFragments {
-        project_id,
-        file_path,
-        start,
-        end,
-        select_fields,
-      } => {
-        let project = match self.projects.get(project_id) {
-          Some(v) => v,
-          None => backend_nice_error!("project ID not found"),
-        };
-        let game_file = match project.get_virtual_game_file(file_path) {
-          Some(v) => v,
-          None => backend_nice_error!("virtual game file not found"),
-        };
-        let all_fragments = game_file.fragments();
-        let (start, end) = Self::validate_range(all_fragments.len(), (*start, *end))?;
-        let mut listed_fragments = Vec::with_capacity(end.checked_sub(start).unwrap());
-
-        for i in start..end {
-          let (_, f) = all_fragments.get_index(i).unwrap();
-          listed_fragments.push(ListedFragment {
-            fragment: f.share_rc(),
-            select_fields: select_fields.share_rc(),
-          });
-        }
-
-        Ok(ResponseMessageType::VirtualGameFileListFragments { fragments: listed_fragments })
-      }
-
-      RequestMessageType::VirtualGameFileGetFragment {
-        project_id,
-        file_path,
-        json_path,
-        select_fields,
-      } => {
-        let project = match self.projects.get(project_id) {
-          Some(v) => v,
-          None => backend_nice_error!("project ID not found"),
-        };
-        let game_file = match project.get_virtual_game_file(file_path) {
-          Some(v) => v,
-          None => backend_nice_error!("virtual game file not found"),
-        };
-        let f = match game_file.get_fragment(json_path) {
-          Some(v) => v,
-          None => backend_nice_error!("virtual game file not found"),
-        };
-
-        Ok(ResponseMessageType::VirtualGameFileGetFragment {
-          fragment: ListedFragment {
-            fragment: f.share_rc(),
-            select_fields: select_fields.share_rc(),
-          },
-        })
-      }
-    }
-  }
-
-  /// Based on <https://github.com/rust-lang/rust/blob/0c341226ad3780c11b1f29f6da8172b1d653f9ef/library/core/src/slice/index.rs#L514-L548>.
-  fn validate_range(
-    len: usize,
-    range: (Option<usize>, Option<usize>),
-  ) -> AnyResult<(usize, usize)> {
-    let (start, end) = range;
-    let (start, end) = (start.unwrap_or(0), end.unwrap_or(len));
-    if start > end {
-      backend_nice_error!("start > end");
-    }
-    if end > len {
-      backend_nice_error!("end > len");
-    }
-    Ok((start, end))
-  }
 }
 
 #[derive(Debug, Clone)]
 pub struct IdAllocator {
-  /// `u32`s are used because JS only has 32-bit integers. And 64-bit floats,
-  /// but those aren't really convenient for storing IDs.
-  current_id: u32,
+  current_id: Id,
   pub only_nonzero: bool,
   pub wrap_around: bool,
 }
@@ -549,11 +548,11 @@ impl IdAllocator {
 }
 
 impl Iterator for IdAllocator {
-  type Item = u32;
+  type Item = Id;
   fn next(&mut self) -> Option<Self::Item> {
     // Clever branchless hack. Will take a max value with 1 when `only_nonzero`
     // is true, will not affect `self.next_id` otherwise.
-    let id = self.current_id.max(self.only_nonzero as u32);
+    let id = self.current_id.max(self.only_nonzero as Id);
     let (next_id, overflow) = id.overflowing_add(1);
     if overflow && !self.wrap_around {
       None
@@ -561,37 +560,5 @@ impl Iterator for IdAllocator {
       self.current_id = next_id;
       Some(id)
     }
-  }
-}
-
-#[derive(Debug)]
-pub struct BackendNiceError {
-  pub message: MaybeStaticStr,
-  pub source: Option<AnyError>,
-}
-
-impl From<&'static str> for BackendNiceError {
-  fn from(message: &'static str) -> Self { Self { message: Cow::Borrowed(message), source: None } }
-}
-
-impl From<String> for BackendNiceError {
-  fn from(message: String) -> Self { Self { message: Cow::Owned(message), source: None } }
-}
-
-impl fmt::Display for BackendNiceError {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(
-      f,
-      "BackendError (you are most likely seeing this error because of a bug; it should've been \
-      sent over the backend protocol and handled by the frontend): {}",
-      self.message,
-    )
-  }
-}
-
-impl StdError for BackendNiceError {
-  #[inline]
-  fn source(&self) -> Option<&(dyn StdError + 'static)> {
-    self.source.as_ref().map(AnyError::as_ref)
   }
 }
