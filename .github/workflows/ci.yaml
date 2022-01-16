@@ -81,8 +81,16 @@ jobs:
           npm run node-gyp rebuild -- --debug -- -D rust_build_profile=debug
 
       - name: Test Node.js bindings
-        working-directory: node-bindings
-        run: node test.js
+        run: |
+          crosslocale="$PWD/target/debug/crosslocale"
+          test_js="$PWD/node-bindings/test.js"
+          cd "${RUNNER_TEMP}"
+          wget http://stronghold.crosscode.ru/~notabridge/crosscode.tgz
+          wget https://github.com/dmitmel/crosslocale-scans/raw/main/scan-1.4.2-1.json
+          tar xzvf crosscode.tgz
+          "$crosslocale" create-project ./tmp --translation-locale=ru_RU ./scan-1.4.2-1.json
+          "$crosslocale" import ./tmp --format=cc-ru-chapter-fragments ./crosscode/chapter-fragments
+          node "$test_js"
 
       - name: clang-format
         if: runner.os == 'Linux'
