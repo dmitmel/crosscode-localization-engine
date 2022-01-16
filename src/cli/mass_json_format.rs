@@ -3,7 +3,6 @@ use crate::impl_prelude::*;
 use crate::progress::ProgressReporter;
 use crate::rc_string::RcString;
 use crate::utils::json;
-use crate::utils::serde as serde_utils;
 use crate::utils::RcExt;
 
 use std::convert::TryFrom;
@@ -284,7 +283,7 @@ fn format_buffer(
     &mut output_bytes,
     json::UltimateFormatter::new(json_config),
   );
-  serde_utils::OnTheFlyConverter::convert(&mut serializer, &mut deserializer)?;
+  serde_transcode::transcode(&mut deserializer, &mut serializer)?;
   deserializer.end()?;
   if !output_bytes.ends_with(b"\n") {
     output_bytes.push(b'\n');
