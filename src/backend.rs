@@ -74,6 +74,124 @@ pub struct ErrorResponseMessage {
   message: MaybeStaticStr,
 }
 
+impl<'de> Deserialize<'de> for Message {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: serde::Deserializer<'de>,
+  {
+    use serde::de::Error as DeError;
+
+    struct MessageVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for MessageVisitor {
+      type Value = Message;
+
+      fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("Message array")
+      }
+
+      #[inline]
+      fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+      where
+        A: serde::de::SeqAccess<'de>,
+      {
+        let msg_type = match seq.next_element::<u8>()? {
+          Some(v) => v,
+          None => return Err(DeError::invalid_length(0, &"message type")),
+        };
+
+        match MessageType::from_int(msg_type) {
+          Some(MessageType::Request) => {
+            let msg_id = match seq.next_element::<Id>()? {
+              Some(v) => v,
+              None => return Err(DeError::invalid_length(1, &"message ID")),
+            };
+            let method = match seq.next_element::<String>()? {
+              Some(v) => v,
+              None => return Err(DeError::invalid_length(2, &"request message method")),
+            };
+            let params = match seq.next_element::<JsonValue>()? {
+              Some(v) => v,
+              None => return Err(DeError::invalid_length(3, &"request message params")),
+            };
+            Ok(Message::Request(RequestMessage { id: msg_id, method: Cow::Owned(method), params }))
+          }
+
+          Some(MessageType::Response) => {
+            let msg_id = match seq.next_element::<Id>()? {
+              Some(v) => v,
+              None => return Err(DeError::invalid_length(1, &"message ID")),
+            };
+            let result = match seq.next_element::<JsonValue>()? {
+              Some(v) => v,
+              None => return Err(DeError::invalid_length(2, &"response message result")),
+            };
+            Ok(Message::Response(ResponseMessage { id: msg_id, result }))
+          }
+
+          Some(MessageType::ErrorResponse) => {
+            let msg_id = match seq.next_element::<Option<Id>>()? {
+              Some(v) => v,
+              None => return Err(DeError::invalid_length(1, &"message ID")),
+            };
+            let err_msg = match seq.next_element::<String>()? {
+              Some(v) => v,
+              None => return Err(DeError::invalid_length(2, &"error response message text")),
+            };
+            Ok(Message::ErrorResponse(ErrorResponseMessage {
+              id: msg_id,
+              message: Cow::Owned(err_msg),
+            }))
+          }
+
+          None => {
+            return Err(DeError::invalid_value(
+              serde::de::Unexpected::Unsigned(msg_type as u64),
+              &"message type 1 <= i <= 3",
+            ))
+          }
+        }
+      }
+    }
+
+    deserializer.deserialize_seq(MessageVisitor)
+  }
+}
+
+impl Serialize for Message {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    match self {
+      Message::Request(msg) => {
+        let mut seq = serializer.serialize_seq(Some(4))?;
+        seq.serialize_element(&(MessageType::Request as u8))?;
+        seq.serialize_element(&msg.id)?;
+        seq.serialize_element(&msg.method)?;
+        seq.serialize_element(&msg.params)?;
+        seq.end()
+      }
+
+      Message::Response(msg) => {
+        let mut seq = serializer.serialize_seq(Some(3))?;
+        seq.serialize_element(&(MessageType::Response as u8))?;
+        seq.serialize_element(&msg.id)?;
+        seq.serialize_element(&msg.result)?;
+        seq.end()
+      }
+
+      Message::ErrorResponse(msg) => {
+        let mut seq = serializer.serialize_seq(Some(3))?;
+        seq.serialize_element(&(MessageType::ErrorResponse as u8))?;
+        seq.serialize_element(&msg.id)?;
+        seq.serialize_element(&msg.message)?;
+        seq.end()
+      }
+    }
+  }
+}
+
 pub trait Method: Sized + DeserializeOwned + 'static {
   fn name() -> &'static str;
 
@@ -115,12 +233,6 @@ impl fmt::Debug for MethodDeclaration {
 }
 
 inventory::collect!(MethodDeclaration);
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub enum RequestMessageType {}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub enum ResponseMessageType {}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FieldsSelection {
@@ -323,130 +435,13 @@ impl Backend {
     }
   }
 
-  pub fn deserialize_message(buf: &str) -> serde_json::Result<Message> {
-    use serde::de::Error as DeError;
-
-    struct MessageVisitor {}
-
-    impl<'de> serde::de::Visitor<'de> for MessageVisitor {
-      type Value = Message;
-
-      fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("Message array")
-      }
-
-      #[inline]
-      fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-      where
-        A: serde::de::SeqAccess<'de>,
-      {
-        let msg_type = match seq.next_element::<u8>()? {
-          Some(v) => v,
-          None => return Err(DeError::invalid_length(0, &"message type")),
-        };
-
-        match MessageType::from_int(msg_type) {
-          Some(MessageType::Request) => {
-            let msg_id = match seq.next_element::<Id>()? {
-              Some(v) => v,
-              None => return Err(DeError::invalid_length(1, &"message ID")),
-            };
-            let method = match seq.next_element::<String>()? {
-              Some(v) => v,
-              None => return Err(DeError::invalid_length(2, &"request message method")),
-            };
-            let params = match seq.next_element::<JsonValue>()? {
-              Some(v) => v,
-              None => return Err(DeError::invalid_length(3, &"request message params")),
-            };
-            Ok(Message::Request(RequestMessage { id: msg_id, method: Cow::Owned(method), params }))
-          }
-
-          Some(MessageType::Response) => {
-            let msg_id = match seq.next_element::<Id>()? {
-              Some(v) => v,
-              None => return Err(DeError::invalid_length(1, &"message ID")),
-            };
-            let result = match seq.next_element::<JsonValue>()? {
-              Some(v) => v,
-              None => return Err(DeError::invalid_length(2, &"response message result")),
-            };
-            Ok(Message::Response(ResponseMessage { id: msg_id, result }))
-          }
-
-          Some(MessageType::ErrorResponse) => {
-            let msg_id = match seq.next_element::<Option<Id>>()? {
-              Some(v) => v,
-              None => return Err(DeError::invalid_length(1, &"message ID")),
-            };
-            let err_msg = match seq.next_element::<String>()? {
-              Some(v) => v,
-              None => return Err(DeError::invalid_length(2, &"error response message text")),
-            };
-            Ok(Message::ErrorResponse(ErrorResponseMessage {
-              id: msg_id,
-              message: Cow::Owned(err_msg),
-            }))
-          }
-
-          None => {
-            return Err(DeError::invalid_value(
-              serde::de::Unexpected::Unsigned(msg_type as u64),
-              &"message type 1 <= i <= 3",
-            ))
-          }
-        }
-      }
-    }
-
-    use serde::Deserializer;
-    let mut de = serde_json::Deserializer::from_str(buf);
-    let msg = de.deserialize_seq(MessageVisitor {})?;
-    de.end()?;
-    Ok(msg)
-  }
-
-  pub fn serialize_message(buf: &mut Vec<u8>, msg: Message) -> serde_json::Result<()> {
-    use serde::Serializer;
-    let mut ser = serde_json::Serializer::new(buf);
-
-    match msg {
-      Message::Request(msg) => {
-        let mut seq = ser.serialize_seq(Some(4))?;
-        seq.serialize_element(&(MessageType::Request as u8))?;
-        seq.serialize_element(&msg.id)?;
-        seq.serialize_element(&msg.method)?;
-        seq.serialize_element(&msg.params)?;
-        seq.end()?;
-      }
-
-      Message::Response(msg) => {
-        let mut seq = ser.serialize_seq(Some(3))?;
-        seq.serialize_element(&(MessageType::Response as u8))?;
-        seq.serialize_element(&msg.id)?;
-        seq.serialize_element(&msg.result)?;
-        seq.end()?;
-      }
-
-      Message::ErrorResponse(msg) => {
-        let mut seq = ser.serialize_seq(Some(3))?;
-        seq.serialize_element(&(MessageType::ErrorResponse as u8))?;
-        seq.serialize_element(&msg.id)?;
-        seq.serialize_element(&msg.message)?;
-        seq.end()?;
-      }
-    }
-
-    Ok(())
-  }
-
   pub fn start(&mut self) -> AnyResult<()> {
     let mut message_index: usize = 0;
     loop {
       let result = try_any_result!({
         let buf = self.transport.recv().context("Failed to receive message from the transport")?;
 
-        let in_msg: serde_json::Result<Message> = match Self::deserialize_message(&buf) {
+        let in_msg: serde_json::Result<Message> = match serde_json::from_str(&buf) {
           Err(e) if !e.is_io() => {
             warn!("Failed to deserialize message(index={}): {}", message_index, e);
             Err(e)
@@ -486,7 +481,7 @@ impl Backend {
         };
 
         let mut buf = Vec::new();
-        Self::serialize_message(&mut buf, out_msg).context("Failed to serialize message")?;
+        serde_json::to_writer(&mut buf, &out_msg).context("Failed to serialize message")?;
         // Safe because serde_json doesn't emit invalid UTF-8, and besides JSON
         // files are required to be encoded as UTF-8 by the specification. See
         // <https://tools.ietf.org/html/rfc8259#section-8.1>.
