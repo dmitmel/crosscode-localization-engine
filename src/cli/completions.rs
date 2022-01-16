@@ -3,7 +3,7 @@
 use crate::impl_prelude::*;
 use crate::progress::ProgressReporter;
 
-use clap_generate::Shell;
+use clap_complete::Shell;
 use std::io::{self, Write};
 
 #[derive(Debug)]
@@ -45,7 +45,7 @@ impl super::Command for CompletionsCommand {
       _ => unreachable!(),
     };
     let mut out = io::stdout();
-    clap_generate::generate(shell, &mut arg_parser, env!("CARGO_BIN_NAME"), &mut out);
+    clap_complete::generate(shell, &mut arg_parser, env!("CARGO_BIN_NAME"), &mut out);
     out.write_all(b"\n")?;
     out.flush()?;
 

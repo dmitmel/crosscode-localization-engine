@@ -26,8 +26,8 @@ serde_json = { version = "1.0.61", features = ["preserve_order"] }
 simd-json = { version = "0.4.7", optional = true }
 env_logger = { version = "0.9.0", default-features = false, features = ["termcolor", "atty", "humantime"] }
 log = { version = "0.4.11" }
-clap = { version = "3.0.0-rc.11", default-features = false, features = ["color", "std"] }
-clap_generate = { version = "3.0.0-rc.11" }
+clap = { version = "3.0.7", default-features = false, features = ["color", "std"] }
+clap_complete = { version = "3.0.4" }
 anyhow = { version = "1.0.38" }
 walkdir = { version = "2.3.1" }
 indexmap = { version = "1.6.1", features = ["serde-1"] }
@@ -36,9 +36,9 @@ once_cell = { version = "1.5.2" }
 time = { version = "0.2.27" }
 # textwrap = { version = "0.11.0" }
 atty = { version = "0.2.14" }
-threadpool = "1.8.1"
-inventory = "0.1.10"
-serde-transcode = "1.1.1"
+threadpool = { version = "1.8.1" }
+inventory = { version = "0.1.10" }
+serde-transcode = { version = "1.1.1" }
 
 [target.'cfg(unix)'.dependencies]
 libc = { version = "0.2" }
@@ -47,4 +47,4 @@ libc = { version = "0.2" }
 winapi = { version = "0.3", features = ["handleapi", "processenv", "winbase", "wincon", "winnt"] }
 
 [features]
-clap_debug = ["clap/debug", "clap_generate/debug"]
+clap_debug = ["clap/debug", "clap_complete/debug"]
