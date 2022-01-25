@@ -29,7 +29,7 @@ fn main() {
       .ok()?;
     if git_output.status.success() {
       let commit = String::from_utf8(git_output.stdout).ok()?;
-      let nice_version = format!("{} ({})", version, commit).replace("\n", "");
+      let nice_version = format!("{} ({})", version, commit).replace('\n', "");
       println!("cargo:rustc-env=CARGO_PKG_NICE_VERSION={}", nice_version);
     }
 
