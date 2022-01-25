@@ -262,10 +262,9 @@ macro_rules! backend_fields_enum {
     }
   ) => {
     #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
-    #[allow(non_camel_case_types)]
     $(#[$enum_meta])*
     $visibility enum $enum_name {
-      $($(#[$variant_meta])* $field_name,)+
+      $(#[allow(non_camel_case_types)] $(#[$variant_meta])* $field_name,)+
     }
 
     impl $enum_name {

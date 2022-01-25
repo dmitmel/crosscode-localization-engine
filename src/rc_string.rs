@@ -28,7 +28,7 @@ impl RcString {
   pub fn into_rc(self) -> Arc<String> { self.0 }
 
   #[inline(always)]
-  pub fn share_rc(&self) -> RcString { RcString(Arc::clone(&self.0)) }
+  pub fn share_rc(&self) -> Self { Self(Arc::clone(&self.0)) }
   #[inline(always)]
   pub fn rc_clone_inner(&self) -> String { (*self.0).clone() }
 }

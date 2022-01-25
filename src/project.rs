@@ -436,6 +436,14 @@ impl Project {
   }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[repr(u8)]
+pub enum FileType {
+  TrFile,
+  GameFile,
+}
+
 #[derive(Debug)]
 pub struct TrFileInitOpts {
   pub id: Uuid,

@@ -48,18 +48,19 @@ let backend = new addon.Backend();
 
     let message = JSON.parse(message_buf.toString('utf8'));
     console.log(`recv[${humanizeByteSize(message_buf.length)}]`, inspect(message));
+    console.log(`recv[${humanizeByteSize(message_buf.length)}]`);
   }
 })();
 
 for (let [request_index, request] of [
-  { type: 'Backend/info' },
-  { type: 'Project/open', dir: 'tmp' },
-  { type: 'Project/get_meta', project_id: 1 },
-  { type: 'Project/list_tr_files', project_id: 1 },
+  { type: 'get_backend_info' },
+  { type: 'open_project', dir: 'tmp' },
+  { type: 'get_project_meta', project_id: 1 },
+  { type: 'list_files', project_id: 1, file_type: 'tr_file' },
   {
-    type: 'VirtualGameFile/list_fragments',
+    type: 'query_fragments',
     project_id: 1,
-    file_path: 'data/maps/hideout/entrance.json',
+    from_game_file: 'data/maps/hideout/entrance.json',
     select_fields: {
       fragments: ['id', 'game_file_path', 'json_path'],
     },
