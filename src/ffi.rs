@@ -33,16 +33,22 @@ pub static CROSSLOCALE_NICE_VERSION_LEN: usize = crate::CRATE_NICE_VERSION.len()
 #[no_mangle]
 pub static CROSSLOCALE_PROTOCOL_VERSION: u32 = crate::backend::PROTOCOL_VERSION;
 
+macro_rules! abort_on_caught_panic {
+  ($body:block) => {
+    match panic::catch_unwind(AssertUnwindSafe(move || $body)) {
+      Ok(v) => v,
+      Err(_) => process::abort(),
+    }
+  };
+}
+
 #[no_mangle]
 pub extern "C" fn crosslocale_init_logging() -> crosslocale_result {
-  match panic::catch_unwind(AssertUnwindSafe(move || {
+  abort_on_caught_panic!({
     crate::init_logging();
     crate::print_banner_message();
     CROSSLOCALE_OK
-  })) {
-    Ok(v) => v,
-    Err(_) => process::abort(),
-  }
+  })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -192,13 +198,10 @@ unsafe fn free_message(myself: &mut crosslocale_message) {
 pub extern "C" fn crosslocale_message_free(
   myself: *mut crosslocale_message,
 ) -> crosslocale_result {
-  match panic::catch_unwind(AssertUnwindSafe(move || {
+  abort_on_caught_panic!({
     unsafe { free_message(&mut *myself) };
     CROSSLOCALE_OK
-  })) {
-    Ok(v) => v,
-    Err(_) => process::abort(),
-  }
+  })
 }
 
 /// cbindgen:ignore
@@ -334,29 +337,30 @@ pub struct crosslocale_backend {
 pub extern "C" fn crosslocale_backend_new(
   out: *mut *mut crosslocale_backend,
 ) -> crosslocale_result {
-  match panic::catch_unwind(AssertUnwindSafe(move || {
+  abort_on_caught_panic!({
     let (incoming_send, incoming_recv) = mpsc::channel::<JsonValue>();
     let (outgoing_send, outgoing_recv) = mpsc::channel::<JsonValue>();
 
-    let backend_thread =
-      match thread::Builder::new().name(std::any::type_name::<Backend>().to_owned()).spawn(
-        move || match panic::catch_unwind(AssertUnwindSafe(move || {
-          let mut backend = Backend::new(Box::new(FfiChannelTransport {
-            receiver: incoming_recv,
-            sender: outgoing_send,
-          }));
-          if let Err(e) = backend.start() {
-            crate::report_critical_error(e);
-            process::abort();
-          }
-        })) {
-          Ok(v) => v,
-          Err(_) => process::abort(),
-        },
-      ) {
-        Ok(v) => v,
-        Err(_) => return CROSSLOCALE_ERR_SPAWN_THREAD_FAILED,
-      };
+    let thread_body = move || {
+      abort_on_caught_panic!({
+        let mut backend = Backend::new(Box::new(FfiChannelTransport {
+          receiver: incoming_recv,
+          sender: outgoing_send,
+        }));
+        if let Err(e) = backend.start() {
+          crate::report_critical_error(e);
+          process::abort();
+        }
+      })
+    };
+
+    let backend_thread = match thread::Builder::new()
+      .name(std::any::type_name::<Backend>().to_owned())
+      .spawn(thread_body)
+    {
+      Ok(v) => v,
+      Err(_) => return CROSSLOCALE_ERR_SPAWN_THREAD_FAILED,
+    };
 
     let ffi_backend = Box::into_raw(Box::new(crosslocale_backend {
       message_sender: Some(incoming_send),
@@ -366,23 +370,17 @@ pub extern "C" fn crosslocale_backend_new(
     unsafe { *out = ffi_backend };
 
     CROSSLOCALE_OK
-  })) {
-    Ok(v) => v,
-    Err(_) => process::abort(),
-  }
+  })
 }
 
 #[no_mangle]
 pub extern "C" fn crosslocale_backend_free(
   myself: *mut crosslocale_backend,
 ) -> crosslocale_result {
-  match panic::catch_unwind(AssertUnwindSafe(move || {
+  abort_on_caught_panic!({
     drop(unsafe { Box::from_raw(myself) });
     CROSSLOCALE_OK
-  })) {
-    Ok(v) => v,
-    Err(_) => process::abort(),
-  }
+  })
 }
 
 #[no_mangle]
@@ -390,7 +388,7 @@ pub extern "C" fn crosslocale_backend_recv_message(
   myself: *const crosslocale_backend,
   out_message: *mut crosslocale_message,
 ) -> crosslocale_result {
-  match panic::catch_unwind(AssertUnwindSafe(move || {
+  abort_on_caught_panic!({
     let myself = unsafe { &*myself };
     let message: JsonValue = match myself.message_receiver.recv() {
       Ok(v) => v,
@@ -398,10 +396,7 @@ pub extern "C" fn crosslocale_backend_recv_message(
     };
     unsafe { *out_message = wrap_json_value(message).unwrap_or(MESSAGE_NIL_VALUE) };
     CROSSLOCALE_OK
-  })) {
-    Ok(v) => v,
-    Err(_) => process::abort(),
-  }
+  })
 }
 
 #[no_mangle]
@@ -409,7 +404,7 @@ pub extern "C" fn crosslocale_backend_send_message(
   myself: *const crosslocale_backend,
   message: *const crosslocale_message,
 ) -> crosslocale_result {
-  match panic::catch_unwind(AssertUnwindSafe(move || {
+  abort_on_caught_panic!({
     let myself = unsafe { &*myself };
     let message = unsafe { unwrap_json_value(&*message) };
     let message_sender = match myself.message_sender.as_ref() {
@@ -421,24 +416,18 @@ pub extern "C" fn crosslocale_backend_send_message(
       Err(mpsc::SendError(_)) => return CROSSLOCALE_ERR_BACKEND_DISCONNECTED,
     }
     CROSSLOCALE_OK
-  })) {
-    Ok(v) => v,
-    Err(_) => process::abort(),
-  }
+  })
 }
 
 #[no_mangle]
 pub extern "C" fn crosslocale_backend_close(
   myself: *mut crosslocale_backend,
 ) -> crosslocale_result {
-  match panic::catch_unwind(AssertUnwindSafe(move || {
+  abort_on_caught_panic!({
     let myself = unsafe { &mut *myself };
     myself.message_sender = None;
     CROSSLOCALE_OK
-  })) {
-    Ok(v) => v,
-    Err(_) => process::abort(),
-  }
+  })
 }
 
 #[no_mangle]
@@ -446,14 +435,9 @@ pub extern "C" fn crosslocale_backend_is_closed(
   myself: *mut crosslocale_backend,
   out: *mut bool,
 ) -> crosslocale_result {
-  match panic::catch_unwind(AssertUnwindSafe(move || {
+  abort_on_caught_panic!({
     let myself = unsafe { &mut *myself };
-    unsafe {
-      *out = myself.message_sender.is_none();
-    }
+    unsafe { *out = myself.message_sender.is_none() };
     CROSSLOCALE_OK
-  })) {
-    Ok(v) => v,
-    Err(_) => process::abort(),
-  }
+  })
 }
