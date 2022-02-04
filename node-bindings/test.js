@@ -24,16 +24,20 @@ function humanizeByteSize(bytes) {
   return `${bytes.toFixed(2)}${unit}`;
 }
 
+function humanizedJsonSize(value) {
+  return humanizeByteSize(Buffer.byteLength(JSON.stringify(value)));
+}
+
 addon.init_logging();
 
 let backend = new addon.Backend();
 
 (async () => {
   while (true) {
-    let message_buf;
+    let message;
 
     try {
-      message_buf = await new Promise((resolve, reject) => {
+      message = await new Promise((resolve, reject) => {
         backend.recv_message((err, message) => {
           if (err != null) reject(err);
           else resolve(message);
@@ -46,9 +50,7 @@ let backend = new addon.Backend();
       throw err;
     }
 
-    let message = JSON.parse(message_buf.toString('utf8'));
-    console.log(`recv[${humanizeByteSize(message_buf.length)}]`, inspect(message));
-    console.log(`recv[${humanizeByteSize(message_buf.length)}]`);
+    console.log(`recv[${humanizedJsonSize(message)}]`, inspect(message));
   }
 })();
 
@@ -68,9 +70,8 @@ for (let [request_index, request] of [
 ].entries()) {
   let message = [1, request_index + 1, request.type, request];
   delete request.type;
-  let message_str = JSON.stringify(message);
-  console.log(`send[${humanizeByteSize(Buffer.byteLength(message_str))}]`, inspect(message));
-  backend.send_message(message_str);
+  console.log(`send[${humanizedJsonSize(message)}]`, inspect(message));
+  backend.send_message(message);
 }
 
 backend.close();

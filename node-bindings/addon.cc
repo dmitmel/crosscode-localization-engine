@@ -5,7 +5,7 @@
 
 #include <crosslocale.h>
 
-const uint32_t SUPPORTED_FFI_BRIDGE_VERSION = 2;
+const uint32_t SUPPORTED_FFI_BRIDGE_VERSION = 3;
 
 // NOTE: About the radical usage of crosslocale_backend_t which may seem
 // thread-unsafe on the first glance: the implementation details are employed
@@ -36,48 +36,19 @@ const uint32_t SUPPORTED_FFI_BRIDGE_VERSION = 2;
 
 class FfiBackendException : public std::exception {
 public:
-  crosslocale_result_t code;
+  crosslocale_result code;
 
-  FfiBackendException(crosslocale_result_t code) : code(code) {}
+  FfiBackendException(crosslocale_result code) : code(code) {}
 
   bool is_ok() const noexcept { return this->code == CROSSLOCALE_OK; };
 
   const char* what() const noexcept override {
-    // The switch statement can't be used here because the following constants
-    // are extern, but C++ requires the values used for case branches to be
-    // strictly known at compile-time.
-    if (this->code == CROSSLOCALE_OK) {
-      return "this isn't actually an error";
-    } else if (this->code == CROSSLOCALE_ERR_GENERIC_RUST_PANIC) {
-      return "generic Rust panic";
-    } else if (this->code == CROSSLOCALE_ERR_BACKEND_DISCONNECTED) {
-      return "the backend thread has disconnected";
-    } else if (this->code == CROSSLOCALE_ERR_NON_UTF8_STRING) {
-      return "a provided string wasn't properly utf8-encoded";
-    } else if (this->code == CROSSLOCALE_ERR_SPAWN_THREAD_FAILED) {
-      return "failed to spawn the backend thread";
-    } else {
-      return "unkown error";
-    }
+    return (char*)crosslocale_error_description(this->code);
   }
 
-  const char* id() const noexcept {
-#define BackendException_check_id(id) \
-  if (this->code == id) {             \
-    return #id;                       \
-  }
+  const char* id() const noexcept { return (char*)crosslocale_error_id_str(this->code); }
 
-    BackendException_check_id(CROSSLOCALE_OK);
-    BackendException_check_id(CROSSLOCALE_ERR_GENERIC_RUST_PANIC);
-    BackendException_check_id(CROSSLOCALE_ERR_BACKEND_DISCONNECTED);
-    BackendException_check_id(CROSSLOCALE_ERR_NON_UTF8_STRING);
-    BackendException_check_id(CROSSLOCALE_ERR_SPAWN_THREAD_FAILED);
-    return nullptr;
-
-#undef BackendException_check_id
-  }
-
-  Napi::Error ToNodeError(Napi::Env env) const {
+  Napi::Error to_node_error(Napi::Env env) const {
     Napi::Error obj = Napi::Error::New(env, this->what());
     obj.Set("errno", Napi::Number::New(env, this->code));
     if (const char* id_str = this->id()) {
@@ -87,43 +58,229 @@ public:
   }
 };
 
-void throw_ffi_result(crosslocale_result_t res) {
+void throw_ffi_result(crosslocale_result res) {
   if (res != CROSSLOCALE_OK) {
     throw FfiBackendException(res);
   }
 }
 
-class RustString {
+class BackendMessage {
 public:
-  RustString(uint8_t* buf, size_t len, size_t cap) : buf(buf), len(len), cap(cap) {}
+  Napi::Value to_js_value(Napi::Env env) const {
+    Napi::Value js_value = to_js_value_impl(env, this->raw);
+    return js_value != nullptr ? js_value : env.Undefined();
+  }
 
-  ~RustString() { throw_ffi_result(crosslocale_message_free(this->buf, this->len, this->cap)); }
+  const crosslocale_message& get_raw() const { return this->raw; }
 
-  void operator=(const RustString&) = delete;
-  RustString(const RustString&) = delete;
+  void operator=(const BackendMessage&) = delete;
+  BackendMessage(const BackendMessage&) = delete;
 
-  uint8_t* get_buf() { return this->buf; }
-  char* get_char_buf() { return (char*)this->buf; }
-  size_t get_len() { return this->len; }
-  size_t get_cap() { return this->cap; }
+protected:
+  BackendMessage(crosslocale_message raw) : raw(raw) {}
 
-private:
-  uint8_t* buf;
-  size_t len;
-  size_t cap;
+  crosslocale_message raw;
+
+  static Napi::Value to_js_value_impl(Napi::Env env, crosslocale_message raw) {
+    switch (raw.type) {
+    case CROSSLOCALE_MESSAGE_NIL:
+      return env.Null();
+    case CROSSLOCALE_MESSAGE_BOOL:
+      return Napi::Boolean::New(env, raw.as.value_bool);
+    case CROSSLOCALE_MESSAGE_I64:
+      return Napi::Number::New(env, (double)raw.as.value_i64);
+    case CROSSLOCALE_MESSAGE_F64:
+      return Napi::Number::New(env, raw.as.value_f64);
+    case CROSSLOCALE_MESSAGE_STR:
+      return Napi::String::New(env, (char*)raw.as.value_str.ptr, raw.as.value_str.len);
+
+    case CROSSLOCALE_MESSAGE_LIST: {
+      Napi::Array js_array = Napi::Array::New(env, raw.as.value_list.len);
+      if (raw.as.value_list.len <= UINT32_MAX) {
+        for (uint32_t i = 0; i < (uint32_t)raw.as.value_list.len; i++) {
+          crosslocale_message value = raw.as.value_list.ptr[i];
+          Napi::Value js_value = to_js_value_impl(env, value);
+          if (js_value != nullptr) {
+            js_array.Set(i, js_value);
+          }
+        }
+      } else {
+        for (size_t i = 0; i < raw.as.value_list.len; i++) {
+          crosslocale_message value = raw.as.value_list.ptr[i];
+          Napi::Value js_value = to_js_value_impl(env, value);
+          if (js_value != nullptr) {
+            js_array.Set(Napi::Number::New(env, (double)i), js_value);
+          }
+        }
+      }
+      return js_array;
+    }
+
+    case CROSSLOCALE_MESSAGE_DICT: {
+      Napi::Object js_object = Napi::Object::New(env);
+      for (size_t i = 0; i < raw.as.value_dict.len; i++) {
+        crosslocale_message_str key = raw.as.value_dict.keys[i];
+        crosslocale_message value = raw.as.value_dict.values[i];
+        Napi::Value js_value = to_js_value_impl(env, value);
+        if (js_value != nullptr) {
+          js_object.Set(Napi::String::New(env, (char*)key.ptr, key.len), js_value);
+        }
+      }
+      return js_object;
+    }
+
+    case CROSSLOCALE_MESSAGE_INVALID:
+      throw std::logic_error("encountered an explicitly invalid value");
+    }
+    return Napi::Value();
+  }
+};
+
+class BackendMessageFromJs : public BackendMessage {
+public:
+  BackendMessageFromJs(Napi::Env env, Napi::Value value)
+      : BackendMessage(from_js_value_impl(env, value)) {}
+
+  ~BackendMessageFromJs() { free_raw_value(this->raw); }
+
+  void operator=(const BackendMessageFromJs&) = delete;
+  BackendMessageFromJs(const BackendMessageFromJs&) = delete;
+
+protected:
+  static void free_raw_value(crosslocale_message raw) {
+    switch (raw.type) {
+    case CROSSLOCALE_MESSAGE_NIL:
+    case CROSSLOCALE_MESSAGE_BOOL:
+    case CROSSLOCALE_MESSAGE_I64:
+    case CROSSLOCALE_MESSAGE_F64:
+      break;
+
+    case CROSSLOCALE_MESSAGE_STR:
+      delete[] raw.as.value_str.ptr;
+      break;
+
+    case CROSSLOCALE_MESSAGE_LIST:
+      for (size_t i = 0; i < raw.as.value_list.len; i++) {
+        free_raw_value(raw.as.value_list.ptr[i]);
+      }
+      delete[] raw.as.value_list.ptr;
+      break;
+
+    case CROSSLOCALE_MESSAGE_DICT:
+      for (size_t i = 0; i < raw.as.value_dict.len; i++) {
+        delete[] raw.as.value_dict.keys[i].ptr;
+        free_raw_value(raw.as.value_dict.values[i]);
+      }
+      delete[] raw.as.value_dict.keys;
+      delete[] raw.as.value_dict.values;
+      break;
+
+    case CROSSLOCALE_MESSAGE_INVALID:
+      break;
+    }
+  }
+
+  static crosslocale_message_str from_js_str(Napi::String value) {
+    Napi::Env env = value.Env();
+    size_t length;
+    napi_status status = napi_get_value_string_utf8(env, value, nullptr, 0, &length);
+    NAPI_THROW_IF_FAILED(env, status);
+    char* data = new char[length + 1];
+    status = napi_get_value_string_utf8(env, value, &data[0], length + 1, nullptr);
+    NAPI_THROW_IF_FAILED(env, status);
+    return crosslocale_message_str{.len = length, .ptr = (uint8_t*)data};
+  }
+
+  // <https://codereview.stackexchange.com/q/260759/254963>
+  static crosslocale_message from_js_value_impl(Napi::Env env, Napi::Value js_value) {
+    switch (js_value.Type()) {
+    case napi_undefined:
+    case napi_null:
+      return {.type = CROSSLOCALE_MESSAGE_NIL, .as = {.value_bool = false}};
+
+    case napi_boolean: {
+      bool b = js_value.As<Napi::Boolean>().Value();
+      return {.type = CROSSLOCALE_MESSAGE_BOOL, .as = {.value_bool = b}};
+    }
+
+    case napi_number: {
+      double n_float = js_value.As<Napi::Number>().DoubleValue();
+      int64_t n_int = (uint64_t)n_float;
+      if ((double)n_int == n_float) {
+        return {.type = CROSSLOCALE_MESSAGE_I64, .as = {.value_i64 = n_int}};
+      } else {
+        return {.type = CROSSLOCALE_MESSAGE_F64, .as = {.value_f64 = n_float}};
+      }
+    }
+
+    case napi_string: {
+      crosslocale_message_str s = from_js_str(js_value.As<Napi::String>());
+      return {.type = CROSSLOCALE_MESSAGE_STR, .as = {.value_str = s}};
+    }
+
+    case napi_object: {
+      if (js_value.IsArray()) {
+        Napi::Array js_array = js_value.As<Napi::Array>();
+        uint32_t len = js_array.Length();
+        crosslocale_message* data = new crosslocale_message[len];
+        for (size_t i = 0; i < len; i++) {
+          crosslocale_message element = from_js_value_impl(env, js_array.Get(i));
+          if (element.type != CROSSLOCALE_MESSAGE_INVALID) {
+            data[i] = element;
+          }
+        }
+        return {.type = CROSSLOCALE_MESSAGE_LIST, .as = {.value_list = {.len = len, .ptr = data}}};
+      } else {
+        Napi::Object js_object = js_value.As<Napi::Object>();
+        Napi::Array js_keys = js_object.GetPropertyNames();
+        uint32_t len = js_keys.Length();
+        crosslocale_message_str* keys = new crosslocale_message_str[len];
+        crosslocale_message* values = new crosslocale_message[len];
+        for (size_t i = 0; i < len; i++) {
+          Napi::Value js_key = js_keys.Get(i);
+          crosslocale_message value = from_js_value_impl(env, js_object.Get(js_key));
+          if (value.type != CROSSLOCALE_MESSAGE_INVALID) {
+            crosslocale_message_str key = from_js_str(js_key.As<Napi::String>());
+            keys[i] = key;
+            values[i] = value;
+          }
+        }
+        return {.type = CROSSLOCALE_MESSAGE_DICT,
+          .as = {.value_dict = {.len = len, .keys = keys, .values = values}}};
+      }
+    }
+
+    case napi_symbol:
+    case napi_function:
+    case napi_external:
+    case napi_bigint:
+      break;
+    }
+    return {.type = CROSSLOCALE_MESSAGE_INVALID, .as = {.value_bool = false}};
+  }
+};
+
+class BackendMessageFromRust : public BackendMessage {
+public:
+  BackendMessageFromRust(crosslocale_message raw) : BackendMessage(raw) {}
+
+  ~BackendMessageFromRust() { crosslocale_message_free(&this->raw); }
+
+  void operator=(const BackendMessageFromRust&) = delete;
+  BackendMessageFromRust(const BackendMessageFromRust&) = delete;
 };
 
 class FfiBackend {
 public:
   FfiBackend() {
-    crosslocale_backend_t* raw = nullptr;
+    crosslocale_backend* raw = nullptr;
     throw_ffi_result(crosslocale_backend_new(&raw));
     this->raw = raw;
   }
 
   ~FfiBackend() {
     if (this->raw != nullptr) {
-      crosslocale_backend_t* raw = this->raw;
+      crosslocale_backend* raw = this->raw;
       this->raw = nullptr;
       throw_ffi_result(crosslocale_backend_free(raw));
     }
@@ -132,19 +289,16 @@ public:
   void operator=(const FfiBackend&) = delete;
   FfiBackend(const FfiBackend&) = delete;
 
-  std::unique_ptr<RustString> recv_message() {
+  std::unique_ptr<BackendMessageFromRust> recv_message() {
     std::lock_guard<std::mutex> guard(this->recv_mutex);
-    uint8_t* message_buf = nullptr;
-    size_t message_len = 0;
-    size_t message_cap = 0;
-    throw_ffi_result(
-      crosslocale_backend_recv_message(this->raw, &message_buf, &message_len, &message_cap));
-    return std::make_unique<RustString>(message_buf, message_len, message_cap);
+    crosslocale_message message;
+    throw_ffi_result(crosslocale_backend_recv_message(this->raw, &message));
+    return std::make_unique<BackendMessageFromRust>(message);
   }
 
-  void send_message(const uint8_t* buf, size_t len) {
+  void send_message(const BackendMessage& message) {
     std::lock_guard<std::mutex> guard(this->send_mutex);
-    throw_ffi_result(crosslocale_backend_send_message(this->raw, buf, len));
+    throw_ffi_result(crosslocale_backend_send_message(this->raw, &message.get_raw()));
   }
 
   void close() {
@@ -162,7 +316,7 @@ public:
   static void init_logging() { throw_ffi_result(crosslocale_init_logging()); }
 
 private:
-  crosslocale_backend_t* raw = nullptr;
+  crosslocale_backend* raw = nullptr;
   std::mutex send_mutex;
   std::mutex recv_mutex;
 };
@@ -185,7 +339,7 @@ public:
   void Execute() override {
     this->has_error = false;
     try {
-      this->message_str = this->inner->recv_message();
+      this->message = this->inner->recv_message();
     } catch (const FfiBackendException& e) {
       this->error = e;
       this->has_error = true;
@@ -194,18 +348,16 @@ public:
 
   std::vector<napi_value> GetResult(Napi::Env env) override {
     if (!this->has_error) {
-      return {env.Null(),
-        Napi::Buffer<uint8_t>::Copy(
-          env, this->message_str->get_buf(), this->message_str->get_len())};
+      return {env.Null(), this->message->to_js_value(env)};
     } else {
-      Napi::Error obj = error.ToNodeError(env);
+      Napi::Error obj = this->error.to_node_error(env);
       return {obj.Value()};
     }
   }
 
 private:
   std::shared_ptr<FfiBackend> inner;
-  std::unique_ptr<RustString> message_str;
+  std::unique_ptr<BackendMessageFromRust> message;
   FfiBackendException error = CROSSLOCALE_OK;
   bool has_error = false;
 };
@@ -245,30 +397,15 @@ private:
 
   Napi::Value send_message(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
-    if (!(info.Length() == 1 && (info[0].IsBuffer() || info[0].IsString()))) {
-      NAPI_THROW(
-        Napi::TypeError::New(env, "send_message(text: Buffer | string): void"), Napi::Value());
+    if (!(info.Length() == 1)) {
+      NAPI_THROW(Napi::TypeError::New(env, "send_message(value: any): void"), Napi::Value());
     }
 
-    if (info[0].IsBuffer()) {
-      Napi::Buffer<uint8_t> message(env, info[0]);
-      uint8_t* data = message.Data();
-      size_t len = message.Length();
-      try {
-        this->inner->send_message(data, len);
-      } catch (const FfiBackendException& e) {
-        throw e.ToNodeError(env);
-      }
-    } else {
-      Napi::String message(env, info[0]);
-      std::string std_message = message.Utf8Value();
-      uint8_t* data = (uint8_t*)std_message.data();
-      size_t len = std_message.length();
-      try {
-        this->inner->send_message(data, len);
-      } catch (const FfiBackendException& e) {
-        throw e.ToNodeError(env);
-      }
+    BackendMessageFromJs message(env, info[0]);
+    try {
+      this->inner->send_message(message);
+    } catch (const FfiBackendException& e) {
+      throw e.to_node_error(env);
     }
 
     return Napi::Value();
@@ -291,17 +428,16 @@ private:
   Napi::Value recv_message_sync(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     if (!(info.Length() == 0)) {
-      NAPI_THROW(Napi::TypeError::New(env, "recv_message_sync(): Buffer"), Napi::Value());
+      NAPI_THROW(Napi::TypeError::New(env, "recv_message_sync(): any"), Napi::Value());
     }
 
-    std::unique_ptr<RustString> message;
+    std::unique_ptr<BackendMessageFromRust> message;
     try {
       message = this->inner->recv_message();
     } catch (const FfiBackendException& e) {
-      throw e.ToNodeError(env);
+      throw e.to_node_error(env);
     }
-
-    return Napi::Buffer<uint8_t>::Copy(env, message->get_buf(), message->get_len());
+    return message->to_js_value(env);
   }
 
   Napi::Value close(const Napi::CallbackInfo& info) {
@@ -313,7 +449,7 @@ private:
     try {
       this->inner->close();
     } catch (const FfiBackendException& e) {
-      throw e.ToNodeError(env);
+      throw e.to_node_error(env);
     }
     return Napi::Value();
   }
@@ -328,7 +464,7 @@ private:
     try {
       is_closed = this->inner->is_closed();
     } catch (const FfiBackendException& e) {
-      throw e.ToNodeError(env);
+      throw e.to_node_error(env);
     }
     return Napi::Boolean::New(env, is_closed);
   }

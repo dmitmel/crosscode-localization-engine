@@ -1,4 +1,4 @@
-#![deny(missing_debug_implementations)]
+#![warn(missing_debug_implementations)]
 #![allow(clippy::new_without_default)]
 #![feature(try_blocks, never_type, pattern)]
 // TODO: consider using feature(hash_raw_entry)

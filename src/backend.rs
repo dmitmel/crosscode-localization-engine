@@ -5,7 +5,7 @@ pub mod handlers;
 pub mod transports;
 
 use self::error::BackendNiceError;
-use self::transports::Transport;
+use self::transports::{Transport, TransportedValue};
 use crate::impl_prelude::*;
 use crate::project::{Comment, Fragment, Project, Translation};
 use crate::utils::{self, RcExt};
@@ -45,33 +45,14 @@ impl MessageType {
 
 #[derive(Debug, Clone)]
 pub enum Message<'a> {
-  Request(RequestMessage<'a>),
-  Response(ResponseMessage<'a>),
-  ErrorResponse(ErrorResponseMessage),
+  Request { id: Id, method: Cow<'a, str>, params: Cow<'a, RawValue> },
+  Response { id: Id, result: Cow<'a, RawValue> },
+  ErrorResponse { id: Option<Id>, message: Cow<'static, str> },
 }
 
 /// `u32`s are used because JS only has 32-bit integers. And 64-bit floats, but
 /// those aren't really convenient for storing IDs.
 pub type Id = u32;
-
-#[derive(Debug, Clone)]
-pub struct RequestMessage<'a> {
-  id: Id,
-  method: Cow<'a, str>,
-  params: Cow<'a, RawValue>,
-}
-
-#[derive(Debug, Clone)]
-pub struct ResponseMessage<'a> {
-  id: Id,
-  result: Cow<'a, RawValue>,
-}
-
-#[derive(Debug, Clone)]
-pub struct ErrorResponseMessage {
-  id: Option<Id>,
-  message: Cow<'static, str>,
-}
 
 impl<'de> Deserialize<'de> for Message<'de> {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -80,7 +61,7 @@ impl<'de> Deserialize<'de> for Message<'de> {
   {
     use serde::de::Error as DeError;
 
-    struct MessageVisitor;
+    struct MessageVisitor {}
 
     impl<'de> serde::de::Visitor<'de> for MessageVisitor {
       type Value = Message<'de>;
@@ -113,11 +94,11 @@ impl<'de> Deserialize<'de> for Message<'de> {
               Some(v) => v,
               None => return Err(DeError::invalid_length(3, &"request message params")),
             };
-            Ok(Message::Request(RequestMessage {
+            Ok(Message::Request {
               id: msg_id,
               method: Cow::Owned(method),
               params: Cow::Borrowed(params),
-            }))
+            })
           }
 
           Some(MessageType::Response) => {
@@ -129,7 +110,7 @@ impl<'de> Deserialize<'de> for Message<'de> {
               Some(v) => v,
               None => return Err(DeError::invalid_length(2, &"response message result")),
             };
-            Ok(Message::Response(ResponseMessage { id: msg_id, result: Cow::Borrowed(result) }))
+            Ok(Message::Response { id: msg_id, result: Cow::Borrowed(result) })
           }
 
           Some(MessageType::ErrorResponse) => {
@@ -141,10 +122,7 @@ impl<'de> Deserialize<'de> for Message<'de> {
               Some(v) => v,
               None => return Err(DeError::invalid_length(2, &"error response message text")),
             };
-            Ok(Message::ErrorResponse(ErrorResponseMessage {
-              id: msg_id,
-              message: Cow::Owned(err_msg),
-            }))
+            Ok(Message::ErrorResponse { id: msg_id, message: Cow::Owned(err_msg) })
           }
 
           None => {
@@ -157,7 +135,7 @@ impl<'de> Deserialize<'de> for Message<'de> {
       }
     }
 
-    deserializer.deserialize_seq(MessageVisitor)
+    deserializer.deserialize_seq(MessageVisitor {})
   }
 }
 
@@ -167,28 +145,28 @@ impl<'a> Serialize for Message<'a> {
     S: serde::Serializer,
   {
     match self {
-      Message::Request(msg) => {
+      Message::Request { id, method, params } => {
         let mut seq = serializer.serialize_seq(Some(4))?;
         seq.serialize_element(&(MessageType::Request as u8))?;
-        seq.serialize_element(&msg.id)?;
-        seq.serialize_element(&msg.method)?;
-        seq.serialize_element(&msg.params)?;
+        seq.serialize_element(&id)?;
+        seq.serialize_element(&method)?;
+        seq.serialize_element(&params)?;
         seq.end()
       }
 
-      Message::Response(msg) => {
+      Message::Response { id, result } => {
         let mut seq = serializer.serialize_seq(Some(3))?;
         seq.serialize_element(&(MessageType::Response as u8))?;
-        seq.serialize_element(&msg.id)?;
-        seq.serialize_element(&msg.result)?;
+        seq.serialize_element(&id)?;
+        seq.serialize_element(&result)?;
         seq.end()
       }
 
-      Message::ErrorResponse(msg) => {
+      Message::ErrorResponse { id, message } => {
         let mut seq = serializer.serialize_seq(Some(3))?;
         seq.serialize_element(&(MessageType::ErrorResponse as u8))?;
-        seq.serialize_element(&msg.id)?;
-        seq.serialize_element(&msg.message)?;
+        seq.serialize_element(&id)?;
+        seq.serialize_element(&message)?;
         seq.end()
       }
     }
@@ -446,66 +424,13 @@ impl Backend {
   pub fn start(&mut self) -> AnyResult<()> {
     let mut message_index: usize = 0;
     loop {
-      let result = try_any_result!({
-        let buf = self.transport.recv().context("Failed to receive message from the transport")?;
-
-        let in_msg: serde_json::Result<Message> = match serde_json::from_str(&buf) {
-          Err(e) if !e.is_io() => {
-            warn!("Failed to deserialize message(index={}): {}", message_index, e);
-            Err(e)
-          }
-          result => Ok(result.context("Failed to deserialize message")?),
-        };
-
-        let out_msg: Message = match in_msg {
-          Ok(in_msg) => {
-            let in_msg_id = match &in_msg {
-              Message::Request(RequestMessage { id, .. }) => Some(*id),
-              _ => None,
-            };
-            match self.process_message(in_msg) {
-              Ok(out_msg) => out_msg,
-              Err(e) => {
-                let mut message = "internal backend error".into();
-                match e.downcast::<BackendNiceError>() {
-                  Ok(e) => {
-                    message = e.message;
-                    if let Some(e) = e.source {
-                      crate::report_error(e);
-                    }
-                  }
-                  Err(e) => {
-                    crate::report_error(e);
-                  }
-                }
-                Message::ErrorResponse(ErrorResponseMessage { id: in_msg_id, message })
-              }
-            }
-          }
-          Err(e) => Message::ErrorResponse(ErrorResponseMessage {
-            id: None,
-            message: Cow::Owned(e.to_string()),
-          }),
-        };
-
-        let mut buf = Vec::new();
-        serde_json::to_writer(&mut buf, &out_msg).context("Failed to serialize message")?;
-        // Safe because serde_json doesn't emit invalid UTF-8, and besides JSON
-        // files are required to be encoded as UTF-8 by the specification. See
-        // <https://tools.ietf.org/html/rfc8259#section-8.1>.
-        let buf = unsafe { String::from_utf8_unchecked(buf) };
-
-        self.transport.send(buf).context("Failed to send message to the transport")?;
-      })
-      .with_context(|| format!("Failed to process message(index={})", message_index));
-
-      match result {
+      match self.process_one_message(message_index) {
         Err(e) if e.is::<transports::TransportDisconnectionError>() => {
-          warn!("The frontend has disconnected, exiting cleanly");
+          info!("The frontend has disconnected, exiting cleanly");
           break;
         }
         Err(e) => {
-          crate::report_error(e);
+          crate::report_error(e.context(format!("Failed to process message #{}", message_index)));
         }
         _ => {}
       }
@@ -516,26 +441,90 @@ impl Backend {
     Ok(())
   }
 
-  #[allow(clippy::unnecessary_wraps)]
-  fn process_message(&mut self, msg: Message) -> AnyResult<Message> {
-    Ok(match msg {
-      Message::Request(msg) => {
-        let method_decl: &'static MethodDeclaration = match self.methods_registry.get(&*msg.method)
-        {
-          Some(v) => *v,
-          None => backend_nice_error!("unknown method"),
-        };
-        let params = (method_decl.deserialize_request)(msg.params.as_ref())
-          .context("Failed to deserialize message parameters")?;
-        let result = (method_decl.handle_call)(self, params)?;
-        let json_result = (method_decl.serialize_response)(result)
-          .context("Failed to serialize message result")?;
-        Message::Response(ResponseMessage { id: msg.id, result: Cow::Owned(json_result) })
+  fn process_one_message(&mut self, message_index: usize) -> AnyResult<()> {
+    let transported_value =
+      self.transport.recv().context("Failed to receive message from the transport")?;
+    let json_str: String;
+    let in_msg: serde_json::Result<Message> = match transported_value {
+      TransportedValue::Json(ref v) => serde_json::from_str(v),
+      TransportedValue::Parsed(v) => try {
+        json_str = serde_json::to_string(&v?)?;
+        serde_json::from_str(&json_str)?
       }
-      Message::Response(_) | Message::ErrorResponse(_) => {
-        backend_nice_error!("the backend currently can't receive responses");
+      // TransportedValue::Parsed(Ok(v)) => Message::deserialize(v),
+      // TransportedValue::Parsed(Err(v)) => Err(v),
+    };
+
+    let out_msg: Message = match in_msg {
+      Ok(Message::Request { id, method, params }) => match self.process_request(method, params) {
+        Ok(result) => Message::Response { id, result },
+        Err(e) => {
+          let mut message = "internal backend error".into();
+          match e.downcast::<BackendNiceError>() {
+            Ok(e) => {
+              message = e.message;
+              if let Some(e) = e.source {
+                crate::report_error(e);
+              }
+            }
+            Err(e) => {
+              crate::report_error(e);
+            }
+          }
+          Message::ErrorResponse { id: Some(id), message }
+        }
+      },
+
+      Ok(Message::Response { .. }) | Ok(Message::ErrorResponse { .. }) => Message::ErrorResponse {
+        id: None,
+        message: "the backend currently can't receive responses".into(),
+      },
+
+      Err(e) if !e.is_io() => {
+        warn!("Failed to deserialize message #{}: {}", message_index, e);
+        Message::ErrorResponse { id: None, message: Cow::Owned(e.to_string()) }
       }
-    })
+
+      Err(e) => {
+        Err(e).context("Failed to deserialize message")?;
+        unreachable!()
+      }
+    };
+
+    let transported_value = if self.transport.uses_parsed_values() {
+      let json_value = serde_json::to_value(&out_msg).context("Failed to serialize message")?;
+      TransportedValue::Parsed(Ok(json_value))
+    } else {
+      let mut buf = Vec::new();
+      serde_json::to_writer(&mut buf, &out_msg).context("Failed to serialize message")?;
+      // Safe because serde_json doesn't emit invalid UTF-8, and besides JSON
+      // files are required to be encoded as UTF-8 by the specification. See
+      // <https://tools.ietf.org/html/rfc8259#section-8.1>.
+      TransportedValue::Json(unsafe { String::from_utf8_unchecked(buf) })
+    };
+
+    self.transport.send(transported_value).context("Failed to send message to the transport")?;
+
+    Ok(())
+  }
+
+  // There must be an explicit lifetime here, so that the compiler understands
+  // that the returned value doesn't pull a borrow for the whole `self`.
+  fn process_request<'response>(
+    &mut self,
+    method: Cow<str>,
+    params: Cow<RawValue>,
+  ) -> AnyResult<Cow<'response, RawValue>> {
+    let method_decl: &'static MethodDeclaration = match self.methods_registry.get(&*method) {
+      Some(v) => *v,
+      None => backend_nice_error!("unknown method"),
+    };
+    let params = (method_decl.deserialize_request)(&*params)
+      .context("Failed to deserialize message parameters")?;
+    let result = (method_decl.handle_call)(self, params)?;
+    let json_result =
+      (method_decl.serialize_response)(result).context("Failed to serialize message result")?;
+    Ok(Cow::Owned(json_result))
   }
 }
 
