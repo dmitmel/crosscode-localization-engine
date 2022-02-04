@@ -12,7 +12,7 @@ finish() {
 }
 trap finish EXIT
 
-perf record --call-graph=dwarf --output="$perf_file" -- "$@"
+perf record --call-graph=dwarf --output="$perf_file" --compression-level=1 -- "$@"
 mv "$perf_file" perf.data
 # <https://github.com/jonhoo/inferno>
 perf script | inferno-collapse-perf | inferno-flamegraph > perf-flamegraph.svg
