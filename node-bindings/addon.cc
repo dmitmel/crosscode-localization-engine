@@ -95,6 +95,7 @@ protected:
       return Napi::String::New(env, (char*)raw.as.value_str.ptr, raw.as.value_str.len);
 
     case CROSSLOCALE_MESSAGE_LIST: {
+      Napi::EscapableHandleScope scope(env);
       Napi::Array js_array = Napi::Array::New(env, raw.as.value_list.len);
       if (raw.as.value_list.len <= UINT32_MAX) {
         for (uint32_t i = 0; i < (uint32_t)raw.as.value_list.len; i++) {
@@ -113,10 +114,11 @@ protected:
           }
         }
       }
-      return js_array;
+      return scope.Escape(js_array);
     }
 
     case CROSSLOCALE_MESSAGE_DICT: {
+      Napi::EscapableHandleScope scope(env);
       Napi::Object js_object = Napi::Object::New(env);
       for (size_t i = 0; i < raw.as.value_dict.len; i++) {
         crosslocale_message_str key = raw.as.value_dict.keys[i];
@@ -126,7 +128,7 @@ protected:
           js_object.Set(Napi::String::New(env, (char*)key.ptr, key.len), js_value);
         }
       }
-      return js_object;
+      return scope.Escape(js_object);
     }
 
     case CROSSLOCALE_MESSAGE_INVALID:
@@ -196,6 +198,8 @@ protected:
 
   // <https://codereview.stackexchange.com/q/260759/254963>
   static crosslocale_message from_js_value_impl(Napi::Env env, Napi::Value js_value) {
+    Napi::HandleScope scope(env);
+
     crosslocale_message msg;
     switch (js_value.Type()) {
     case napi_undefined:
