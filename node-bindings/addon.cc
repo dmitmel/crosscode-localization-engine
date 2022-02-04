@@ -188,34 +188,48 @@ protected:
     char* data = new char[length + 1];
     status = napi_get_value_string_utf8(env, value, &data[0], length + 1, nullptr);
     NAPI_THROW_IF_FAILED(env, status);
-    return crosslocale_message_str{.len = length, .ptr = (uint8_t*)data};
+    crosslocale_message_str str;
+    str.len = length;
+    str.ptr = (uint8_t*)data;
+    return str;
   }
 
   // <https://codereview.stackexchange.com/q/260759/254963>
   static crosslocale_message from_js_value_impl(Napi::Env env, Napi::Value js_value) {
+    crosslocale_message msg;
     switch (js_value.Type()) {
     case napi_undefined:
     case napi_null:
-      return {.type = CROSSLOCALE_MESSAGE_NIL, .as = {.value_bool = false}};
+      msg.type = CROSSLOCALE_MESSAGE_NIL;
+      msg.as.value_bool = false;
+      return msg;
 
     case napi_boolean: {
       bool b = js_value.As<Napi::Boolean>().Value();
-      return {.type = CROSSLOCALE_MESSAGE_BOOL, .as = {.value_bool = b}};
+      msg.type = CROSSLOCALE_MESSAGE_BOOL;
+      msg.as.value_bool = b;
+      return msg;
     }
 
     case napi_number: {
       double n_float = js_value.As<Napi::Number>().DoubleValue();
       int64_t n_int = (uint64_t)n_float;
       if ((double)n_int == n_float) {
-        return {.type = CROSSLOCALE_MESSAGE_I64, .as = {.value_i64 = n_int}};
+        msg.type = CROSSLOCALE_MESSAGE_I64;
+        msg.as.value_i64 = n_int;
+        return msg;
       } else {
-        return {.type = CROSSLOCALE_MESSAGE_F64, .as = {.value_f64 = n_float}};
+        msg.type = CROSSLOCALE_MESSAGE_F64;
+        msg.as.value_f64 = n_float;
+        return msg;
       }
     }
 
     case napi_string: {
       crosslocale_message_str s = from_js_str(js_value.As<Napi::String>());
-      return {.type = CROSSLOCALE_MESSAGE_STR, .as = {.value_str = s}};
+      msg.type = CROSSLOCALE_MESSAGE_STR;
+      msg.as.value_str = s;
+      return msg;
     }
 
     case napi_object: {
@@ -229,7 +243,10 @@ protected:
             data[i] = element;
           }
         }
-        return {.type = CROSSLOCALE_MESSAGE_LIST, .as = {.value_list = {.len = len, .ptr = data}}};
+        msg.type = CROSSLOCALE_MESSAGE_LIST;
+        msg.as.value_list.len = len;
+        msg.as.value_list.ptr = data;
+        return msg;
       } else {
         Napi::Object js_object = js_value.As<Napi::Object>();
         Napi::Array js_keys = js_object.GetPropertyNames();
@@ -245,8 +262,11 @@ protected:
             values[i] = value;
           }
         }
-        return {.type = CROSSLOCALE_MESSAGE_DICT,
-          .as = {.value_dict = {.len = len, .keys = keys, .values = values}}};
+        msg.type = CROSSLOCALE_MESSAGE_DICT;
+        msg.as.value_dict.len = len;
+        msg.as.value_dict.keys = keys;
+        msg.as.value_dict.values = values;
+        return msg;
       }
     }
 
@@ -256,7 +276,9 @@ protected:
     case napi_bigint:
       break;
     }
-    return {.type = CROSSLOCALE_MESSAGE_INVALID, .as = {.value_bool = false}};
+    msg.type = CROSSLOCALE_MESSAGE_INVALID;
+    msg.as.value_bool = false;
+    return msg;
   }
 };
 
@@ -293,7 +315,7 @@ public:
     std::lock_guard<std::mutex> guard(this->recv_mutex);
     crosslocale_message message;
     throw_ffi_result(crosslocale_backend_recv_message(this->raw, &message));
-    return std::make_unique<BackendMessageFromRust>(message);
+    return std::unique_ptr<BackendMessageFromRust>(new BackendMessageFromRust(message));
   }
 
   void send_message(const BackendMessage& message) {
