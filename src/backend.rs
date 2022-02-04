@@ -8,13 +8,13 @@ use self::error::BackendNiceError;
 use self::transports::{Transport, TransportedValue};
 use crate::impl_prelude::*;
 use crate::project::{Comment, Fragment, Project, Translation};
+use crate::utils::json::Value as JsonValue;
 use crate::utils::{self, RcExt};
 
 use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeSeq as _;
 use serde::{Deserialize, Serialize};
-use serde_json::value::RawValue;
 use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -44,9 +44,9 @@ impl MessageType {
 }
 
 #[derive(Debug, Clone)]
-pub enum Message<'a> {
-  Request { id: Id, method: Cow<'a, str>, params: Cow<'a, RawValue> },
-  Response { id: Id, result: Cow<'a, RawValue> },
+pub enum Message {
+  Request { id: Id, method: Cow<'static, str>, params: JsonValue },
+  Response { id: Id, result: JsonValue },
   ErrorResponse { id: Option<Id>, message: Cow<'static, str> },
 }
 
@@ -54,7 +54,7 @@ pub enum Message<'a> {
 /// those aren't really convenient for storing IDs.
 pub type Id = u32;
 
-impl<'de> Deserialize<'de> for Message<'de> {
+impl<'de> Deserialize<'de> for Message {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
   where
     D: serde::Deserializer<'de>,
@@ -64,7 +64,7 @@ impl<'de> Deserialize<'de> for Message<'de> {
     struct MessageVisitor {}
 
     impl<'de> serde::de::Visitor<'de> for MessageVisitor {
-      type Value = Message<'de>;
+      type Value = Message;
 
       fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("Message array")
@@ -90,15 +90,11 @@ impl<'de> Deserialize<'de> for Message<'de> {
               Some(v) => v,
               None => return Err(DeError::invalid_length(2, &"request message method")),
             };
-            let params = match seq.next_element::<&'de RawValue>()? {
+            let params = match seq.next_element::<JsonValue>()? {
               Some(v) => v,
               None => return Err(DeError::invalid_length(3, &"request message params")),
             };
-            Ok(Message::Request {
-              id: msg_id,
-              method: Cow::Owned(method),
-              params: Cow::Borrowed(params),
-            })
+            Ok(Message::Request { id: msg_id, method: Cow::Owned(method), params })
           }
 
           Some(MessageType::Response) => {
@@ -106,11 +102,11 @@ impl<'de> Deserialize<'de> for Message<'de> {
               Some(v) => v,
               None => return Err(DeError::invalid_length(1, &"message ID")),
             };
-            let result = match seq.next_element::<&'de RawValue>()? {
+            let result = match seq.next_element::<JsonValue>()? {
               Some(v) => v,
               None => return Err(DeError::invalid_length(2, &"response message result")),
             };
-            Ok(Message::Response { id: msg_id, result: Cow::Borrowed(result) })
+            Ok(Message::Response { id: msg_id, result })
           }
 
           Some(MessageType::ErrorResponse) => {
@@ -139,7 +135,7 @@ impl<'de> Deserialize<'de> for Message<'de> {
   }
 }
 
-impl<'a> Serialize for Message<'a> {
+impl Serialize for Message {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where
     S: serde::Serializer,
@@ -185,15 +181,9 @@ pub trait Method: Sized + DeserializeOwned + 'static {
   fn declaration() -> MethodDeclaration {
     MethodDeclaration {
       name: Self::name(),
-      deserialize_request: |json| {
-        Ok(Box::new(serde_json::from_str::<Self>(json.get())?)) //
-      },
-      serialize_response: |any| {
-        serde_json::value::to_raw_value(&any.downcast::<Self::Result>().unwrap())
-      },
-      handle_call: |bk, any| {
-        Ok(Box::new(Self::handler(bk, *any.downcast::<Self>().unwrap())?)) //
-      },
+      deserialize_request: |json| Ok(Box::new(serde_json::from_value::<Self>(json)?)),
+      serialize_response: |any| serde_json::to_value(any.downcast::<Self::Result>().unwrap()),
+      handle_call: |bk, any| Ok(Box::new(Self::handler(bk, *any.downcast::<Self>().unwrap())?)),
     }
   }
 }
@@ -202,8 +192,8 @@ pub trait Method: Sized + DeserializeOwned + 'static {
 #[derive(Clone)]
 pub struct MethodDeclaration {
   pub name: &'static str,
-  pub deserialize_request: fn(&RawValue) -> serde_json::Result<Box<dyn Any>>,
-  pub serialize_response: fn(Box<dyn Any>) -> serde_json::Result<Box<RawValue>>,
+  pub deserialize_request: fn(JsonValue) -> serde_json::Result<Box<dyn Any>>,
+  pub serialize_response: fn(Box<dyn Any>) -> serde_json::Result<JsonValue>,
   pub handle_call: fn(&'_ mut Backend, Box<dyn Any>) -> AnyResult<Box<dyn Any>>,
 }
 
@@ -508,23 +498,21 @@ impl Backend {
     Ok(())
   }
 
-  // There must be an explicit lifetime here, so that the compiler understands
-  // that the returned value doesn't pull a borrow for the whole `self`.
-  fn process_request<'response>(
+  fn process_request(
     &mut self,
-    method: Cow<str>,
-    params: Cow<RawValue>,
-  ) -> AnyResult<Cow<'response, RawValue>> {
+    method: Cow<'static, str>,
+    params: JsonValue,
+  ) -> AnyResult<JsonValue> {
     let method_decl: &'static MethodDeclaration = match self.methods_registry.get(&*method) {
       Some(v) => *v,
       None => backend_nice_error!("unknown method"),
     };
-    let params = (method_decl.deserialize_request)(&*params)
+    let params = (method_decl.deserialize_request)(params)
       .context("Failed to deserialize message parameters")?;
     let result = (method_decl.handle_call)(self, params)?;
-    let json_result =
+    let result =
       (method_decl.serialize_response)(result).context("Failed to serialize message result")?;
-    Ok(Cow::Owned(json_result))
+    Ok(result)
   }
 }
 
