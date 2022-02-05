@@ -57,7 +57,7 @@ impl Method for ReqOpenProject {
       Ok(v) => v,
       Err(e) => backend_nice_error!("failed to open project", e),
     };
-    let project_id = backend.project_id_alloc.next().unwrap();
+    let project_id = backend.project_id.alloc();
     backend.projects.insert(project_id, project);
     Ok(ResOpenProject { project_id })
   }

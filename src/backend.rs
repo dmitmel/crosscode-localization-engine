@@ -5,7 +5,7 @@ pub mod handlers;
 pub mod transports;
 
 use self::error::BackendNiceError;
-use self::transports::Transport;
+use self::transports::{Transport, TransportDisconnectionError};
 use crate::impl_prelude::*;
 use crate::project::{Comment, Fragment, Project, Translation};
 use crate::utils::{self, RcExt};
@@ -14,7 +14,7 @@ use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeSeq as _;
 use serde::{Deserialize, Serialize};
-use serde_json::value::RawValue;
+use serde_json::value::{to_raw_value, RawValue};
 use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -48,6 +48,17 @@ pub enum Message<'a> {
   Request { id: Id, method: Cow<'a, str>, params: Cow<'a, RawValue> },
   Response { id: Id, result: Cow<'a, RawValue> },
   ErrorResponse { id: Option<Id>, message: Cow<'static, str> },
+}
+
+impl<'a> Message<'a> {
+  #[inline]
+  pub fn response_id(&self) -> Option<Id> {
+    match self {
+      Self::Request { .. } => None,
+      Self::Response { id, .. } => Some(*id),
+      Self::ErrorResponse { id, .. } => *id,
+    }
+  }
 }
 
 /// `u32`s are used because JS only has 32-bit integers. And 64-bit floats, but
@@ -178,22 +189,31 @@ pub trait Method: Sized + DeserializeOwned + 'static {
 
   type Result: Sized + Serialize + 'static;
 
-  fn handler(_backend: &mut Backend, _params: Self) -> AnyResult<Self::Result> {
-    backend_nice_error!("the backend doesn't handle this request")
-  }
+  fn handler(backend: &mut Backend, params: Self) -> AnyResult<Self::Result>;
 
   fn declaration() -> MethodDeclaration {
     MethodDeclaration {
+      client: false,
       name: Self::name(),
-      deserialize_request: |json| {
-        Ok(Box::new(serde_json::from_str::<Self>(json.get())?)) //
-      },
-      serialize_response: |any| {
-        serde_json::value::to_raw_value(&any.downcast::<Self::Result>().unwrap())
-      },
-      handle_call: |bk, any| {
-        Ok(Box::new(Self::handler(bk, *any.downcast::<Self>().unwrap())?)) //
-      },
+      deserialize_incoming: |json| Ok(Box::new(serde_json::from_str::<Self>(json.get())?)),
+      serialize_outgoing: |any| to_raw_value(&any.downcast::<Self::Result>().unwrap()),
+      handle_call: |bk, any| Ok(Box::new(Self::handler(bk, *any.downcast::<Self>().unwrap())?)),
+    }
+  }
+}
+
+pub trait ClientMethod: Sized + Serialize + 'static {
+  fn name() -> &'static str;
+
+  type Result: Sized + DeserializeOwned + 'static;
+
+  fn declaration() -> MethodDeclaration {
+    MethodDeclaration {
+      client: true,
+      name: Self::name(),
+      deserialize_incoming: |json| Ok(Box::new(serde_json::from_str::<Self::Result>(json.get())?)),
+      serialize_outgoing: |any| to_raw_value(&any.downcast::<Self>().unwrap()),
+      handle_call: |_bk, _any| unreachable!("called handle_call on a client method"),
     }
   }
 }
@@ -201,19 +221,21 @@ pub trait Method: Sized + DeserializeOwned + 'static {
 #[allow(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct MethodDeclaration {
+  pub client: bool,
   pub name: &'static str,
-  pub deserialize_request: fn(&RawValue) -> serde_json::Result<Box<dyn Any>>,
-  pub serialize_response: fn(Box<dyn Any>) -> serde_json::Result<Box<RawValue>>,
+  pub deserialize_incoming: fn(&RawValue) -> serde_json::Result<Box<dyn Any>>,
+  pub serialize_outgoing: fn(Box<dyn Any>) -> serde_json::Result<Box<RawValue>>,
   pub handle_call: fn(&'_ mut Backend, Box<dyn Any>) -> AnyResult<Box<dyn Any>>,
 }
 
 impl fmt::Debug for MethodDeclaration {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     f.debug_struct("MethodDeclaration")
+      .field("client", &self.client)
       .field("name", &self.name)
       // <https://github.com/rust-lang/rust/blob/1.58.0/library/core/src/ptr/mod.rs#L1440-L1450>
-      .field("deserialize_request", &(self.deserialize_request as usize as *const ()))
-      .field("serialize_response", &(self.serialize_response as usize as *const ()))
+      .field("deserialize_incoming", &(self.deserialize_incoming as usize as *const ()))
+      .field("serialize_outgoing", &(self.serialize_outgoing as usize as *const ()))
       .field("handle_call", &(self.handle_call as usize as *const ()))
       .finish()
   }
@@ -396,100 +418,143 @@ impl serde::Serialize for ListedComment {
 #[derive(Debug)]
 pub struct Backend {
   transport: Box<dyn Transport>,
-  project_id_alloc: IdAllocator,
+  message_id: IdAllocator,
+  project_id: IdAllocator,
   projects: HashMap<Id, Rc<Project>>,
   methods_registry: HashMap<&'static str, &'static MethodDeclaration>,
+  client_methods_registry: HashMap<&'static str, &'static MethodDeclaration>,
+  client_request_id: IdAllocator,
+  client_responses: HashMap<Id, Message<'static>>,
 }
 
 impl Backend {
   pub fn new(transport: Box<dyn Transport>) -> Self {
     let mut methods_registry = HashMap::new();
+    let mut client_methods_registry = HashMap::new();
     for decl in inventory::iter::<MethodDeclaration> {
       let decl: &MethodDeclaration = decl;
-      if methods_registry.insert(decl.name, decl).is_some() {
+      let map = if decl.client { &mut client_methods_registry } else { &mut methods_registry };
+      if map.insert(decl.name, decl).is_some() {
         panic!("Duplicate method registered for name: {:?}", decl.name);
       }
     }
 
     Self {
       transport,
-      project_id_alloc: IdAllocator::new(),
-      // I assume that at least one project will be opened because otherwise
-      // (without opening a project) the backend is pretty much useless
-      projects: HashMap::with_capacity(1),
+      message_id: IdAllocator::new(),
+      project_id: IdAllocator::new(),
+      projects: HashMap::new(),
       methods_registry,
+      client_methods_registry,
+      client_request_id: IdAllocator::new(),
+      client_responses: HashMap::new(),
     }
   }
 
   pub fn start(&mut self) -> AnyResult<()> {
-    let mut message_index: usize = 0;
-    loop {
-      match self.process_one_message(message_index) {
-        Err(e) if e.is::<transports::TransportDisconnectionError>() => {
-          info!("The frontend has disconnected, exiting cleanly");
-          break;
-        }
-        Err(e) => {
-          crate::report_error(e.context(format!("Failed to process message #{}", message_index)));
-        }
-        _ => {}
-      }
-
-      message_index = message_index.wrapping_add(1);
+    match self.process_messages_until(None) {
+      Ok(_) => unreachable!(),
+      Err(TransportDisconnectionError) => Ok(()),
     }
-
-    Ok(())
   }
 
-  fn process_one_message(&mut self, message_index: usize) -> AnyResult<()> {
-    let buf = self.transport.recv().context("Failed to receive message from the transport")?;
-    let in_msg: serde_json::Result<Message> = serde_json::from_str(&buf);
+  fn process_messages_until(
+    &mut self,
+    expected_response_id: Option<Id>,
+  ) -> Result<Message<'static>, TransportDisconnectionError> {
+    if let Some(id) = expected_response_id {
+      self.client_responses.remove(&id);
+    }
 
-    let out_msg: Message = match in_msg {
-      Ok(Message::Request { id, method, params }) => match self.process_request(method, params) {
-        Ok(result) => Message::Response { id, result },
+    loop {
+      let message_id = self.message_id.alloc();
+      match self.process_one_message(message_id) {
+        Ok(None) => {}
+
+        Ok(Some(message)) => match message {
+          Message::Request { .. } => {
+            unreachable!();
+          }
+          Message::ErrorResponse { id: None, message } => {
+            warn!("Received an error from the client: {}", message);
+          }
+          Message::Response { id, .. } | Message::ErrorResponse { id: Some(id), .. } => {
+            if Some(id) == expected_response_id {
+              return Ok(message);
+            } else {
+              self.client_responses.insert(id, message);
+            }
+          }
+        },
+
+        Err(e) if e.is::<TransportDisconnectionError>() => {
+          return Err(TransportDisconnectionError);
+        }
         Err(e) => {
-          let mut message = "internal backend error".into();
-          match e.downcast::<BackendNiceError>() {
+          crate::report_error(e.context(format!("Failed to process message #{}", message_id)));
+        }
+      }
+
+      if let Some(id) = expected_response_id {
+        if let Some(message) = self.client_responses.remove(&id) {
+          return Ok(message);
+        }
+      }
+    }
+  }
+
+  fn process_one_message(&mut self, message_id: Id) -> AnyResult<Option<Message<'static>>> {
+    let buf = self.transport.recv().context("Failed to receive message from the transport")?;
+    match serde_json::from_str(&buf) {
+      Err(e) => {
+        warn!("Failed to deserialize message #{}: {}", message_id, e);
+        self.send_one_message(&Message::ErrorResponse {
+          id: None,
+          message: Cow::Owned(e.to_string()),
+        })?;
+        Ok(None)
+      }
+
+      Ok(Message::Request { id, method, params }) => {
+        let out_message = match self.process_request(method, params) {
+          Ok(result) => Message::Response { id, result },
+          Err(e) if e.is::<TransportDisconnectionError>() => {
+            return Err(e);
+          }
+          Err(e) => match e.downcast::<BackendNiceError>() {
             Ok(e) => {
-              message = e.message;
               if let Some(e) = e.source {
                 crate::report_error(e);
               }
+              Message::ErrorResponse { id: Some(id), message: e.message }
             }
             Err(e) => {
               crate::report_error(e);
+              Message::ErrorResponse { id: Some(id), message: "internal backend error".into() }
             }
-          }
-          Message::ErrorResponse { id: Some(id), message }
-        }
-      },
-
-      Ok(Message::Response { .. }) | Ok(Message::ErrorResponse { .. }) => Message::ErrorResponse {
-        id: None,
-        message: "the backend currently can't receive responses".into(),
-      },
-
-      Err(e) if !e.is_io() => {
-        warn!("Failed to deserialize message #{}: {}", message_index, e);
-        Message::ErrorResponse { id: None, message: Cow::Owned(e.to_string()) }
+          },
+        };
+        self.send_one_message(&out_message)?;
+        Ok(None)
       }
 
-      Err(e) => {
-        Err(e).context("Failed to deserialize message")?;
-        unreachable!()
+      Ok(Message::Response { id, result }) => {
+        Ok(Some(Message::Response { id, result: Cow::Owned(result.into_owned()) }))
       }
-    };
+      Ok(Message::ErrorResponse { id, message }) => {
+        Ok(Some(Message::ErrorResponse { id, message: Cow::Owned(message.into_owned()) }))
+      }
+    }
+  }
 
+  fn send_one_message(&mut self, message: &Message) -> AnyResult<()> {
     let mut buf = Vec::new();
-    serde_json::to_writer(&mut buf, &out_msg).context("Failed to serialize message")?;
+    serde_json::to_writer(&mut buf, message).context("Failed to serialize message")?;
     // Safe because serde_json doesn't emit invalid UTF-8, and besides JSON
     // files are required to be encoded as UTF-8 by the specification. See
     // <https://tools.ietf.org/html/rfc8259#section-8.1>.
     let buf = unsafe { String::from_utf8_unchecked(buf) };
-
     self.transport.send(buf).context("Failed to send message to the transport")?;
-
     Ok(())
   }
 
@@ -504,38 +569,60 @@ impl Backend {
       Some(v) => *v,
       None => backend_nice_error!("unknown method"),
     };
-    let params = (method_decl.deserialize_request)(&*params)
+    let params = (method_decl.deserialize_incoming)(&*params)
       .context("Failed to deserialize message parameters")?;
     let result = (method_decl.handle_call)(self, params)?;
-    let json_result =
-      (method_decl.serialize_response)(result).context("Failed to serialize message result")?;
-    Ok(Cow::Owned(json_result))
+    let result =
+      (method_decl.serialize_outgoing)(result).context("Failed to serialize message result")?;
+    Ok(Cow::Owned(result))
+  }
+
+  pub fn send_request<M: ClientMethod>(&mut self, params: M) -> AnyResult<M::Result> {
+    let method_decl: &'static MethodDeclaration =
+      self.client_methods_registry.get(M::name()).unwrap();
+    let params = (method_decl.serialize_outgoing)(Box::new(params))
+      .context("Failed to serialize client message parameters")?;
+    let result = self.send_request_impl(Cow::Borrowed(M::name()), Cow::Owned(params))?;
+    let result = (method_decl.deserialize_incoming)(&*result)
+      .context("Failed to deserialize client message result")?;
+    Ok(*result.downcast::<M::Result>().unwrap())
+  }
+
+  // Same story with explicit lifetimes as in process_request.
+  pub fn send_request_impl<'req, 'res>(
+    &mut self,
+    method: Cow<'req, str>,
+    params: Cow<'req, RawValue>,
+  ) -> AnyResult<Cow<'res, RawValue>> {
+    let id = self.client_request_id.alloc();
+    self.send_one_message(&Message::Request { id, method, params })?;
+    match self.process_messages_until(Some(id))? {
+      Message::Request { .. } => unreachable!(),
+      Message::Response { result, .. } => Ok(result),
+      Message::ErrorResponse { message, .. } => bail!("client error: {}", message),
+    }
   }
 }
 
 #[derive(Debug, Clone)]
 pub struct IdAllocator {
-  current_id: Id,
-  pub only_nonzero: bool,
-  pub wrap_around: bool,
+  current: Id,
 }
 
 impl IdAllocator {
-  pub fn new() -> Self { Self { current_id: 0, only_nonzero: true, wrap_around: true } }
+  #[inline(always)]
+  pub fn new() -> Self { Self { current: 0 } }
+
+  #[inline]
+  pub fn alloc(&mut self) -> Id {
+    let id = self.current.max(1);
+    self.current = id.wrapping_add(1);
+    id
+  }
 }
 
 impl Iterator for IdAllocator {
   type Item = Id;
-  fn next(&mut self) -> Option<Self::Item> {
-    // Clever branchless hack. Will take a max value with 1 when `only_nonzero`
-    // is true, will not affect `self.next_id` otherwise.
-    let id = self.current_id.max(self.only_nonzero as Id);
-    let (next_id, overflow) = id.overflowing_add(1);
-    if overflow && !self.wrap_around {
-      None
-    } else {
-      self.current_id = next_id;
-      Some(id)
-    }
-  }
+  #[inline(always)]
+  fn next(&mut self) -> Option<Self::Item> { Some(self.alloc()) }
 }

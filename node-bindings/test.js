@@ -51,25 +51,32 @@ let backend = new addon.Backend();
   }
 })();
 
-for (let [request_index, request] of [
-  { type: 'get_backend_info' },
-  { type: 'open_project', dir: 'tmp' },
-  { type: 'get_project_meta', project_id: 1 },
-  { type: 'list_files', project_id: 1, file_type: 'tr_file' },
-  {
-    type: 'query_fragments',
-    project_id: 1,
-    from_game_file: 'data/maps/hideout/entrance.json',
-    select_fields: {
-      fragments: ['id', 'game_file_path', 'json_path'],
+try {
+  for (let [request_index, request] of [
+    { type: 'get_backend_info' },
+    { type: 'open_project', dir: 'tmp' },
+    { type: 'get_project_meta', project_id: 1 },
+    { type: 'list_files', project_id: 1, file_type: 'tr_file' },
+    {
+      type: 'query_fragments',
+      project_id: 1,
+      from_game_file: 'data/maps/hideout/entrance.json',
+      select_fields: {
+        fragments: ['id', 'game_file_path', 'json_path'],
+      },
     },
-  },
-].entries()) {
-  let message = [1, request_index + 1, request.type, request];
-  delete request.type;
-  let message_buf = Buffer.from(JSON.stringify(message), 'utf8');
-  console.log(`send[${humanizeByteSize(message_buf.length)}]`, inspect(message));
-  backend.send_message(message_buf);
-}
+  ].entries()) {
+    let message = [1, request_index + 1, request.type, request];
+    delete request.type;
+    let message_buf = Buffer.from(JSON.stringify(message), 'utf8');
+    console.log(`send[${humanizeByteSize(message_buf.length)}]`, inspect(message));
+    backend.send_message(message_buf);
+  }
 
-backend.close();
+  backend.close();
+} catch (e) {
+  if (e.code === 'CROSSLOCALE_ERR_BACKEND_DISCONNECTED') {
+    return;
+  }
+  throw e;
+}
