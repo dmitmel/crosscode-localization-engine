@@ -5,16 +5,16 @@ pub mod handlers;
 pub mod transports;
 
 use self::error::BackendNiceError;
-use self::transports::{Transport, TransportedValue};
+use self::transports::Transport;
 use crate::impl_prelude::*;
 use crate::project::{Comment, Fragment, Project, Translation};
-use crate::utils::json::Value as JsonValue;
 use crate::utils::{self, RcExt};
 
 use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeSeq as _;
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -44,9 +44,9 @@ impl MessageType {
 }
 
 #[derive(Debug, Clone)]
-pub enum Message {
-  Request { id: Id, method: Cow<'static, str>, params: JsonValue },
-  Response { id: Id, result: JsonValue },
+pub enum Message<'a> {
+  Request { id: Id, method: Cow<'a, str>, params: Cow<'a, RawValue> },
+  Response { id: Id, result: Cow<'a, RawValue> },
   ErrorResponse { id: Option<Id>, message: Cow<'static, str> },
 }
 
@@ -54,17 +54,17 @@ pub enum Message {
 /// those aren't really convenient for storing IDs.
 pub type Id = u32;
 
-impl<'de> Deserialize<'de> for Message {
+impl<'de> Deserialize<'de> for Message<'de> {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
   where
     D: serde::Deserializer<'de>,
   {
     use serde::de::Error as DeError;
 
-    struct MessageVisitor {}
+    struct MessageVisitor;
 
     impl<'de> serde::de::Visitor<'de> for MessageVisitor {
-      type Value = Message;
+      type Value = Message<'de>;
 
       fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("Message array")
@@ -90,11 +90,15 @@ impl<'de> Deserialize<'de> for Message {
               Some(v) => v,
               None => return Err(DeError::invalid_length(2, &"request message method")),
             };
-            let params = match seq.next_element::<JsonValue>()? {
+            let params = match seq.next_element::<&'de RawValue>()? {
               Some(v) => v,
               None => return Err(DeError::invalid_length(3, &"request message params")),
             };
-            Ok(Message::Request { id: msg_id, method: Cow::Owned(method), params })
+            Ok(Message::Request {
+              id: msg_id,
+              method: Cow::Owned(method),
+              params: Cow::Borrowed(params),
+            })
           }
 
           Some(MessageType::Response) => {
@@ -102,11 +106,11 @@ impl<'de> Deserialize<'de> for Message {
               Some(v) => v,
               None => return Err(DeError::invalid_length(1, &"message ID")),
             };
-            let result = match seq.next_element::<JsonValue>()? {
+            let result = match seq.next_element::<&'de RawValue>()? {
               Some(v) => v,
               None => return Err(DeError::invalid_length(2, &"response message result")),
             };
-            Ok(Message::Response { id: msg_id, result })
+            Ok(Message::Response { id: msg_id, result: Cow::Borrowed(result) })
           }
 
           Some(MessageType::ErrorResponse) => {
@@ -131,11 +135,11 @@ impl<'de> Deserialize<'de> for Message {
       }
     }
 
-    deserializer.deserialize_seq(MessageVisitor {})
+    deserializer.deserialize_seq(MessageVisitor)
   }
 }
 
-impl Serialize for Message {
+impl<'a> Serialize for Message<'a> {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where
     S: serde::Serializer,
@@ -181,9 +185,15 @@ pub trait Method: Sized + DeserializeOwned + 'static {
   fn declaration() -> MethodDeclaration {
     MethodDeclaration {
       name: Self::name(),
-      deserialize_request: |json| Ok(Box::new(serde_json::from_value::<Self>(json)?)),
-      serialize_response: |any| serde_json::to_value(any.downcast::<Self::Result>().unwrap()),
-      handle_call: |bk, any| Ok(Box::new(Self::handler(bk, *any.downcast::<Self>().unwrap())?)),
+      deserialize_request: |json| {
+        Ok(Box::new(serde_json::from_str::<Self>(json.get())?)) //
+      },
+      serialize_response: |any| {
+        serde_json::value::to_raw_value(&any.downcast::<Self::Result>().unwrap())
+      },
+      handle_call: |bk, any| {
+        Ok(Box::new(Self::handler(bk, *any.downcast::<Self>().unwrap())?)) //
+      },
     }
   }
 }
@@ -192,8 +202,8 @@ pub trait Method: Sized + DeserializeOwned + 'static {
 #[derive(Clone)]
 pub struct MethodDeclaration {
   pub name: &'static str,
-  pub deserialize_request: fn(JsonValue) -> serde_json::Result<Box<dyn Any>>,
-  pub serialize_response: fn(Box<dyn Any>) -> serde_json::Result<JsonValue>,
+  pub deserialize_request: fn(&RawValue) -> serde_json::Result<Box<dyn Any>>,
+  pub serialize_response: fn(Box<dyn Any>) -> serde_json::Result<Box<RawValue>>,
   pub handle_call: fn(&'_ mut Backend, Box<dyn Any>) -> AnyResult<Box<dyn Any>>,
 }
 
@@ -432,18 +442,8 @@ impl Backend {
   }
 
   fn process_one_message(&mut self, message_index: usize) -> AnyResult<()> {
-    let transported_value =
-      self.transport.recv().context("Failed to receive message from the transport")?;
-    let json_str: String;
-    let in_msg: serde_json::Result<Message> = match transported_value {
-      TransportedValue::Json(ref v) => serde_json::from_str(v),
-      TransportedValue::Parsed(v) => try {
-        json_str = serde_json::to_string(&v?)?;
-        serde_json::from_str(&json_str)?
-      }
-      // TransportedValue::Parsed(Ok(v)) => Message::deserialize(v),
-      // TransportedValue::Parsed(Err(v)) => Err(v),
-    };
+    let buf = self.transport.recv().context("Failed to receive message from the transport")?;
+    let in_msg: serde_json::Result<Message> = serde_json::from_str(&buf);
 
     let out_msg: Message = match in_msg {
       Ok(Message::Request { id, method, params }) => match self.process_request(method, params) {
@@ -481,38 +481,35 @@ impl Backend {
       }
     };
 
-    let transported_value = if self.transport.uses_parsed_values() {
-      let json_value = serde_json::to_value(&out_msg).context("Failed to serialize message")?;
-      TransportedValue::Parsed(Ok(json_value))
-    } else {
-      let mut buf = Vec::new();
-      serde_json::to_writer(&mut buf, &out_msg).context("Failed to serialize message")?;
-      // Safe because serde_json doesn't emit invalid UTF-8, and besides JSON
-      // files are required to be encoded as UTF-8 by the specification. See
-      // <https://tools.ietf.org/html/rfc8259#section-8.1>.
-      TransportedValue::Json(unsafe { String::from_utf8_unchecked(buf) })
-    };
+    let mut buf = Vec::new();
+    serde_json::to_writer(&mut buf, &out_msg).context("Failed to serialize message")?;
+    // Safe because serde_json doesn't emit invalid UTF-8, and besides JSON
+    // files are required to be encoded as UTF-8 by the specification. See
+    // <https://tools.ietf.org/html/rfc8259#section-8.1>.
+    let buf = unsafe { String::from_utf8_unchecked(buf) };
 
-    self.transport.send(transported_value).context("Failed to send message to the transport")?;
+    self.transport.send(buf).context("Failed to send message to the transport")?;
 
     Ok(())
   }
 
-  fn process_request(
+  // There must be explicit lifetimes here, so that the compiler understands
+  // that the returned value doesn't pull a borrow for the whole `self`.
+  fn process_request<'req, 'res>(
     &mut self,
-    method: Cow<'static, str>,
-    params: JsonValue,
-  ) -> AnyResult<JsonValue> {
+    method: Cow<'req, str>,
+    params: Cow<'req, RawValue>,
+  ) -> AnyResult<Cow<'res, RawValue>> {
     let method_decl: &'static MethodDeclaration = match self.methods_registry.get(&*method) {
       Some(v) => *v,
       None => backend_nice_error!("unknown method"),
     };
-    let params = (method_decl.deserialize_request)(params)
+    let params = (method_decl.deserialize_request)(&*params)
       .context("Failed to deserialize message parameters")?;
     let result = (method_decl.handle_call)(self, params)?;
-    let result =
+    let json_result =
       (method_decl.serialize_response)(result).context("Failed to serialize message result")?;
-    Ok(result)
+    Ok(Cow::Owned(json_result))
   }
 }
 

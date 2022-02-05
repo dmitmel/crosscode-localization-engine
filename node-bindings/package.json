@@ -9,6 +9,7 @@
     "node-gyp": "node-gyp"
   },
   "devDependencies": {
+    "@types/node": ">=11.0.0",
     "node-addon-api": "^4.0.0"
   }
 }

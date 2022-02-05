@@ -5,7 +5,7 @@
 
 #include <crosslocale.h>
 
-const uint32_t SUPPORTED_FFI_BRIDGE_VERSION = 3;
+const uint32_t SUPPORTED_FFI_BRIDGE_VERSION = 4;
 
 // NOTE: About the radical usage of crosslocale_backend_t which may seem
 // thread-unsafe on the first glance: the implementation details are employed
@@ -43,7 +43,7 @@ public:
   bool is_ok() const noexcept { return this->code == CROSSLOCALE_OK; };
 
   const char* what() const noexcept override {
-    return (char*)crosslocale_error_description(this->code);
+    return (char*)crosslocale_error_describe(this->code);
   }
 
   const char* id() const noexcept { return (char*)crosslocale_error_id_str(this->code); }
@@ -64,236 +64,17 @@ void throw_ffi_result(crosslocale_result res) {
   }
 }
 
-class BackendMessage {
+class FfiMessage {
 public:
-  Napi::Value to_js_value(Napi::Env env) const {
-    Napi::Value js_value = to_js_value_impl(env, this->raw);
-    return js_value != nullptr ? js_value : env.Undefined();
-  }
+  uint8_t* ptr;
+  size_t len;
 
-  const crosslocale_message& get_raw() const { return this->raw; }
+  FfiMessage(uint8_t* ptr, size_t len) : ptr(ptr), len(len) {}
 
-  void operator=(const BackendMessage&) = delete;
-  BackendMessage(const BackendMessage&) = delete;
+  ~FfiMessage() { throw_ffi_result(crosslocale_message_free(this->ptr, this->len)); }
 
-protected:
-  BackendMessage(crosslocale_message raw) : raw(raw) {}
-
-  crosslocale_message raw;
-
-  static Napi::Value to_js_value_impl(Napi::Env env, crosslocale_message raw) {
-    switch (raw.type) {
-    case CROSSLOCALE_MESSAGE_NIL:
-      return env.Null();
-    case CROSSLOCALE_MESSAGE_BOOL:
-      return Napi::Boolean::New(env, raw.as.value_bool);
-    case CROSSLOCALE_MESSAGE_I64:
-      return Napi::Number::New(env, (double)raw.as.value_i64);
-    case CROSSLOCALE_MESSAGE_F64:
-      return Napi::Number::New(env, raw.as.value_f64);
-    case CROSSLOCALE_MESSAGE_STR:
-      return Napi::String::New(env, (char*)raw.as.value_str.ptr, raw.as.value_str.len);
-
-    case CROSSLOCALE_MESSAGE_LIST: {
-      Napi::EscapableHandleScope scope(env);
-      Napi::Array js_array = Napi::Array::New(env, raw.as.value_list.len);
-      if (raw.as.value_list.len <= UINT32_MAX) {
-        for (uint32_t i = 0; i < (uint32_t)raw.as.value_list.len; i++) {
-          crosslocale_message value = raw.as.value_list.ptr[i];
-          Napi::Value js_value = to_js_value_impl(env, value);
-          if (js_value != nullptr) {
-            js_array.Set(i, js_value);
-          }
-        }
-      } else {
-        for (size_t i = 0; i < raw.as.value_list.len; i++) {
-          crosslocale_message value = raw.as.value_list.ptr[i];
-          Napi::Value js_value = to_js_value_impl(env, value);
-          if (js_value != nullptr) {
-            js_array.Set(Napi::Number::New(env, (double)i), js_value);
-          }
-        }
-      }
-      return scope.Escape(js_array);
-    }
-
-    case CROSSLOCALE_MESSAGE_DICT: {
-      Napi::EscapableHandleScope scope(env);
-      Napi::Object js_object = Napi::Object::New(env);
-      for (size_t i = 0; i < raw.as.value_dict.len; i++) {
-        crosslocale_message_str key = raw.as.value_dict.keys[i];
-        crosslocale_message value = raw.as.value_dict.values[i];
-        Napi::Value js_value = to_js_value_impl(env, value);
-        if (js_value != nullptr) {
-          js_object.Set(Napi::String::New(env, (char*)key.ptr, key.len), js_value);
-        }
-      }
-      return scope.Escape(js_object);
-    }
-
-    case CROSSLOCALE_MESSAGE_INVALID:
-      throw std::logic_error("encountered an explicitly invalid value");
-    }
-    return Napi::Value();
-  }
-};
-
-class BackendMessageFromJs : public BackendMessage {
-public:
-  BackendMessageFromJs(Napi::Env env, Napi::Value value)
-      : BackendMessage(from_js_value_impl(env, value)) {}
-
-  ~BackendMessageFromJs() { free_raw_value(this->raw); }
-
-  void operator=(const BackendMessageFromJs&) = delete;
-  BackendMessageFromJs(const BackendMessageFromJs&) = delete;
-
-protected:
-  static void free_raw_value(crosslocale_message raw) {
-    switch (raw.type) {
-    case CROSSLOCALE_MESSAGE_NIL:
-    case CROSSLOCALE_MESSAGE_BOOL:
-    case CROSSLOCALE_MESSAGE_I64:
-    case CROSSLOCALE_MESSAGE_F64:
-      break;
-
-    case CROSSLOCALE_MESSAGE_STR:
-      delete[] raw.as.value_str.ptr;
-      break;
-
-    case CROSSLOCALE_MESSAGE_LIST:
-      for (size_t i = 0; i < raw.as.value_list.len; i++) {
-        free_raw_value(raw.as.value_list.ptr[i]);
-      }
-      delete[] raw.as.value_list.ptr;
-      break;
-
-    case CROSSLOCALE_MESSAGE_DICT:
-      for (size_t i = 0; i < raw.as.value_dict.len; i++) {
-        delete[] raw.as.value_dict.keys[i].ptr;
-        free_raw_value(raw.as.value_dict.values[i]);
-      }
-      delete[] raw.as.value_dict.keys;
-      delete[] raw.as.value_dict.values;
-      break;
-
-    case CROSSLOCALE_MESSAGE_INVALID:
-      break;
-    }
-  }
-
-  static crosslocale_message_str from_js_str(Napi::String value) {
-    Napi::Env env = value.Env();
-    size_t length;
-    napi_status status = napi_get_value_string_utf8(env, value, nullptr, 0, &length);
-    NAPI_THROW_IF_FAILED(env, status);
-    char* data = new char[length + 1];
-    status = napi_get_value_string_utf8(env, value, &data[0], length + 1, nullptr);
-    NAPI_THROW_IF_FAILED(env, status);
-    crosslocale_message_str str;
-    str.len = length;
-    str.ptr = (uint8_t*)data;
-    return str;
-  }
-
-  // <https://codereview.stackexchange.com/q/260759/254963>
-  static crosslocale_message from_js_value_impl(Napi::Env env, Napi::Value js_value) {
-    Napi::HandleScope scope(env);
-
-    crosslocale_message msg;
-    switch (js_value.Type()) {
-    case napi_undefined:
-    case napi_null:
-      msg.type = CROSSLOCALE_MESSAGE_NIL;
-      msg.as.value_bool = false;
-      return msg;
-
-    case napi_boolean: {
-      bool b = js_value.As<Napi::Boolean>().Value();
-      msg.type = CROSSLOCALE_MESSAGE_BOOL;
-      msg.as.value_bool = b;
-      return msg;
-    }
-
-    case napi_number: {
-      double n_float = js_value.As<Napi::Number>().DoubleValue();
-      int64_t n_int = (uint64_t)n_float;
-      if ((double)n_int == n_float) {
-        msg.type = CROSSLOCALE_MESSAGE_I64;
-        msg.as.value_i64 = n_int;
-        return msg;
-      } else {
-        msg.type = CROSSLOCALE_MESSAGE_F64;
-        msg.as.value_f64 = n_float;
-        return msg;
-      }
-    }
-
-    case napi_string: {
-      crosslocale_message_str s = from_js_str(js_value.As<Napi::String>());
-      msg.type = CROSSLOCALE_MESSAGE_STR;
-      msg.as.value_str = s;
-      return msg;
-    }
-
-    case napi_object: {
-      if (js_value.IsArray()) {
-        Napi::Array js_array = js_value.As<Napi::Array>();
-        uint32_t len = js_array.Length();
-        crosslocale_message* data = new crosslocale_message[len];
-        for (size_t i = 0; i < len; i++) {
-          crosslocale_message element = from_js_value_impl(env, js_array.Get(i));
-          if (element.type != CROSSLOCALE_MESSAGE_INVALID) {
-            data[i] = element;
-          }
-        }
-        msg.type = CROSSLOCALE_MESSAGE_LIST;
-        msg.as.value_list.len = len;
-        msg.as.value_list.ptr = data;
-        return msg;
-      } else {
-        Napi::Object js_object = js_value.As<Napi::Object>();
-        Napi::Array js_keys = js_object.GetPropertyNames();
-        uint32_t len = js_keys.Length();
-        crosslocale_message_str* keys = new crosslocale_message_str[len];
-        crosslocale_message* values = new crosslocale_message[len];
-        for (size_t i = 0; i < len; i++) {
-          Napi::Value js_key = js_keys.Get(i);
-          crosslocale_message value = from_js_value_impl(env, js_object.Get(js_key));
-          if (value.type != CROSSLOCALE_MESSAGE_INVALID) {
-            crosslocale_message_str key = from_js_str(js_key.As<Napi::String>());
-            keys[i] = key;
-            values[i] = value;
-          }
-        }
-        msg.type = CROSSLOCALE_MESSAGE_DICT;
-        msg.as.value_dict.len = len;
-        msg.as.value_dict.keys = keys;
-        msg.as.value_dict.values = values;
-        return msg;
-      }
-    }
-
-    case napi_symbol:
-    case napi_function:
-    case napi_external:
-    case napi_bigint:
-      break;
-    }
-    msg.type = CROSSLOCALE_MESSAGE_INVALID;
-    msg.as.value_bool = false;
-    return msg;
-  }
-};
-
-class BackendMessageFromRust : public BackendMessage {
-public:
-  BackendMessageFromRust(crosslocale_message raw) : BackendMessage(raw) {}
-
-  ~BackendMessageFromRust() { crosslocale_message_free(&this->raw); }
-
-  void operator=(const BackendMessageFromRust&) = delete;
-  BackendMessageFromRust(const BackendMessageFromRust&) = delete;
+  void operator=(const FfiMessage&) = delete;
+  FfiMessage(const FfiMessage&) = delete;
 };
 
 class FfiBackend {
@@ -315,16 +96,17 @@ public:
   void operator=(const FfiBackend&) = delete;
   FfiBackend(const FfiBackend&) = delete;
 
-  std::unique_ptr<BackendMessageFromRust> recv_message() {
+  std::unique_ptr<FfiMessage> recv_message() {
     std::lock_guard<std::mutex> guard(this->recv_mutex);
-    crosslocale_message message;
-    throw_ffi_result(crosslocale_backend_recv_message(this->raw, &message));
-    return std::unique_ptr<BackendMessageFromRust>(new BackendMessageFromRust(message));
+    uint8_t* message = nullptr;
+    size_t message_len = 0;
+    throw_ffi_result(crosslocale_backend_recv_message(this->raw, &message, &message_len));
+    return std::make_unique<FfiMessage>(message, message_len);
   }
 
-  void send_message(const BackendMessage& message) {
+  void send_message(const uint8_t* buf, size_t len) {
     std::lock_guard<std::mutex> guard(this->send_mutex);
-    throw_ffi_result(crosslocale_backend_send_message(this->raw, &message.get_raw()));
+    throw_ffi_result(crosslocale_backend_send_message(this->raw, buf, len));
   }
 
   void close() {
@@ -365,7 +147,7 @@ public:
   void Execute() override {
     this->has_error = false;
     try {
-      this->message = this->inner->recv_message();
+      this->message_str = this->inner->recv_message();
     } catch (const FfiBackendException& e) {
       this->error = e;
       this->has_error = true;
@@ -374,16 +156,17 @@ public:
 
   std::vector<napi_value> GetResult(Napi::Env env) override {
     if (!this->has_error) {
-      return {env.Null(), this->message->to_js_value(env)};
+      return {env.Null(),
+        Napi::Buffer<uint8_t>::Copy(env, this->message_str->ptr, this->message_str->len)};
     } else {
-      Napi::Error obj = this->error.to_node_error(env);
+      Napi::Error obj = error.to_node_error(env);
       return {obj.Value()};
     }
   }
 
 private:
   std::shared_ptr<FfiBackend> inner;
-  std::unique_ptr<BackendMessageFromRust> message;
+  std::unique_ptr<FfiMessage> message_str;
   FfiBackendException error = CROSSLOCALE_OK;
   bool has_error = false;
 };
@@ -423,13 +206,15 @@ private:
 
   Napi::Value send_message(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
-    if (!(info.Length() == 1)) {
-      NAPI_THROW(Napi::TypeError::New(env, "send_message(value: any): void"), Napi::Value());
+    if (!(info.Length() == 1 && info[0].IsBuffer())) {
+      NAPI_THROW(Napi::TypeError::New(env, "send_message(text: Buffer): void"), Napi::Value());
     }
 
-    BackendMessageFromJs message(env, info[0]);
+    Napi::Buffer<uint8_t> message(env, info[0]);
+    uint8_t* data = message.Data();
+    size_t len = message.Length();
     try {
-      this->inner->send_message(message);
+      this->inner->send_message(data, len);
     } catch (const FfiBackendException& e) {
       throw e.to_node_error(env);
     }
@@ -454,16 +239,17 @@ private:
   Napi::Value recv_message_sync(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     if (!(info.Length() == 0)) {
-      NAPI_THROW(Napi::TypeError::New(env, "recv_message_sync(): any"), Napi::Value());
+      NAPI_THROW(Napi::TypeError::New(env, "recv_message_sync(): Buffer"), Napi::Value());
     }
 
-    std::unique_ptr<BackendMessageFromRust> message;
+    std::unique_ptr<FfiMessage> message;
     try {
       message = this->inner->recv_message();
     } catch (const FfiBackendException& e) {
       throw e.to_node_error(env);
     }
-    return message->to_js_value(env);
+
+    return Napi::Buffer<uint8_t>::Copy(env, message->ptr, message->len);
   }
 
   Napi::Value close(const Napi::CallbackInfo& info) {
