@@ -46,10 +46,13 @@
                 {
                     "action_name": "prepare",
                     "inputs": ["<(rust_target_dir)/<(rust_build_profile)/<(rust_dylib_file)"],
-                    "conditions": [
-                        ['OS=="win"', {"inputs": ["<(rust_target_dir)/<(rust_build_profile)/<(rust_dylib_file).lib"]}],
-                    ],
                     "outputs": ["<(PRODUCT_DIR)/<(rust_dylib_file)"],
+                    "conditions": [
+                        ['OS=="win"', {
+                            "inputs": ["<(rust_target_dir)/<(rust_build_profile)/<(rust_dylib_file).lib"],
+                            "outputs": ["<(PRODUCT_DIR)/<(rust_dylib_file).lib"],
+                        }],
+                    ],
                     "action": [
                         "python3",
                         "scripts/prepare_rust_dylib.py",
