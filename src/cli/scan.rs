@@ -5,8 +5,8 @@ use crate::scan;
 use crate::scan::fragment_descriptions;
 use crate::scan::json_file_finder::{self, FoundJsonFile};
 use crate::scan::lang_label_extractor::{self, LangLabel};
-use crate::utils;
 use crate::utils::json;
+use crate::utils::{self, ArcExt};
 
 use once_cell::sync::Lazy;
 use serde::Deserialize;
@@ -14,7 +14,7 @@ use std::borrow::Cow;
 use std::char;
 use std::collections::HashSet;
 use std::fs;
-use std::io;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::str::FromStr;
@@ -40,7 +40,7 @@ impl super::Command for ScanCommand {
           .value_hint(clap::ValueHint::DirPath)
           .setting(clap::ArgSettings::AllowInvalidUtf8)
           .required(true)
-          .help("Path to the assets directory."),
+          .help("Path to the primary assets directory."),
       )
       .arg(
         clap::Arg::new("output")
@@ -80,11 +80,27 @@ impl super::Command for ScanCommand {
           .short('j')
           .long("jobs")
           .help(
-            "The number of parallel worker threads allocated for the scanner. Zero means using as \
-            many threads as there are CPU cores available.",
+            "The number of parallel worker threads allocated for the scanner. Zero means using \
+            as many threads as there are CPU cores available.",
           )
           .validator(|s| usize::from_str(s).map(|_| ()))
           .default_value("0"),
+      )
+      .arg(
+        clap::Arg::new("assets_overrides_dirs")
+          .value_name("ASSETS")
+          .value_hint(clap::ValueHint::DirPath)
+          .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .multiple_values(true)
+          .number_of_values(1)
+          .long("add-assets-overrides-dir")
+          .help(
+            "Appends a directory to the list of assets overrides directories: for each file \
+            found in the primary assets directory, they are checked for containing a replacement \
+            for that file (in order of addition, the first matched file is used). Note that this \
+            currently doesn't enable support for mods - these directories themselves are not \
+            scanned for asset files, and patches of any kind are not supported.",
+          ),
       )
   }
 
@@ -94,7 +110,7 @@ impl super::Command for ScanCommand {
     matches: &clap::ArgMatches,
     mut progress: Box<dyn ProgressReporter>,
   ) -> AnyResult<()> {
-    let opt_assets_dir = Arc::new(PathBuf::from(matches.value_of_os("assets_dir").unwrap()));
+    let opt_assets_dir = PathBuf::from(matches.value_of_os("assets_dir").unwrap());
     let opt_output = PathBuf::from(matches.value_of_os("output").unwrap());
     let opt_extra_locales: HashSet<_> = matches
       .values_of("locales")
@@ -102,8 +118,16 @@ impl super::Command for ScanCommand {
     let opt_all_locales = matches.is_present("all_locales");
     let opt_compact = matches.is_present("compact");
     let opt_jobs = usize::from_str(matches.value_of("jobs").unwrap()).unwrap();
+    let opt_assets_overrides_dirs: Vec<_> = matches
+      .values_of("assets_overrides_dirs")
+      .map_or_else(Vec::new, |values| values.map(PathBuf::from).collect());
 
     info!("Performing a scan of game files in the assets dir {:?}", opt_assets_dir);
+
+    let assets_resolver = Arc::new(AssetsResolver {
+      assets_dir: opt_assets_dir,
+      assets_overrides_dirs: opt_assets_overrides_dirs,
+    });
 
     // Note that this is just a pre-emptive check that may become false if
     // another program modifies the file system in parallel...
@@ -134,11 +158,11 @@ impl super::Command for ScanCommand {
     }
 
     let game_version =
-      read_game_version(&opt_assets_dir).context("Failed to read the game version")?;
+      read_game_version(&assets_resolver).context("Failed to read the game version")?;
     info!("Game version is {}", game_version);
 
     info!("Finding all JSON files");
-    let all_json_files = json_file_finder::find_all_in_assets_dir(&opt_assets_dir)
+    let all_json_files = json_file_finder::find_all_in_assets_dir(&assets_resolver.assets_dir)
       .context("Failed to find all JSON files in the assets dir")?;
     info!("Found {} JSON files in total", all_json_files.len());
 
@@ -175,17 +199,16 @@ impl super::Command for ScanCommand {
 
     for (task_index, found_file) in all_json_files.into_iter().enumerate() {
       let lang_labels_tx = lang_labels_tx.clone();
-      let opt_assets_dir = opt_assets_dir.clone();
-      let extractor_opts = extractor_opts.clone();
+      let assets_resolver = assets_resolver.share_rc();
+      let extractor_opts = extractor_opts.share_rc();
 
       pool.execute(move || {
-        let abs_path = opt_assets_dir.join(&found_file.path);
-        let json_data: json::Value = match utils::json::read_file(&abs_path, &mut Vec::new()) {
+        let json_path = Path::new(&found_file.path);
+        let json_data: json::Value = match assets_resolver.load_json(json_path, &mut Vec::new()) {
           Ok(v) => v,
           Err(e) => {
             crate::report_error(
-              AnyError::new(e)
-                .context(format!("Failed to deserialize from JSON file {:?}", abs_path)),
+              e.context(format!("Failed to deserialize from JSON file {:?}", json_path)),
             );
             return;
           }
@@ -213,7 +236,6 @@ impl super::Command for ScanCommand {
           } else {
             Vec::new()
           };
-
           collected_lang_labels.push(lang_label);
         }
 
@@ -316,13 +338,11 @@ struct ChangelogEntryRef<'a> {
   changes: Vec<Cow<'a, str>>,
 }
 
-pub fn read_game_version(assets_dir: &Path) -> AnyResult<RcString> {
-  let abs_changelog_path = assets_dir.join(*CHANGELOG_FILE_PATH);
-
+fn read_game_version(assets_resolver: &AssetsResolver) -> AnyResult<RcString> {
   let mut changelog_bytes = Vec::new();
-  let changelog_data: ChangelogFileRef =
-    utils::json::read_file(&abs_changelog_path, &mut changelog_bytes)
-      .with_context(|| format!("Failed to serialize to JSON file {:?}", abs_changelog_path))?;
+  let changelog_data: ChangelogFileRef = assets_resolver
+    .load_json(*CHANGELOG_FILE_PATH, &mut changelog_bytes)
+    .with_context(|| format!("Failed to load JSON asset file {:?}", CHANGELOG_FILE_PATH))?;
 
   let latest_entry = changelog_data
     .changelog
@@ -358,5 +378,52 @@ pub fn read_game_version(assets_dir: &Path) -> AnyResult<RcString> {
     Ok(RcString::from(utils::fast_concat(&[&latest_entry.version, "-", max_hotfix_str])))
   } else {
     Ok(RcString::from(latest_entry.version.clone()))
+  }
+}
+
+#[derive(Debug)]
+pub struct AssetsResolver {
+  pub assets_dir: PathBuf,
+  pub assets_overrides_dirs: Vec<PathBuf>,
+}
+
+impl AssetsResolver {
+  pub fn open(&self, path: &Path, options: fs::OpenOptions) -> AnyResult<fs::File> {
+    for assets_dir in &self.assets_overrides_dirs {
+      let full_path = assets_dir.join(path);
+      match options.open(&full_path) {
+        Ok(f) => return Ok(f),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+        Err(e) => {
+          return Err(AnyError::new(e).context(format!("Error when opening file {:?}", full_path)))
+        }
+      }
+    }
+    let full_path = self.assets_dir.join(path);
+    match options.open(&full_path) {
+      Ok(f) => Ok(f),
+      Err(e) => {
+        return Err(AnyError::new(e).context(format!("Error when opening file {:?}", full_path)))
+      }
+    }
+  }
+
+  pub fn read(&self, path: &Path) -> AnyResult<Vec<u8>> {
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    let mut file = self.open(path, options)?;
+    let mut bytes = Vec::with_capacity(utils::buffer_capacity_for_reading_file(&file));
+    file.read_to_end(&mut bytes)?;
+    Ok(bytes)
+  }
+
+  pub fn load_json<'a, T: serde::Deserialize<'a>>(
+    &self,
+    path: &Path,
+    out_bytes: &'a mut Vec<u8>,
+  ) -> AnyResult<T> {
+    *out_bytes = self.read(path)?;
+    let value = serde_json::from_slice(out_bytes)?;
+    Ok(value)
   }
 }

@@ -3,7 +3,7 @@ use crate::impl_prelude::*;
 use crate::progress::ProgressReporter;
 use crate::rc_string::RcString;
 use crate::utils::json;
-use crate::utils::RcExt;
+use crate::utils::{self, RcExt};
 
 use std::convert::TryFrom;
 use std::fs;
@@ -198,10 +198,8 @@ impl super::Command for MassJsonFormatCommand {
             .truncate(false)
             .open(input_path)?;
 
-          let mut input_bytes = Vec::with_capacity(
-            // See <https://github.com/rust-lang/rust/blob/1.55.0/library/std/src/fs.rs#L201-L207>.
-            input_file.metadata().map_or(0, |m| m.len() as usize + 1),
-          );
+          let mut input_bytes =
+            Vec::with_capacity(utils::buffer_capacity_for_reading_file(&input_file));
           input_file.read_to_end(&mut input_bytes)?;
 
           let output_bytes: Vec<u8> = format_buffer(&input_bytes, json_config)?;

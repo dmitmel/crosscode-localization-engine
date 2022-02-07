@@ -255,6 +255,15 @@ pub fn create_dir_recursively(path: &Path) -> io::Result<()> {
   fs::DirBuilder::new().recursive(true).create(path)
 }
 
+/// See <https://github.com/rust-lang/rust/blob/1.55.0/library/std/src/fs.rs#L201-L207>
+/// and <https://github.com/rust-lang/rust/commit/a990c76d84ccc5c285cbd533ea6020778fa18863>.
+pub fn buffer_capacity_for_reading_file(file: &fs::File) -> usize {
+  match file.metadata() {
+    Ok(m) => m.len() as usize + 1,
+    Err(_) => 0,
+  }
+}
+
 pub fn split_filename_extension(filename: &str) -> (&str, Option<&str>) {
   if let Some(dot_index) = filename.rfind('.') {
     if dot_index > 0 {
