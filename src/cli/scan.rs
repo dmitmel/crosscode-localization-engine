@@ -167,7 +167,6 @@ impl super::Command for ScanCommand {
       task_index: usize,
       found_file: FoundJsonFile,
       lang_labels: Vec<LangLabel>,
-      ignored_lang_labels_count: usize,
     }
 
     // The task results are boxed to reduce the size of the memory block which
@@ -202,13 +201,7 @@ impl super::Command for ScanCommand {
         };
 
         let mut collected_lang_labels = Vec::<LangLabel>::new();
-        let mut local_ignored_lang_labels_count: usize = 0;
         for mut lang_label in lang_labels_iter {
-          if is_lang_label_ignored(&lang_label, &found_file) {
-            local_ignored_lang_labels_count += 1;
-            continue;
-          }
-
           lang_label.description = if !found_file.is_lang_file {
             match fragment_descriptions::generate(&json_data, &lang_label.json_path) {
               Ok(v) => v,
@@ -229,7 +222,6 @@ impl super::Command for ScanCommand {
             task_index,
             found_file,
             lang_labels: collected_lang_labels,
-            ignored_lang_labels_count: local_ignored_lang_labels_count,
           }))
           .unwrap();
       });
@@ -256,11 +248,9 @@ impl super::Command for ScanCommand {
     progress.end_task()?;
 
     let mut total_fragments_count: usize = 0;
-    let mut ignored_lang_labels_count: usize = 0;
     // This loop isn't actually a bottleneck.
     for task_result in sorted_results.into_iter() {
       let task_result = task_result.unwrap();
-      ignored_lang_labels_count += task_result.ignored_lang_labels_count;
       let mut scan_db_file: Option<Rc<scan::ScanGameFile>> = None;
 
       for lang_label in task_result.lang_labels {
@@ -286,10 +276,9 @@ impl super::Command for ScanCommand {
     }
 
     info!(
-      "Found {} localizable strings in {} files, {} were ignored",
+      "Found {} localizable strings in {} files",
       total_fragments_count,
       scan_db.game_files().len(),
-      ignored_lang_labels_count,
     );
 
     info!("Writing the scan database");
@@ -370,38 +359,4 @@ pub fn read_game_version(assets_dir: &Path) -> AnyResult<RcString> {
   } else {
     Ok(RcString::from(latest_entry.version.clone()))
   }
-}
-
-static IGNORED_STRINGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-  hashset![
-    "",
-    "en_US",
-    "LOL, DO NOT TRANSLATE THIS!",
-    "LOL, DO NOT TRANSLATE THIS! (hologram)",
-    "\\c[1][DO NOT TRANSLATE THE FOLLOWING]\\c[0]",
-    "\\c[1][DO NOT TRANSLATE FOLLOWING TEXTS]\\c[0]",
-  ]
-});
-
-#[allow(clippy::iter_nth_zero)]
-fn is_lang_label_ignored(lang_label: &LangLabel, found_file: &FoundJsonFile) -> bool {
-  if IGNORED_STRINGS.contains(lang_label.main_locale_text.trim()) {
-    return true;
-  }
-
-  let file_path = found_file.path.strip_prefix(&*found_file.asset_root).unwrap();
-  let json_path: Vec<_> = lang_label.json_path.split('/').collect();
-
-  if file_path.starts_with("data/enemies/") && json_path.get(0) == Some(&"meta") {
-    return true;
-  }
-
-  if file_path.starts_with("data/credits/")
-    && json_path.get(0) == Some(&"entries")
-    && json_path.get(2) == Some(&"names")
-  {
-    return true;
-  }
-
-  false
 }
