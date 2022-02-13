@@ -452,9 +452,11 @@ impl Backend {
   }
 
   pub fn start(&mut self) -> AnyResult<()> {
-    match self.process_messages_until(None) {
-      Ok(_) => unreachable!(),
-      Err(TransportDisconnectionError) => Ok(()),
+    match self.process_messages_until(None).unwrap_err() {
+      TransportDisconnectionError => {
+        info!("The frontend has disconnected, exiting cleanly");
+        Ok(())
+      }
     }
   }
 
