@@ -14,7 +14,7 @@ inventory::submit!(&CompletionsCommand as &dyn super::Command);
 impl super::Command for CompletionsCommand {
   fn name(&self) -> &'static str { "completions" }
 
-  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
+  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
     app
       .about("Generates completion scripts for various shells.")
       //

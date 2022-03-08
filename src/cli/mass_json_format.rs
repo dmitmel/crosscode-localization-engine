@@ -20,19 +20,19 @@ inventory::submit!(&MassJsonFormatCommand as &dyn super::Command);
 impl super::Command for MassJsonFormatCommand {
   fn name(&self) -> &'static str { "mass-json-format" }
 
-  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
+  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
     dump_common::DumpCommandCommonOpts::add_only_formatting_to_arg_parser(
       app
         .about(
           "Utility command for quickly formatting or minifying a ton of JSON files. Intended for \
           personal use by Dima as an aid for working on the CrossCode version archive.",
         )
-        .setting(clap::AppSettings::Hidden)
+        .hide(true)
         .arg(
           clap::Arg::new("inputs")
             .value_name("INPUT_PATH")
             .value_hint(clap::ValueHint::AnyPath)
-            .setting(clap::ArgSettings::AllowInvalidUtf8)
+            .allow_invalid_utf8(true)
             .multiple_values(true)
             .help(
               "Files to format. Directories may be passed as well, in which case all .json files \
@@ -43,7 +43,7 @@ impl super::Command for MassJsonFormatCommand {
           clap::Arg::new("inputs_file")
             .value_name("PATH")
             .value_hint(clap::ValueHint::FilePath)
-            .setting(clap::ArgSettings::AllowInvalidUtf8)
+            .allow_invalid_utf8(true)
             .short('I')
             .long("read-inputs")
             .help(
@@ -56,7 +56,7 @@ impl super::Command for MassJsonFormatCommand {
           clap::Arg::new("output")
             .value_name("PATH")
             .value_hint(clap::ValueHint::AnyPath)
-            .setting(clap::ArgSettings::AllowInvalidUtf8)
+            .allow_invalid_utf8(true)
             .short('o')
             .long("output")
             .help("Path to the destination file or directory."),

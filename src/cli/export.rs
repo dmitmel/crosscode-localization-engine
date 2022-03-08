@@ -21,7 +21,7 @@ inventory::submit!(&ExportCommand as &dyn super::Command);
 impl super::Command for ExportCommand {
   fn name(&self) -> &'static str { "export" }
 
-  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
+  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
     app
       .about(
         "Exports translations from a project into a different format, for example for compiling \
@@ -31,7 +31,7 @@ impl super::Command for ExportCommand {
         clap::Arg::new("project_dir")
           .value_name("PROJECT")
           .value_hint(clap::ValueHint::DirPath)
-          .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .allow_invalid_utf8(true)
           .required(true)
           .help("Path to the project directory."),
       )
@@ -39,7 +39,7 @@ impl super::Command for ExportCommand {
         clap::Arg::new("output")
           .value_name("PATH")
           .value_hint(clap::ValueHint::AnyPath)
-          .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .allow_invalid_utf8(true)
           .short('o')
           .long("output")
           .required(true)
@@ -79,7 +79,7 @@ impl super::Command for ExportCommand {
         clap::Arg::new("mapping_output")
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
-          .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .allow_invalid_utf8(true)
           .requires("splitter")
           .long("mapping-output")
           .help(

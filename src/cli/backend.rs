@@ -11,7 +11,7 @@ inventory::submit!(&BackendCommand as &dyn super::Command);
 impl super::Command for BackendCommand {
   fn name(&self) -> &'static str { "backend" }
 
-  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
+  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
     app
       .about(
         "Starts the translation tool backend in a given project. This command should not be used \

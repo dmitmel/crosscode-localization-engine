@@ -34,13 +34,14 @@ pub enum ProgressMode {
 }
 
 impl GlobalOpts {
-  pub fn create_arg_parser<'help>() -> clap::App<'help> {
-    clap::App::new(crate::CRATE_TITLE)
+  pub fn create_arg_parser<'help>() -> clap::Command<'help> {
+    clap::Command::new(crate::CRATE_TITLE)
       .version(crate::CRATE_NICE_VERSION)
       .about("CrossCode Localization Engine command-line tool")
-      .global_setting(clap::AppSettings::AllowHyphenValues)
-      .global_setting(clap::AppSettings::NextLineHelp)
-      .setting(clap::AppSettings::SubcommandRequiredElseHelp)
+      .allow_hyphen_values(true)
+      .next_line_help(true)
+      .subcommand_required(true)
+      .arg_required_else_help(true)
       .arg(
         clap::Arg::new("verbose")
           .short('v')
@@ -63,7 +64,7 @@ impl GlobalOpts {
         clap::Arg::new("cd")
           .value_name("DIR")
           .value_hint(clap::ValueHint::DirPath)
-          .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .allow_invalid_utf8(true)
           .short('C')
           .long("cd")
           .help("Change the working directory first before doing anything.")
@@ -95,7 +96,7 @@ impl GlobalOpts {
 assert_trait_is_object_safe!(Command);
 pub trait Command {
   fn name(&self) -> &'static str;
-  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help>;
+  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help>;
   fn run(
     &self,
     global_opts: GlobalOpts,
@@ -107,11 +108,12 @@ pub trait Command {
 inventory::collect!(&'static dyn Command);
 
 pub fn create_complete_arg_parser<'help>(
-) -> (clap::App<'help>, HashMap<&'static str, &'static dyn Command>) {
+) -> (clap::Command<'help>, HashMap<&'static str, &'static dyn Command>) {
   let mut arg_parser = GlobalOpts::create_arg_parser();
   let mut all_commands_map = HashMap::new();
   for &command in inventory::iter::<&dyn Command> {
-    arg_parser = arg_parser.subcommand(command.create_arg_parser(clap::App::new(command.name())));
+    arg_parser =
+      arg_parser.subcommand(command.create_arg_parser(clap::Command::new(command.name())));
     all_commands_map.insert(command.name(), command);
   }
   (arg_parser, all_commands_map)

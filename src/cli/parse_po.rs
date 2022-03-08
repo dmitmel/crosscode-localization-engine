@@ -18,10 +18,10 @@ inventory::submit!(&ParsePoCommand as &dyn super::Command);
 impl super::Command for ParsePoCommand {
   fn name(&self) -> &'static str { "parse-po" }
 
-  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
+  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
     app
       .about("Debug command for testing the gettext po parser.")
-      .setting(clap::AppSettings::Hidden)
+      .hide(true)
       .arg(clap::Arg::new("file").value_name("FILE").value_hint(clap::ValueHint::FilePath))
       .arg(clap::Arg::new("json").short('J').long("json"))
   }

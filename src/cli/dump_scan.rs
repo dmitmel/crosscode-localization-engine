@@ -17,7 +17,7 @@ inventory::submit!(&DumpScanCommand as &dyn super::Command);
 impl super::Command for DumpScanCommand {
   fn name(&self) -> &'static str { "dump-scan" }
 
-  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
+  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
     common::DumpCommandCommonOpts::add_to_arg_parser(
       app
         .about(
@@ -28,7 +28,7 @@ impl super::Command for DumpScanCommand {
           clap::Arg::new("scan_db")
             .value_name("SCAN_DB_PATH")
             .value_hint(clap::ValueHint::FilePath)
-            .setting(clap::ArgSettings::AllowInvalidUtf8)
+            .allow_invalid_utf8(true)
             .required(true)
             .help("Path to a scan database to dump."),
         ),

@@ -19,7 +19,7 @@ inventory::submit!(&DumpProjectCommand as &dyn super::Command);
 impl super::Command for DumpProjectCommand {
   fn name(&self) -> &'static str { "dump-project" }
 
-  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
+  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
     common::DumpCommandCommonOpts::add_to_arg_parser(
       app
         .about(
@@ -30,7 +30,7 @@ impl super::Command for DumpProjectCommand {
           clap::Arg::new("project_dir")
             .value_name("PROJECT")
             .value_hint(clap::ValueHint::DirPath)
-            .setting(clap::ArgSettings::AllowInvalidUtf8)
+            .allow_invalid_utf8(true)
             .required(true)
             .help("Path to the project directory."),
         ),

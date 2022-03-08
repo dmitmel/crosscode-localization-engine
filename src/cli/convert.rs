@@ -23,7 +23,7 @@ inventory::submit!(&ConvertCommand as &dyn super::Command);
 impl super::Command for ConvertCommand {
   fn name(&self) -> &'static str { "convert" }
 
-  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
+  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
     app
       .about(
         "Converts between various translation file formats without the need for import/export.",
@@ -33,7 +33,7 @@ impl super::Command for ConvertCommand {
           .value_name("SCAN_DB_PATH")
           .value_hint(clap::ValueHint::FilePath)
           .long("scan")
-          .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .allow_invalid_utf8(true)
           .required(true)
           .help(
             "A scan database to use for referencing data like fragment descriptions if the \
@@ -55,7 +55,7 @@ impl super::Command for ConvertCommand {
         clap::Arg::new("inputs")
           .value_name("INPUT_PATH")
           .value_hint(clap::ValueHint::AnyPath)
-          .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .allow_invalid_utf8(true)
           .multiple_values(true)
           .required(true)
           .conflicts_with("inputs_file")
@@ -65,7 +65,7 @@ impl super::Command for ConvertCommand {
         clap::Arg::new("inputs_file")
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
-          .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .allow_invalid_utf8(true)
           .short('I')
           .long("read-inputs")
           .help(
@@ -78,7 +78,7 @@ impl super::Command for ConvertCommand {
         clap::Arg::new("output")
           .value_name("PATH")
           .value_hint(clap::ValueHint::AnyPath)
-          .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .allow_invalid_utf8(true)
           .short('o')
           .long("output")
           .required(true)
@@ -139,7 +139,7 @@ impl super::Command for ConvertCommand {
         clap::Arg::new("mapping_output")
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
-          .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .allow_invalid_utf8(true)
           .requires("splitter")
           .long("mapping-output")
           .help(

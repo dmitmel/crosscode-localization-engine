@@ -18,14 +18,14 @@ inventory::submit!(&CreateProjectCommand as &dyn super::Command);
 impl super::Command for CreateProjectCommand {
   fn name(&self) -> &'static str { "create-project" }
 
-  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
+  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
     app
       .about("Creates an empty translation project using the data obtained by scanning the game.")
       .arg(
         clap::Arg::new("project_dir")
           .value_name("PROJECT")
           .value_hint(clap::ValueHint::DirPath)
-          .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .allow_invalid_utf8(true)
           .required(true)
           .help("Path to the project directory."),
       )
@@ -33,7 +33,7 @@ impl super::Command for CreateProjectCommand {
         clap::Arg::new("main_scan_db")
           .value_name("MAIN_SCAN_DB_PATH")
           .value_hint(clap::ValueHint::FilePath)
-          .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .allow_invalid_utf8(true)
           .required(true)
           .help("Path to the main scan database from which the project will be generated."),
       )
@@ -41,7 +41,7 @@ impl super::Command for CreateProjectCommand {
         clap::Arg::new("extra_scan_dbs")
           .value_name("EXTRA_SCAN_DB_PATHS")
           .value_hint(clap::ValueHint::FilePath)
-          .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .allow_invalid_utf8(true)
           .multiple_values(true)
           .help(
             "Paths to extra scan databases from which additional fragments will be read. Keep \

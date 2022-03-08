@@ -20,7 +20,7 @@ inventory::submit!(&ImportCommand as &dyn super::Command);
 impl super::Command for ImportCommand {
   fn name(&self) -> &'static str { "import" }
 
-  fn create_arg_parser<'help>(&self, app: clap::App<'help>) -> clap::App<'help> {
+  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
     app
       .about(
         "Imports translations from a different format into a project, for example for migrating \
@@ -30,7 +30,7 @@ impl super::Command for ImportCommand {
         clap::Arg::new("project_dir")
           .value_name("PROJECT")
           .value_hint(clap::ValueHint::DirPath)
-          .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .allow_invalid_utf8(true)
           .required(true)
           .help("Path to the project directory."),
       )
@@ -38,7 +38,7 @@ impl super::Command for ImportCommand {
         clap::Arg::new("inputs")
           .value_name("IMPORT_PATH")
           .value_hint(clap::ValueHint::AnyPath)
-          .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .allow_invalid_utf8(true)
           .multiple_values(true)
           .required(true)
           .conflicts_with("inputs_file")
@@ -48,7 +48,7 @@ impl super::Command for ImportCommand {
         clap::Arg::new("inputs_file")
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
-          .setting(clap::ArgSettings::AllowInvalidUtf8)
+          .allow_invalid_utf8(true)
           .short('I')
           .long("read-inputs")
           .help(
