@@ -1,13 +1,13 @@
 #!/usr/bin/env false
 
-# generate a string cache:
+# Generate a string cache:
 (set -eux; version="1.4.2-1"
 git -C ~/all-crosscode-versions checkout ${version}
 output=~/crosscode/localize-me-string-caches/str-cache-${version}.json
 lmt-jsontr --gamedir ~/all-crosscode-versions --string-cache-file ${output} save_cache
 gzip ${output})
 
-# perform a migration:
+# Perform a migration:
 (set -eux; version_from="1.4.1-2" version_to="1.4.2-1"; for cclocale in es_ES pt_BR ru_RU uk_UA vi_VN; do
 crosslocale create-project tmp --translation-locale ${cclocale} ~/crosscode/crosscode-crosslocale-scans/scan-${version_from}.json --splitter monolithic-file
 crosslocale import tmp -f po ~/crosscode/crosscode-localization-data/po/${cclocale}/components
@@ -22,9 +22,12 @@ crosslocale export tmp -f po -o ~/crosscode/crosscode-localization-data/po/${ccl
 \rm -rf tmp new.pack.json old.pack.json
 done)
 
-# import from crosscode-ru:
+# Import from crosscode-ru:
 (set -eux;
 crosslocale create-project tmp --translation-locale ru_RU ~/crosscode/crosscode-ru/assets/ru-translation-tool/scan.json --splitter monolithic-file
 crosslocale import tmp -f cc-ru-chapter-fragments ~/crosscode/crosscode-ru/assets/ru-translation-tool/chapter-fragments
 crosslocale export tmp -f po -o ~/crosscode/crosscode-localization-data/po/ru_RU/components --splitter notabenoid-chapters
 \rm -rf tmp)
+
+# Generate the patched scan database:
+node ~/crosscode/crosscode-ru/tool/dist/headless-scan.js --gameAssetsDir ~/all-crosscode-versions/assets --ccloaderDir ~/crosscode/ccloader3 --outputFile ~/crosscode/crosscode-localization-data/scan.json
