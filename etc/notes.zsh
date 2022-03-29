@@ -31,3 +31,9 @@ crosslocale export tmp -f po -o ~/crosscode/crosscode-localization-data/po/ru_RU
 
 # Generate the patched scan database:
 node ~/crosscode/crosscode-ru/tool/dist/headless-scan.js --gameAssetsDir ~/all-crosscode-versions/assets --ccloaderDir ~/crosscode/ccloader3 --outputFile ~/crosscode/crosscode-localization-data/scan.json
+
+# Add a language:
+(set -eux;
+crosslocale create-project tmp --translation-locale tr_TR ~/crosscode/crosscode-ru/assets/ru-translation-tool/scan.json --splitter monolithic-file
+crosslocale export tmp -f po -o ~/crosscode/crosscode-localization-data/po/tr_TR/components --splitter notabenoid-chapters
+\rm -rf tmp)
