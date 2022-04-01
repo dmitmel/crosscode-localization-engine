@@ -1,7 +1,14 @@
-target/
+/target/
+/perf.data
+/perf-flamegraph.svg
+
 node_modules/
 .ccls-cache/
 compile_commands.json
 /node-bindings/build/
-/perf.data*
-/perf-flamegraph.svg*
+
+__pycache__/
+/mod-tools/build/
+/mod-tools/dist/
+*.pyc
+*.egg-info/
