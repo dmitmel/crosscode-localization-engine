@@ -128,7 +128,6 @@ impl<'src> Lexer<'src> {
     Ok(None)
   }
 
-  #[inline(never)]
   fn skip_whitespace(&mut self) {
     while matches!(
       self.peek_char(),
@@ -174,8 +173,7 @@ impl<'src> Lexer<'src> {
   }
 
   fn parse_string(&mut self) -> Result<Option<TokenType<'src>>, ParsingError> {
-    let text_start_index = self.next_char_index;
-    let mut literal_text_start_index = text_start_index;
+    let mut literal_text_start_index = self.next_char_index;
     let mut text_buf: Option<String> = None;
 
     loop {
@@ -241,13 +239,13 @@ impl<'src> Lexer<'src> {
   }
 
   fn parse_keyword(&mut self) -> Result<Option<TokenType<'src>>, ParsingError> {
-    while self.peek_char().map_or(false, |c| c.is_ascii_alphanumeric() || c == '_') {
+    while self.peek_char().map_or(false, |c| c.is_ascii_alphabetic() || c == '_') {
       self.next_char();
     }
     let keyword = &self.src[self.token_start_pos.byte_index..self.next_char_index];
 
     Ok(Some(match (self.is_previous_entry, keyword) {
-      (false, "domain") => self.emit_error(
+      (_, "domain") => self.emit_error(
         "the \"domain\" keyword is unsupported due to the lack of documentation about it"
           .to_owned(),
       )?,
