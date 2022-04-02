@@ -4,7 +4,6 @@ use crate::rc_string::RcString;
 use std::fmt;
 use std::iter;
 use std::str;
-use std::str::pattern::Pattern;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct CharPos {
@@ -151,9 +150,4 @@ impl<'str> Iterator for CharPosIter<'str> {
 }
 
 impl iter::FusedIterator for CharPosIter<'_> {
-}
-
-/// Taken from <https://users.rust-lang.org/t/how-to-find-a-substring-starting-at-a-specific-index/8299/2>.
-pub fn find_start_at<'a>(slice: &'a str, at: usize, pat: impl Pattern<'a>) -> Option<usize> {
-  slice.get(at..)?.find(pat).map(|i| at + i)
 }

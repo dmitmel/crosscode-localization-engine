@@ -93,7 +93,7 @@ impl<'src> Lexer<'src> {
     }
   }
 
-  fn emit_error(&mut self, message: String) -> Result<!, ParsingError> {
+  fn emit_error<T>(&mut self, message: String) -> Result<T, ParsingError> {
     self.done = true;
     Err(ParsingError { pos: self.current_pos, message: RcString::from(message) })
   }
@@ -143,7 +143,7 @@ impl<'src> Lexer<'src> {
     match self.peek_char() {
       Some('~') => {
         self.next_char();
-        self.emit_error("obsolete entries are unsupported".to_owned())?;
+        self.emit_error("obsolete entries are unsupported".to_owned())?
       }
 
       Some('|') => {

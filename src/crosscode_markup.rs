@@ -1,7 +1,7 @@
 //! Port of <https://github.com/dmitmel/cc-translateinator/blob/a36da6700fe028cfbe8e19f89110774e50989fe5/src/crosscode_markup.ts>,
 //! which in turn was inspired by <https://github.com/L-Sherry/Localize-Me-Tools/blob/c117847bc15fe8b62a7bcd7f343310c9a4ce09da/checker.py#L118-L165>.
 
-use crate::utils::parsing::{self, ParsingError};
+use crate::utils::parsing::ParsingError;
 
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
@@ -99,9 +99,9 @@ impl<'src> Lexer<'src> {
             "c" | "s" | "v" | "i" => {
               if src.get(i..i + 1) == Some("[") {
                 i += 1;
-                if let Some(j) = parsing::find_start_at(src, i, ']') {
-                  token_data = &src[i..j];
-                  i = j + 1;
+                if let Some(j) = src[i..].find(']') {
+                  token_data = &src[i..i + j];
+                  i += j + 1;
                   match command_char {
                     "c" => token_type = Some(TokenType::Color),
                     "s" => token_type = Some(TokenType::TypingSpeed),

@@ -68,12 +68,12 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn emit_error(&mut self, message: String) -> Result<!, ParsingError> {
+  fn emit_error<T>(&mut self, message: String) -> Result<T, ParsingError> {
     self.done = true;
     Err(ParsingError { pos: self.current_token_start_pos, message: RcString::from(message) })
   }
 
-  fn emit_error_after(&mut self, message: String) -> Result<!, ParsingError> {
+  fn emit_error_after<T>(&mut self, message: String) -> Result<T, ParsingError> {
     self.done = true;
     Err(ParsingError { pos: self.current_token_end_pos, message: RcString::from(message) })
   }

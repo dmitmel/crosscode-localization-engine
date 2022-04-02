@@ -32,8 +32,8 @@ class ParsingError(Exception):
 @dataclass()
 class Token:
   _: KW_ONLY
-  start_pos: CharPos = CharPos.default()
-  end_pos: CharPos = CharPos.default()
+  start_pos: CharPos = field(default_factory=CharPos.default)
+  end_pos: CharPos = field(default_factory=CharPos.default)
 
 
 @dataclass()
