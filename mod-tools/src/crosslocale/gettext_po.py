@@ -100,10 +100,11 @@ class Lexer:
 
   def next_char(self) -> Optional[str]:
     i = self.next_char_index
-    if i >= len(self.src):
+    try:
+      c = self.src[i]
+    except IndexError:
       self.done = True
       return None
-    c = self.src[i]
     self.current_pos.char_index = i
     if i == 0 or self.src[i - 1] == "\n":
       self.current_pos.column = 1
@@ -116,15 +117,13 @@ class Lexer:
     return c
 
   def peek_char(self) -> Optional[str]:
-    i = self.next_char_index
-    return self.src[i] if i < len(self.src) else None
+    try:
+      return self.src[self.next_char_index]
+    except IndexError:
+      return None
 
   def begin_token(self) -> None:
-    self.token_start_pos = CharPos(
-      self.current_pos.char_index,
-      self.current_pos.line,
-      self.current_pos.column,
-    )
+    self.token_start_pos = self.current_pos.clone()
 
   _TokenT = TypeVar("_TokenT", bound=Token)
 
@@ -169,8 +168,12 @@ class Lexer:
     return None
 
   def skip_whitespace(self) -> None:
-    while self.peek_char() in ("\t", "\n", "\v", "\f", "\r", " "):
-      self.next_char()
+    while True:
+      c = self.peek_char()
+      if c is not None and c in " \n\r\t\v\f":
+        self.next_char()
+      else:
+        break
 
   def parse_comment(self) -> Optional[TokenComment]:
     comment_type = CommentType.Translator
@@ -193,7 +196,10 @@ class Lexer:
     if comment_type != CommentType.Translator:
       self.next_char()
     text_start_index = self.next_char_index
-    while self.peek_char() not in (None, "\n"):
+    while True:
+      c = self.peek_char()
+      if c is None or c == "\n":
+        break
       self.next_char()
     text = self.src[text_start_index:self.next_char_index]
     return TokenComment(comment_type=comment_type, text=text)
@@ -275,39 +281,42 @@ class Parser:
 
   def __init__(self, src: str) -> None:
     self.lexer = Lexer(src)
-    self.peeked_token: Optional[Token] = None
     self.done: bool = False
-    self.current_token_start_pos: CharPos = CharPos.default()
-    self.current_token_end_pos: CharPos = CharPos.default()
+    self.peeked_token: Optional[Token] = None
+    self.current_token: Optional[Token] = None
 
   def next_token(self) -> Optional[Token]:
-    if self.peeked_token is not None:
-      token = self.peeked_token
-      self.peeked_token = None
-      return token
-    token = self.lexer.parse_next_token()
+    token = self.peeked_token
     if token is None:
-      self.done = True
-      return None
-    self.current_token_start_pos = token.start_pos.clone()
-    self.current_token_end_pos = token.end_pos.clone()
+      token = self.lexer.parse_next_token()
+      if token is None:
+        self.done = True
+    self.peeked_token = None
+    self.current_token = token
     return token
 
   def peek_token(self) -> Optional[Token]:
-    if self.peeked_token is not None:
-      return self.peeked_token
-    self.peeked_token = self.lexer.parse_next_token()
-    if self.peeked_token is None:
-      self.done = True
+    token = self.peeked_token
+    if token is None:
+      token = self.lexer.parse_next_token()
+      self.peeked_token = token
+      if token is None:
+        self.done = True
     return self.peeked_token
 
   def emit_error(self, message: str) -> NoReturn:
     self.done = True
-    raise ParsingError(message, self.current_token_start_pos.clone())
+    raise ParsingError(
+      message,
+      self.current_token.start_pos.clone() if self.current_token is not None else CharPos.default()
+    )
 
   def emit_error_after(self, message: str) -> NoReturn:
     self.done = True
-    raise ParsingError(message, self.current_token_end_pos.clone())
+    raise ParsingError(
+      message,
+      self.current_token.end_pos.clone() if self.current_token is not None else CharPos.default()
+    )
 
   def parse_next_message(self) -> Optional[ParsedMessage]:
     if self.done:
