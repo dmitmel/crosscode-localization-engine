@@ -2,7 +2,7 @@
 # details and insights in comments in those files.
 
 from __future__ import annotations
-from dataclasses import dataclass, KW_ONLY, field
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, NoReturn, Optional, TypeVar, Union
 
@@ -31,14 +31,12 @@ class ParsingError(Exception):
 
 @dataclass()
 class Token:
-  _: KW_ONLY
-  start_pos: CharPos = field(default_factory=CharPos.default)
-  end_pos: CharPos = field(default_factory=CharPos.default)
+  start_pos: CharPos = field(init=False, default_factory=CharPos.default)
+  end_pos: CharPos = field(init=False, default_factory=CharPos.default)
 
 
 @dataclass()
 class TokenComment(Token):
-  _: KW_ONLY
   comment_type: CommentType
   text: str
 
@@ -52,31 +50,27 @@ class CommentType(Enum):
 
 @dataclass()
 class TokenMsgctxt(Token):
-  _: KW_ONLY
   is_previous: bool
 
 
 @dataclass()
 class TokenMsgid(Token):
-  _: KW_ONLY
   is_previous: bool
 
 
 @dataclass()
 class TokenMsgstr(Token):
-  _: KW_ONLY
+  pass
 
 
 @dataclass()
 class TokenString(Token):
-  _: KW_ONLY
   is_previous: bool
   text: str
 
 
 @dataclass()
 class ParsedMessage:
-  _: KW_ONLY
   translator_comments: List[str] = field(default_factory=list)
   automatic_comments: List[str] = field(default_factory=list)
   reference_comments: List[str] = field(default_factory=list)
