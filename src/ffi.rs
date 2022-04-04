@@ -3,6 +3,7 @@
 
 use crate::backend::transports::MpscChannelTransport;
 use crate::backend::Backend;
+use crate::logging;
 
 use std::mem::ManuallyDrop;
 use std::panic::{self, AssertUnwindSafe};
@@ -14,7 +15,7 @@ use std::sync::mpsc;
 use std::thread;
 
 #[no_mangle]
-pub static CROSSLOCALE_FFI_BRIDGE_VERSION: u32 = 4;
+pub static CROSSLOCALE_FFI_BRIDGE_VERSION: u32 = 5;
 
 #[no_mangle]
 pub static CROSSLOCALE_VERSION_PTR: &u8 = &crate::CRATE_VERSION.as_bytes()[0];
@@ -34,15 +35,6 @@ macro_rules! abort_on_caught_panic {
       Err(_) => process::abort(),
     }
   };
-}
-
-#[no_mangle]
-pub extern "C" fn crosslocale_init_logging() -> crosslocale_result {
-  abort_on_caught_panic!({
-    crate::init_logging();
-    crate::print_banner_message();
-    CROSSLOCALE_OK
-  })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,7 +100,7 @@ pub extern "C" fn crosslocale_backend_new(
           sender: outgoing_send,
         }));
         if let Err(e) = backend.start() {
-          crate::report_critical_error(e);
+          logging::report_critical_error(e);
           process::abort();
         }
       })

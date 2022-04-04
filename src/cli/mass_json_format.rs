@@ -1,5 +1,6 @@
 use super::dump_common;
 use crate::impl_prelude::*;
+use crate::logging;
 use crate::progress::ProgressReporter;
 use crate::rc_string::RcString;
 use crate::utils::json;
@@ -234,7 +235,7 @@ impl super::Command for MassJsonFormatCommand {
             }
           })?;
         }) {
-          crate::report_error(e.context(format!("Failed to format file {:?}", input_path)));
+          logging::report_error(e.context(format!("Failed to format file {:?}", input_path)));
           success = false;
         }
 

@@ -24,8 +24,6 @@ function humanizeByteSize(bytes) {
   return `${bytes.toFixed(2)}${unit}`;
 }
 
-addon.init_logging();
-
 let backend = new addon.Backend();
 
 (async () => {

@@ -13,13 +13,12 @@ pub mod ffi;
 pub mod gettext_po;
 pub mod impl_prelude;
 pub mod localize_me;
+pub mod logging;
 pub mod progress;
 pub mod project;
 pub mod rc_string;
 pub mod scan;
 pub mod utils;
-
-use crate::impl_prelude::*;
 
 pub static CRATE_TITLE: &str = "CrossLocalE";
 pub static CRATE_NAME: &str = env!("CARGO_PKG_NAME");
@@ -28,44 +27,3 @@ pub static CRATE_NICE_VERSION: &str = match option_env!("CARGO_PKG_NICE_VERSION"
   Some(v) => v,
   None => CRATE_VERSION,
 };
-
-pub fn init_logging() -> bool {
-  let set_logger_result: Result<(), log::SetLoggerError> =
-    env_logger::try_init_from_env(env_logger::Env::default().default_filter_or(
-      // The logging level of `env_logger` can't be changed once the logger has
-      // been installed, so instead let's by default allow all logging levels
-      // on the `env_logger` side, we will lower the logging level later on
-      // ourselves on the `log` side.
-      "trace",
-    ));
-  let other_logger_already_installed = set_logger_result.is_err();
-  !other_logger_already_installed
-}
-
-pub fn print_banner_message() {
-  info!("{}/{} v{}", CRATE_TITLE, CRATE_NAME, CRATE_NICE_VERSION);
-}
-
-pub fn report_critical_error(mut error: AnyError) {
-  error = error.context(format!(
-    "CRITICAL ERROR in thread '{}'",
-    std::thread::current().name().unwrap_or("<unnamed>"),
-  ));
-  if log::log_enabled!(log::Level::Error) {
-    error!("{:?}", error);
-  } else {
-    eprintln!("ERROR: {:?}", error);
-  }
-}
-
-pub fn report_error(mut error: AnyError) {
-  error = error.context(format!(
-    "non-critical error in thread '{}'",
-    std::thread::current().name().unwrap_or("<unnamed>"),
-  ));
-  if log::log_enabled!(log::Level::Error) {
-    warn!("{:?}", error);
-  } else {
-    eprintln!("WARN: {:?}", error);
-  }
-}

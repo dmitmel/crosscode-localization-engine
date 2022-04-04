@@ -1,4 +1,5 @@
 use crate::impl_prelude::*;
+use crate::logging;
 use crate::progress::ProgressReporter;
 use crate::rc_string::RcString;
 use crate::scan;
@@ -207,7 +208,7 @@ impl super::Command for ScanCommand {
         let json_data: json::Value = match assets_resolver.load_json(json_path, &mut Vec::new()) {
           Ok(v) => v,
           Err(e) => {
-            crate::report_error(
+            logging::report_error(
               e.context(format!("Failed to deserialize from JSON file {:?}", json_path)),
             );
             return;

@@ -23,19 +23,28 @@ pub fn main() {
   }
 
   if let Err(e) = try_main() {
-    report_critical_error(e);
+    logging::report_critical_error(e);
   }
 }
 
 pub fn try_main() -> AnyResult<()> {
-  crate::init_logging();
+  logging::ensure_installed();
+  logging::set_stdio_logger({
+    let logger = env_logger::Logger::from_env(
+      env_logger::Env::new()
+        .filter_or("CROSSLOCALE_LOG", "trace")
+        .write_style("CROSSLOCALE_LOG_STYLE"),
+    );
+    log::set_max_level(logger.filter());
+    Some(logger)
+  });
 
   let (arg_parser, mut all_commands_map) = cli::create_complete_arg_parser();
   let matches = arg_parser.get_matches();
   let global_opts = cli::GlobalOpts::from_matches(&matches);
 
   if !global_opts.no_banner_message {
-    print_banner_message();
+    logging::print_banner_message();
   }
   log::set_max_level({
     let log_level_from_options =

@@ -5,9 +5,9 @@ use std::io::{self, Write};
 use std::sync::mpsc;
 
 assert_trait_is_object_safe!(Transport);
-pub trait Transport: fmt::Debug {
-  fn recv(&mut self) -> AnyResult<String>;
-  fn send(&mut self, text: String) -> AnyResult<()>;
+pub trait Transport: fmt::Debug + Send {
+  fn recv(&self) -> AnyResult<String>;
+  fn send(&self, text: String) -> AnyResult<()>;
 }
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ impl StdError for TransportDisconnectionError {
 pub struct StdioTransport;
 
 impl Transport for StdioTransport {
-  fn recv(&mut self) -> AnyResult<String> {
+  fn recv(&self) -> AnyResult<String> {
     let mut buf = String::new();
     let read_bytes = io::stdin().read_line(&mut buf).context("Failed to read from stdin")?;
     if read_bytes > 0 {
@@ -36,7 +36,7 @@ impl Transport for StdioTransport {
     }
   }
 
-  fn send(&mut self, text: String) -> AnyResult<()> {
+  fn send(&self, text: String) -> AnyResult<()> {
     let mut stdout = io::stdout();
     match try_io_result!({
       stdout.write_all(text.as_bytes())?;
@@ -55,14 +55,14 @@ pub struct MpscChannelTransport {
 }
 
 impl Transport for MpscChannelTransport {
-  fn recv(&mut self) -> AnyResult<String> {
+  fn recv(&self) -> AnyResult<String> {
     match self.receiver.recv() {
       Ok(v) => Ok(v),
       Err(mpsc::RecvError) => Err(TransportDisconnectionError.into()),
     }
   }
 
-  fn send(&mut self, text: String) -> AnyResult<()> {
+  fn send(&self, text: String) -> AnyResult<()> {
     match self.sender.send(text) {
       Ok(()) => Ok(()),
       Err(mpsc::SendError(_)) => Err(TransportDisconnectionError.into()),

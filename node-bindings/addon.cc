@@ -5,7 +5,7 @@
 
 #include <crosslocale.h>
 
-const uint32_t SUPPORTED_FFI_BRIDGE_VERSION = 4;
+const uint32_t SUPPORTED_FFI_BRIDGE_VERSION = 5;
 
 // NOTE: About the radical usage of crosslocale_backend_t which may seem
 // thread-unsafe on the first glance: the implementation details are employed
@@ -121,18 +121,11 @@ public:
     return result;
   }
 
-  static void init_logging() { throw_ffi_result(crosslocale_init_logging()); }
-
 private:
   crosslocale_backend* raw = nullptr;
   std::mutex send_mutex;
   std::mutex recv_mutex;
 };
-
-Napi::Value init_logging(const Napi::CallbackInfo& info) {
-  FfiBackend::init_logging();
-  return Napi::Value();
-}
 
 class NodeRecvMessageWorker : public Napi::AsyncWorker {
 public:
@@ -298,7 +291,6 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     Napi::String::New(env, (char*)CROSSLOCALE_NICE_VERSION_PTR, CROSSLOCALE_NICE_VERSION_LEN));
   exports.Set(Napi::String::New(env, "PROTOCOL_VERSION"),
     Napi::Number::New(env, CROSSLOCALE_PROTOCOL_VERSION));
-  exports.Set(Napi::String::New(env, "init_logging"), Napi::Function::New(env, init_logging));
   return NodeBackend::Init(env, exports);
 }
 

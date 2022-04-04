@@ -1,6 +1,7 @@
 use crate::backend::transports::StdioTransport;
 use crate::backend::{self, Backend};
 use crate::impl_prelude::*;
+use crate::logging;
 use crate::progress::ProgressReporter;
 
 #[derive(Debug)]
@@ -41,6 +42,8 @@ impl super::Command for BackendCommand {
     _matches: &clap::ArgMatches,
     _progress: Box<dyn ProgressReporter>,
   ) -> AnyResult<()> {
-    Backend::new(Box::new(StdioTransport)).start()
+    let mut backend = Backend::new(Box::new(StdioTransport));
+    logging::set_stdio_logger(None);
+    backend.start()
   }
 }

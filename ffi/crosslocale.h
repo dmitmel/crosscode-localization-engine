@@ -41,8 +41,6 @@ extern const size_t CROSSLOCALE_NICE_VERSION_LEN;
 
 extern const uint32_t CROSSLOCALE_PROTOCOL_VERSION;
 
-_CROSSLOCALE_DLLIMPORT enum crosslocale_result crosslocale_init_logging(void);
-
 _CROSSLOCALE_DLLIMPORT const uint8_t* crosslocale_error_describe(enum crosslocale_result myself);
 
 _CROSSLOCALE_DLLIMPORT const uint8_t* crosslocale_error_id_str(enum crosslocale_result myself);

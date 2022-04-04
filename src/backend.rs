@@ -7,8 +7,9 @@ pub mod transports;
 use self::error::BackendNiceError;
 use self::transports::{Transport, TransportDisconnectionError};
 use crate::impl_prelude::*;
+use crate::logging;
 use crate::project::{Comment, Fragment, Project, Translation};
-use crate::utils::{self, RcExt};
+use crate::utils::{self, ArcExt, RcExt};
 
 use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
@@ -20,6 +21,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 pub const PROTOCOL_VERSION: u32 = 0;
 pub static PROTOCOL_VERSION_STR: Lazy<String> = Lazy::new(|| PROTOCOL_VERSION.to_string());
@@ -30,6 +32,7 @@ enum MessageType {
   Request = 1,
   Response = 2,
   ErrorResponse = 3,
+  LogMessage = 4,
 }
 
 impl MessageType {
@@ -38,6 +41,7 @@ impl MessageType {
       1 => Self::Request,
       2 => Self::Response,
       3 => Self::ErrorResponse,
+      4 => Self::LogMessage,
       _ => return None,
     })
   }
@@ -47,7 +51,8 @@ impl MessageType {
 pub enum Message<'a> {
   Request { id: Id, method: Cow<'a, str>, params: Cow<'a, RawValue> },
   Response { id: Id, result: Cow<'a, RawValue> },
-  ErrorResponse { id: Option<Id>, message: Cow<'static, str> },
+  ErrorResponse { id: Option<Id>, message: Cow<'a, str> },
+  LogMessage { level: log::Level, target: Cow<'a, str>, text: Cow<'a, str> },
 }
 
 impl<'a> Message<'a> {
@@ -57,6 +62,7 @@ impl<'a> Message<'a> {
       Self::Request { .. } => None,
       Self::Response { id, .. } => Some(*id),
       Self::ErrorResponse { id, .. } => *id,
+      Self::LogMessage { .. } => None,
     }
   }
 }
@@ -136,10 +142,14 @@ impl<'de> Deserialize<'de> for Message<'de> {
             Ok(Message::ErrorResponse { id: msg_id, message: Cow::Owned(err_msg) })
           }
 
+          Some(MessageType::LogMessage) => {
+            Err(DeError::custom("deserialization of received log messages is not implemented"))
+          }
+
           None => {
             return Err(DeError::invalid_value(
               serde::de::Unexpected::Unsigned(msg_type as u64),
-              &"message type 1 <= i <= 3",
+              &"message type 1 <= i <= 4",
             ))
           }
         }
@@ -178,6 +188,15 @@ impl<'a> Serialize for Message<'a> {
         seq.serialize_element(&(MessageType::ErrorResponse as u8))?;
         seq.serialize_element(&id)?;
         seq.serialize_element(&message)?;
+        seq.end()
+      }
+
+      Message::LogMessage { level, target, text } => {
+        let mut seq = serializer.serialize_seq(Some(4))?;
+        seq.serialize_element(&(MessageType::LogMessage as u8))?;
+        seq.serialize_element(&(*level as u8))?;
+        seq.serialize_element(&target)?;
+        seq.serialize_element(&text)?;
         seq.end()
       }
     }
@@ -417,7 +436,7 @@ impl serde::Serialize for ListedComment {
 
 #[derive(Debug)]
 pub struct Backend {
-  transport: Box<dyn Transport>,
+  transport: Arc<Mutex<Box<dyn Transport>>>,
   message_id: IdAllocator,
   project_id: IdAllocator,
   projects: HashMap<Id, Rc<Project>>,
@@ -425,6 +444,7 @@ pub struct Backend {
   client_methods_registry: HashMap<&'static str, &'static MethodDeclaration>,
   client_request_id: IdAllocator,
   client_responses: HashMap<Id, Message<'static>>,
+  log_listener_id: usize,
 }
 
 impl Backend {
@@ -439,8 +459,35 @@ impl Backend {
       }
     }
 
+    let transport = Arc::new(Mutex::new(transport));
+
+    let log_listener_id = {
+      let transport = transport.share_rc_weak();
+      logging::ensure_installed();
+      logging::add_listener(
+        env_logger::filter::Builder::new().filter_level(log::LevelFilter::max()).build(),
+        Box::new(move |record| {
+          if let Some(transport) = transport.upgrade() {
+            // Don't crash if the lock is poisoned, the main thread has most
+            // certainly crashed and may have took down the transport with it,
+            // thus there is no use sending a log message.
+            if let Ok(transport) = transport.lock() {
+              let _ = Self::send_one_message_to(&**transport, &Message::LogMessage {
+                level: record.level(),
+                target: Cow::Borrowed(record.target()),
+                text: match record.args().as_str() {
+                  Some(s) => Cow::Borrowed(s),
+                  None => Cow::Owned(record.args().to_string()),
+                },
+              });
+            }
+          }
+        }),
+      )
+    };
+
     Self {
-      transport,
+      transport: transport.clone(),
       message_id: IdAllocator::new(),
       project_id: IdAllocator::new(),
       projects: HashMap::new(),
@@ -448,12 +495,15 @@ impl Backend {
       client_methods_registry,
       client_request_id: IdAllocator::new(),
       client_responses: HashMap::new(),
+      log_listener_id,
     }
   }
 
   pub fn start(&mut self) -> AnyResult<()> {
     match self.process_messages_until(None).unwrap_err() {
       TransportDisconnectionError => {
+        // TODO: How can this message and other logger messages be sent after
+        // disconnection of the transport?
         info!("The frontend has disconnected, exiting cleanly");
         Ok(())
       }
@@ -474,7 +524,7 @@ impl Backend {
         Ok(None) => {}
 
         Ok(Some(message)) => match message {
-          Message::Request { .. } => {
+          Message::Request { .. } | Message::LogMessage { .. } => {
             unreachable!();
           }
           Message::ErrorResponse { id: None, message } => {
@@ -493,7 +543,7 @@ impl Backend {
           return Err(TransportDisconnectionError);
         }
         Err(e) => {
-          crate::report_error(e.context(format!("Failed to process message #{}", message_id)));
+          logging::report_error(e.context(format!("Failed to process message #{}", message_id)));
         }
       }
 
@@ -506,7 +556,10 @@ impl Backend {
   }
 
   fn process_one_message(&mut self, message_id: Id) -> AnyResult<Option<Message<'static>>> {
-    let buf = self.transport.recv().context("Failed to receive message from the transport")?;
+    let buf = {
+      let transport = self.transport.lock().unwrap();
+      transport.recv().context("Failed to receive message from the transport")?
+    };
     match serde_json::from_str(&buf) {
       Err(e) => {
         warn!("Failed to deserialize message #{}: {}", message_id, e);
@@ -526,12 +579,12 @@ impl Backend {
           Err(e) => match e.downcast::<BackendNiceError>() {
             Ok(e) => {
               if let Some(e) = e.source {
-                crate::report_error(e);
+                logging::report_error(e);
               }
               Message::ErrorResponse { id: Some(id), message: e.message }
             }
             Err(e) => {
-              crate::report_error(e);
+              logging::report_error(e);
               Message::ErrorResponse { id: Some(id), message: "internal backend error".into() }
             }
           },
@@ -546,17 +599,24 @@ impl Backend {
       Ok(Message::ErrorResponse { id, message }) => {
         Ok(Some(Message::ErrorResponse { id, message: Cow::Owned(message.into_owned()) }))
       }
+
+      Ok(Message::LogMessage { .. }) => Ok(None),
     }
   }
 
   fn send_one_message(&mut self, message: &Message) -> AnyResult<()> {
+    let transport = self.transport.lock().unwrap();
+    Self::send_one_message_to(&**transport, message)
+  }
+
+  fn send_one_message_to(transport: &dyn Transport, message: &Message) -> AnyResult<()> {
     let mut buf = Vec::new();
     serde_json::to_writer(&mut buf, message).context("Failed to serialize message")?;
     // Safe because serde_json doesn't emit invalid UTF-8, and besides JSON
     // files are required to be encoded as UTF-8 by the specification. See
     // <https://tools.ietf.org/html/rfc8259#section-8.1>.
     let buf = unsafe { String::from_utf8_unchecked(buf) };
-    self.transport.send(buf).context("Failed to send message to the transport")?;
+    transport.send(buf).context("Failed to send message to the transport")?;
     Ok(())
   }
 
@@ -599,11 +659,15 @@ impl Backend {
     let id = self.client_request_id.alloc();
     self.send_one_message(&Message::Request { id, method, params })?;
     match self.process_messages_until(Some(id))? {
-      Message::Request { .. } => unreachable!(),
+      Message::Request { .. } | Message::LogMessage { .. } => unreachable!(),
       Message::Response { result, .. } => Ok(result),
       Message::ErrorResponse { message, .. } => bail!("client error: {}", message),
     }
   }
+}
+
+impl Drop for Backend {
+  fn drop(&mut self) { logging::remove_listener(self.log_listener_id); }
 }
 
 #[derive(Debug, Clone)]
