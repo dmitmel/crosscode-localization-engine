@@ -119,7 +119,6 @@ fn generate_for_json_object<'json>(
     } else {
       // Most likely an event step.
 
-      #[allow(clippy::single_match)]
       match type_.as_str() {
         "IF" => {
           match key {

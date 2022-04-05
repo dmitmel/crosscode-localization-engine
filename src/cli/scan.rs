@@ -360,7 +360,6 @@ fn read_game_version(assets_resolver: &AssetsResolver) -> AnyResult<RcString> {
       }
     }
 
-    #[allow(unused_assignments)]
     fn try_extract_hotfix(mut change: &str) -> Option<(&str, u32)> {
       let (i, _): (usize, char) =
         change.char_indices().find(|(_, c)| !matches!(c, '+' | '-' | '~' | ' '))?;
@@ -371,6 +370,7 @@ fn read_game_version(assets_resolver: &AssetsResolver) -> AnyResult<RcString> {
       let hotfix = u32::from_str(hotfix_str).ok()?;
       change = unsafe { change.get_unchecked(i..) };
       change = change.strip_prefix(')')?;
+      let _ = change;
       Some((hotfix_str, hotfix))
     }
   }

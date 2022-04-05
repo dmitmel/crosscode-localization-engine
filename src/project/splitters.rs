@@ -294,7 +294,6 @@ impl NextGenerationSplitter {
   pub const ID: &'static str = "next-generation";
 }
 
-#[allow(clippy::single_match)]
 impl Splitter for NextGenerationSplitter {
   #[inline(always)]
   fn id_static() -> &'static str
@@ -315,6 +314,7 @@ impl Splitter for NextGenerationSplitter {
   #[inline(always)]
   fn id(&self) -> &'static str { Self::ID }
 
+  #[allow(clippy::single_match)]
   fn get_tr_file_for_entire_game_file(
     &mut self,
     asset_root: &str,

@@ -129,7 +129,6 @@ impl super::Command for ExportCommand {
       .create(&opt_format, exporters::ExporterConfig { compact: opt_compact })
       .context("Failed to create the exporter")?;
 
-    #[allow(clippy::manual_map)]
     let mut splitter = match opt_splitter {
       Some(id) => {
         Some(splitters::REGISTRY.create(&id, ()).context("Failed to create the splitter")?)

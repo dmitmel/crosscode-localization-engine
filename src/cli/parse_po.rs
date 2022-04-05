@@ -107,7 +107,6 @@ fn print_messages_json<'src>(iter: impl Iterator<Item = ParsedMessage<'src>>) ->
   Ok(())
 }
 
-#[allow(clippy::unnecessary_wraps)]
 fn print_messages_po<'src>(iter: impl Iterator<Item = ParsedMessage<'src>>) -> AnyResult<()> {
   let mut is_first_message = true;
   for message in iter {

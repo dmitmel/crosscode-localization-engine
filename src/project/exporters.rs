@@ -326,7 +326,6 @@ impl Exporter for GettextPoExporter {
   #[inline(always)]
   fn supports_multiple_translations_for_fragments(&self) -> bool { false }
 
-  #[allow(clippy::write_with_newline)]
   fn export(
     &mut self,
     project_meta: &ExportedProjectMeta,

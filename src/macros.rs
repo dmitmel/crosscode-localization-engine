@@ -68,7 +68,6 @@ macro_rules! try_option {
 macro_rules! assert_trait_is_object_safe {
   ($($trait:tt)+) => {
     #[doc(hidden)]
-    #[allow(non_upper_case_globals)]
     const _: ::std::marker::PhantomData<dyn $($trait)+> = ::std::marker::PhantomData;
   };
 }
