@@ -2,6 +2,7 @@
 # details and insights in comments in those files.
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, NoReturn, Optional, TypeVar, Union
@@ -9,6 +10,7 @@ from typing import List, NoReturn, Optional, TypeVar, Union
 
 @dataclass()
 class CharPos:
+  __slots__ = ("char_index", "line", "column")
   char_index: int
   line: int
   column: int
@@ -83,6 +85,10 @@ class ParsedMessage:
 
 
 class Lexer:
+
+  __slots__ = (
+    "src", "done", "token_start_pos", "current_pos", "next_char_index", "is_previous_entry"
+  )
 
   def __init__(self, src: str) -> None:
     self.src: str = src
@@ -272,6 +278,8 @@ class Lexer:
 
 
 class Parser:
+
+  __slots__ = ("lexer", "done", "peeked_token", "current_token")
 
   def __init__(self, src: str) -> None:
     self.lexer = Lexer(src)
