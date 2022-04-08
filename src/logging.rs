@@ -125,38 +125,49 @@ pub fn print_banner_message() {
   info!("{}/{} v{}", crate::CRATE_TITLE, crate::CRATE_NAME, crate::CRATE_NICE_VERSION);
 }
 
-pub fn prepare_error_for_reporting(error: anyhow::Error, critical: bool) -> anyhow::Error {
+pub fn report_error_impl(
+  error: anyhow::Error,
+  is_critical: bool,
+  target: Option<&str>,
+  module_path: &'static str,
+  file: &'static str,
+  line: u32,
+) {
+  let target = target.unwrap_or(module_path);
   let thread = std::thread::current();
   let thread_name = thread.name().unwrap_or("<unnamed>");
-  error.context(if critical {
+  let error = error.context(if is_critical {
     format!("CRITICAL ERROR in thread '{}'", thread_name)
   } else {
     format!("non-critical error in thread '{}'", thread_name)
-  })
+  });
+  let level = if is_critical { log::Level::Error } else { log::Level::Warn };
+  if log_enabled!(target: target, level) {
+    log::logger().log(
+      &log::Record::builder()
+        .args(format_args!("{:?}", error))
+        .level(level)
+        .target(target)
+        .module_path_static(Some(module_path))
+        .file_static(Some(file))
+        .line(Some(line))
+        .build(),
+    );
+  } else if is_critical {
+    eprintln!("ERROR: {:?}", error);
+  }
 }
 
 #[macro_export]
 macro_rules! report_critical_error {
-  ($error:expr $(,)?) => {{
-    let error = $error;
-    let error = $crate::logging::prepare_error_for_reporting(error, true);
-    if ::log::log_enabled!(::log::Level::Error) {
-      ::log::error!("{:?}", error);
-    } else {
-      ::std::eprintln!("ERROR: {:?}", error);
-    }
-  }};
+  ($error:expr $(,)?) => {
+    $crate::logging::report_error_impl($error, true, None, module_path!(), file!(), line!())
+  };
 }
 
 #[macro_export]
 macro_rules! report_error {
-  ($error:expr $(,)?) => {{
-    let error = $error;
-    let error = $crate::logging::prepare_error_for_reporting(error, false);
-    if ::log::log_enabled!(::log::Level::Error) {
-      ::log::warn!("{:?}", error);
-    } else {
-      ::std::eprintln!("WARN: {:?}", error);
-    }
-  }};
+  ($error:expr $(,)?) => {
+    $crate::logging::report_error_impl($error, false, None, module_path!(), file!(), line!())
+  };
 }
