@@ -125,26 +125,38 @@ pub fn print_banner_message() {
   info!("{}/{} v{}", crate::CRATE_TITLE, crate::CRATE_NAME, crate::CRATE_NICE_VERSION);
 }
 
-pub fn report_critical_error(mut error: AnyError) {
-  error = error.context(format!(
-    "CRITICAL ERROR in thread '{}'",
-    std::thread::current().name().unwrap_or("<unnamed>"),
-  ));
-  if log::log_enabled!(log::Level::Error) {
-    error!("{:?}", error);
+pub fn prepare_error_for_reporting(error: anyhow::Error, critical: bool) -> anyhow::Error {
+  let thread = std::thread::current();
+  let thread_name = thread.name().unwrap_or("<unnamed>");
+  error.context(if critical {
+    format!("CRITICAL ERROR in thread '{}'", thread_name)
   } else {
-    eprintln!("ERROR: {:?}", error);
-  }
+    format!("non-critical error in thread '{}'", thread_name)
+  })
 }
 
-pub fn report_error(mut error: AnyError) {
-  error = error.context(format!(
-    "non-critical error in thread '{}'",
-    std::thread::current().name().unwrap_or("<unnamed>"),
-  ));
-  if log::log_enabled!(log::Level::Error) {
-    warn!("{:?}", error);
-  } else {
-    eprintln!("WARN: {:?}", error);
-  }
+#[macro_export]
+macro_rules! report_critical_error {
+  ($error:expr $(,)?) => {{
+    let error = $error;
+    let error = $crate::logging::prepare_error_for_reporting(error, true);
+    if ::log::log_enabled!(::log::Level::Error) {
+      ::log::error!("{:?}", error);
+    } else {
+      ::std::eprintln!("ERROR: {:?}", error);
+    }
+  }};
+}
+
+#[macro_export]
+macro_rules! report_error {
+  ($error:expr $(,)?) => {{
+    let error = $error;
+    let error = $crate::logging::prepare_error_for_reporting(error, false);
+    if ::log::log_enabled!(::log::Level::Error) {
+      ::log::warn!("{:?}", error);
+    } else {
+      ::std::eprintln!("WARN: {:?}", error);
+    }
+  }};
 }

@@ -23,7 +23,7 @@ pub fn main() {
   }
 
   if let Err(e) = try_main() {
-    logging::report_critical_error(e);
+    crate::report_critical_error!(e);
   }
 }
 

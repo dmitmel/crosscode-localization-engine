@@ -543,7 +543,7 @@ impl Backend {
           return Err(TransportDisconnectionError);
         }
         Err(e) => {
-          logging::report_error(e.context(format!("Failed to process message #{}", message_id)));
+          crate::report_error!(e.context(format!("Failed to process message #{}", message_id)));
         }
       }
 
@@ -579,12 +579,12 @@ impl Backend {
           Err(e) => match e.downcast::<BackendNiceError>() {
             Ok(e) => {
               if let Some(e) = e.source {
-                logging::report_error(e);
+                crate::report_error!(e);
               }
               Message::ErrorResponse { id: Some(id), message: e.message }
             }
             Err(e) => {
-              logging::report_error(e);
+              crate::report_error!(e);
               Message::ErrorResponse { id: Some(id), message: "internal backend error".into() }
             }
           },

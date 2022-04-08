@@ -3,7 +3,6 @@
 
 use crate::backend::transports::MpscChannelTransport;
 use crate::backend::Backend;
-use crate::logging;
 
 use std::mem::ManuallyDrop;
 use std::panic::{self, AssertUnwindSafe};
@@ -100,7 +99,7 @@ pub extern "C" fn crosslocale_backend_new(
           sender: outgoing_send,
         }));
         if let Err(e) = backend.start() {
-          logging::report_critical_error(e);
+          crate::report_critical_error!(e);
           process::abort();
         }
       })
