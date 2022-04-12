@@ -32,7 +32,7 @@ enum MessageType {
   Request = 1,
   Response = 2,
   ErrorResponse = 3,
-  LogMessage = 4,
+  LogRecord = 4,
 }
 
 impl MessageType {
@@ -41,7 +41,7 @@ impl MessageType {
       1 => Self::Request,
       2 => Self::Response,
       3 => Self::ErrorResponse,
-      4 => Self::LogMessage,
+      4 => Self::LogRecord,
       _ => return None,
     })
   }
@@ -52,7 +52,7 @@ pub enum Message<'a> {
   Request { id: Id, method: Cow<'a, str>, params: Cow<'a, RawValue> },
   Response { id: Id, result: Cow<'a, RawValue> },
   ErrorResponse { id: Option<Id>, message: Cow<'a, str> },
-  LogMessage { level: log::Level, target: Cow<'a, str>, text: Cow<'a, str> },
+  LogRecord { level: log::Level, target: Cow<'a, str>, text: Cow<'a, str> },
 }
 
 impl<'a> Message<'a> {
@@ -62,7 +62,7 @@ impl<'a> Message<'a> {
       Self::Request { .. } => None,
       Self::Response { id, .. } => Some(*id),
       Self::ErrorResponse { id, .. } => *id,
-      Self::LogMessage { .. } => None,
+      Self::LogRecord { .. } => None,
     }
   }
 }
@@ -142,9 +142,9 @@ impl<'de> Deserialize<'de> for Message<'de> {
             Ok(Message::ErrorResponse { id: msg_id, message: Cow::Owned(err_msg) })
           }
 
-          Some(MessageType::LogMessage) => {
-            Err(DeError::custom("deserialization of received log messages is not implemented"))
-          }
+          Some(MessageType::LogRecord) => Err(DeError::custom(
+            "deserialization of received LogRecord messages is not implemented",
+          )),
 
           None => {
             return Err(DeError::invalid_value(
@@ -191,9 +191,9 @@ impl<'a> Serialize for Message<'a> {
         seq.end()
       }
 
-      Message::LogMessage { level, target, text } => {
+      Message::LogRecord { level, target, text } => {
         let mut seq = serializer.serialize_seq(Some(4))?;
-        seq.serialize_element(&(MessageType::LogMessage as u8))?;
+        seq.serialize_element(&(MessageType::LogRecord as u8))?;
         seq.serialize_element(&(*level as u8))?;
         seq.serialize_element(&target)?;
         seq.serialize_element(&text)?;
@@ -472,7 +472,7 @@ impl Backend {
             // certainly crashed and may have took down the transport with it,
             // thus there is no use sending a log message.
             if let Ok(transport) = transport.lock() {
-              let _ = Self::send_one_message_to(&**transport, &Message::LogMessage {
+              let _ = Self::send_one_message_to(&**transport, &Message::LogRecord {
                 level: record.level(),
                 target: Cow::Borrowed(record.target()),
                 text: match record.args().as_str() {
@@ -524,7 +524,7 @@ impl Backend {
         Ok(None) => {}
 
         Ok(Some(message)) => match message {
-          Message::Request { .. } | Message::LogMessage { .. } => {
+          Message::Request { .. } | Message::LogRecord { .. } => {
             unreachable!();
           }
           Message::ErrorResponse { id: None, message } => {
@@ -600,7 +600,7 @@ impl Backend {
         Ok(Some(Message::ErrorResponse { id, message: Cow::Owned(message.into_owned()) }))
       }
 
-      Ok(Message::LogMessage { .. }) => Ok(None),
+      Ok(Message::LogRecord { .. }) => Ok(None),
     }
   }
 
@@ -659,7 +659,7 @@ impl Backend {
     let id = self.client_request_id.alloc();
     self.send_one_message(&Message::Request { id, method, params })?;
     match self.process_messages_until(Some(id))? {
-      Message::Request { .. } | Message::LogMessage { .. } => unreachable!(),
+      Message::Request { .. } | Message::LogRecord { .. } => unreachable!(),
       Message::Response { result, .. } => Ok(result),
       Message::ErrorResponse { message, .. } => bail!("client error: {}", message),
     }
