@@ -4,3 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [tool.pyright]
 typeCheckingMode = "strict"
+
+[tool.isort]
+line_length = 99
+add_imports = ["from __future__ import annotations"]
+
+[tool.yapf]
+based_on_style = "google"
+column_limit = 99
+indent_width = 2
+continuation_indent_width = 2
+dedent_closing_brackets = true
+coalesce_brackets = true
+spaces_around_power_operator = true

@@ -96,3 +96,24 @@ jobs:
       - name: clang-format
         if: runner.os == 'Linux'
         run: clang-format --verbose --dry-run ffi/crosslocale.h node-bindings/addon.cc
+
+  build-mod-tools:
+    name: Build mod tools
+
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mod-tools/
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '>=3.7'
+
+      - run: ./setup.py develop
+      - run: pip install pyright yapf isort toml
+      - run: pyright .
+      - run: yapf --diff --recursive .
+      - run: isort --check --diff .
