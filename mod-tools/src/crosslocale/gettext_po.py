@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, NoReturn, Optional, TypeVar, Union
+from typing import List, NoReturn, TypeVar
 
 
 @dataclass()
@@ -98,7 +98,7 @@ class Lexer:
     self.next_char_index: int = 0
     self.is_previous_entry: bool = False
 
-  def next_char(self) -> Optional[str]:
+  def next_char(self) -> str | None:
     i = self.next_char_index
     try:
       c = self.src[i]
@@ -116,7 +116,7 @@ class Lexer:
       self.reset_current_line_flags()
     return c
 
-  def peek_char(self) -> Optional[str]:
+  def peek_char(self) -> str | None:
     try:
       return self.src[self.next_char_index]
     except IndexError:
@@ -143,7 +143,7 @@ class Lexer:
   def reset_current_line_flags(self) -> None:
     self.is_previous_entry = False
 
-  def parse_next_token(self) -> Optional[Token]:
+  def parse_next_token(self) -> Token | None:
     while not self.done:
       self.skip_whitespace()
 
@@ -152,7 +152,7 @@ class Lexer:
         return None
       self.begin_token()
 
-      token: Optional[Token]
+      token: Token | None
       if c == "#":
         token = self.parse_comment()
       elif c == '"':
@@ -175,7 +175,7 @@ class Lexer:
       else:
         break
 
-  def parse_comment(self) -> Optional[TokenComment]:
+  def parse_comment(self) -> TokenComment | None:
     comment_type = CommentType.Translator
 
     c = self.peek_char()
@@ -204,7 +204,7 @@ class Lexer:
     text = self.src[text_start_index:self.next_char_index]
     return TokenComment(comment_type=comment_type, text=text)
 
-  def parse_string(self) -> Optional[TokenString]:
+  def parse_string(self) -> TokenString | None:
     literal_text_start_index = self.next_char_index
     text_buf: List[str] = []
 
@@ -248,7 +248,7 @@ class Lexer:
     text_buf.append(last_literal_text)
     return TokenString(is_previous=self.is_previous_entry, text="".join(text_buf))
 
-  def parse_keyword(self) -> Optional[Union[TokenMsgctxt, TokenMsgid, TokenMsgstr]]:
+  def parse_keyword(self) -> TokenMsgctxt | TokenMsgid | TokenMsgstr | None:
     while True:
       c = self.peek_char()
       if c is None:
@@ -284,10 +284,10 @@ class Parser:
   def __init__(self, src: str) -> None:
     self.lexer = Lexer(src)
     self.done: bool = False
-    self.peeked_token: Optional[Token] = None
-    self.current_token: Optional[Token] = None
+    self.peeked_token: Token | None = None
+    self.current_token: Token | None = None
 
-  def next_token(self) -> Optional[Token]:
+  def next_token(self) -> Token | None:
     token = self.peeked_token
     if token is None:
       token = self.lexer.parse_next_token()
@@ -297,7 +297,7 @@ class Parser:
     self.current_token = token
     return token
 
-  def peek_token(self) -> Optional[Token]:
+  def peek_token(self) -> Token | None:
     token = self.peeked_token
     if token is None:
       token = self.lexer.parse_next_token()
@@ -320,7 +320,7 @@ class Parser:
       self.current_token.end_pos.clone() if self.current_token is not None else CharPos.default()
     )
 
-  def parse_next_message(self) -> Optional[ParsedMessage]:
+  def parse_next_message(self) -> ParsedMessage | None:
     if self.done:
       return None
 
@@ -392,3 +392,16 @@ class Parser:
         out.reference_comments.append(token.text)
       elif token.comment_type == CommentType.Flags:
         out.flags_comments.append(token.text)
+
+
+if __name__ == "__main__":
+  with open(
+    "/home/dmitmel/crosscode/crosscode-localization-data/po/pt_BR/components/database.po", "r"
+  ) as f:
+    text = f.read()
+  parser = Parser(text)
+  while True:
+    msg = parser.parse_next_message()
+    if msg is None:
+      break
+    # print(msg)

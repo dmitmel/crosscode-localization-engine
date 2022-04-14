@@ -39,7 +39,7 @@ pub fn try_main() -> AnyResult<()> {
     Some(logger)
   });
 
-  let (arg_parser, mut all_commands_map) = cli::create_complete_arg_parser();
+  let (arg_parser, all_commands_map) = cli::create_complete_arg_parser();
   let matches = arg_parser.get_matches();
   let global_opts = cli::GlobalOpts::from_matches(&matches);
 
@@ -110,7 +110,7 @@ pub fn try_main() -> AnyResult<()> {
   }
 
   let (command_name, command_matches) = matches.subcommand().unwrap();
-  let command = all_commands_map.remove(command_name).unwrap();
+  let command = all_commands_map.get(command_name).unwrap();
 
   // Brace for impact.
 
