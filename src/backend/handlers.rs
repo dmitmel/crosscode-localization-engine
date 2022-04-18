@@ -1,17 +1,29 @@
 use super::error::BackendNiceError;
-use super::{Backend, FieldsSelection, Id, ListedFragment, Method};
+use super::{Backend, FieldsSelection, Id, ListedFragment, Method, MethodDeclaration};
 use crate::impl_prelude::*;
 use crate::project::{FileType, Fragment, GameFileChunk, Project, TrFile, VirtualGameFile};
 use crate::rc_string::{MaybeStaticStr, RcString};
 use crate::utils::{RcExt, Timestamp};
 
 use indexmap::IndexMap;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::rc::Rc;
 use uuid::Uuid;
+
+pub static ALL_HANDLERS: Lazy<Vec<MethodDeclaration>> = Lazy::new(|| {
+  vec![
+    ReqGetBackendInfo::declaration(),
+    ReqOpenProject::declaration(),
+    ReqCloseProject::declaration(),
+    ReqGetProjectMeta::declaration(),
+    ReqListFiles::declaration(),
+    ReqQueryFragments::declaration(),
+  ]
+});
 
 #[derive(Debug, Deserialize)]
 pub struct ReqGetBackendInfo {}
@@ -24,7 +36,7 @@ pub struct ResGetBackendInfo {
 }
 
 impl Method for ReqGetBackendInfo {
-  fn name() -> &'static str { "get_backend_info" }
+  const NAME: &'static str = "get_backend_info";
   type Result = ResGetBackendInfo;
   fn handler(_backend: &mut Backend, _params: Self) -> AnyResult<Self::Result> {
     Ok(ResGetBackendInfo {
@@ -34,8 +46,6 @@ impl Method for ReqGetBackendInfo {
     })
   }
 }
-
-inventory::submit!(ReqGetBackendInfo::declaration());
 
 #[derive(Debug, Deserialize)]
 pub struct ReqOpenProject {
@@ -48,7 +58,7 @@ pub struct ResOpenProject {
 }
 
 impl Method for ReqOpenProject {
-  fn name() -> &'static str { "open_project" }
+  const NAME: &'static str = "open_project";
   type Result = ResOpenProject;
   fn handler(backend: &mut Backend, params: Self) -> AnyResult<Self::Result> {
     let project = match Project::open(params.dir.clone())
@@ -63,8 +73,6 @@ impl Method for ReqOpenProject {
   }
 }
 
-inventory::submit!(ReqOpenProject::declaration());
-
 #[derive(Debug, Deserialize)]
 pub struct ReqCloseProject {
   pub project_id: Id,
@@ -74,7 +82,7 @@ pub struct ReqCloseProject {
 pub struct ResCloseProject {}
 
 impl Method for ReqCloseProject {
-  fn name() -> &'static str { "close_project" }
+  const NAME: &'static str = "close_project";
   type Result = ResCloseProject;
   fn handler(backend: &mut Backend, params: Self) -> AnyResult<Self::Result> {
     match backend.projects.remove(&params.project_id) {
@@ -83,8 +91,6 @@ impl Method for ReqCloseProject {
     }
   }
 }
-
-inventory::submit!(ReqCloseProject::declaration());
 
 #[derive(Debug, Deserialize)]
 pub struct ReqGetProjectMeta {
@@ -107,7 +113,7 @@ pub struct ResGetProjectMeta {
 }
 
 impl Method for ReqGetProjectMeta {
-  fn name() -> &'static str { "get_project_meta" }
+  const NAME: &'static str = "get_project_meta";
   type Result = ResGetProjectMeta;
   fn handler(backend: &mut Backend, params: Self) -> AnyResult<Self::Result> {
     let project = match backend.projects.get(&params.project_id) {
@@ -130,8 +136,6 @@ impl Method for ReqGetProjectMeta {
   }
 }
 
-inventory::submit!(ReqGetProjectMeta::declaration());
-
 #[derive(Debug, Deserialize)]
 pub struct ReqListFiles {
   pub project_id: Id,
@@ -144,7 +148,7 @@ pub struct ResListFiles {
 }
 
 impl Method for ReqListFiles {
-  fn name() -> &'static str { "list_files" }
+  const NAME: &'static str = "list_files";
   type Result = ResListFiles;
   fn handler(backend: &mut Backend, params: Self) -> AnyResult<Self::Result> {
     let project = match backend.projects.get(&params.project_id) {
@@ -158,8 +162,6 @@ impl Method for ReqListFiles {
     Ok(ResListFiles { paths })
   }
 }
-
-inventory::submit!(ReqListFiles::declaration());
 
 #[derive(Debug, Deserialize)]
 pub struct ReqQueryFragments {
@@ -180,7 +182,7 @@ pub struct ResQueryFragments {
 }
 
 impl Method for ReqQueryFragments {
-  fn name() -> &'static str { "query_fragments" }
+  const NAME: &'static str = "query_fragments";
   type Result = ResQueryFragments;
   fn handler(backend: &mut Backend, params: Self) -> AnyResult<Self::Result> {
     let project = match backend.projects.get(&params.project_id) {
@@ -342,5 +344,3 @@ fn validate_range(len: usize, range: (Option<usize>, Option<usize>)) -> AnyResul
   }
   Ok((start, end))
 }
-
-inventory::submit!(ReqQueryFragments::declaration());

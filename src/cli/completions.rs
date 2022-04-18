@@ -9,8 +9,6 @@ use std::io::{self, Write};
 #[derive(Debug)]
 pub struct CompletionsCommand;
 
-inventory::submit!(&CompletionsCommand as &dyn super::Command);
-
 impl super::Command for CompletionsCommand {
   fn name(&self) -> &'static str { "completions" }
 

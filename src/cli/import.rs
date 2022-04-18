@@ -15,8 +15,6 @@ use std::rc::Rc;
 #[derive(Debug)]
 pub struct ImportCommand;
 
-inventory::submit!(&ImportCommand as &dyn super::Command);
-
 impl super::Command for ImportCommand {
   fn name(&self) -> &'static str { "import" }
 

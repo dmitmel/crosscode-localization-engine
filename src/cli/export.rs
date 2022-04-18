@@ -16,8 +16,6 @@ use std::path::{Path, PathBuf};
 #[derive(Debug)]
 pub struct ExportCommand;
 
-inventory::submit!(&ExportCommand as &dyn super::Command);
-
 impl super::Command for ExportCommand {
   fn name(&self) -> &'static str { "export" }
 

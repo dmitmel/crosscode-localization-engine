@@ -204,7 +204,7 @@ impl<'a> Serialize for Message<'a> {
 }
 
 pub trait Method: Sized + DeserializeOwned + 'static {
-  fn name() -> &'static str;
+  const NAME: &'static str;
 
   type Result: Sized + Serialize + 'static;
 
@@ -213,7 +213,7 @@ pub trait Method: Sized + DeserializeOwned + 'static {
   fn declaration() -> MethodDeclaration {
     MethodDeclaration {
       client: false,
-      name: Self::name(),
+      name: Self::NAME,
       deserialize_incoming: |json| Ok(Box::new(serde_json::from_str::<Self>(json.get())?)),
       serialize_outgoing: |any| to_raw_value(&any.downcast::<Self::Result>().unwrap()),
       handle_call: |bk, any| Ok(Box::new(Self::handler(bk, *any.downcast::<Self>().unwrap())?)),
@@ -222,14 +222,14 @@ pub trait Method: Sized + DeserializeOwned + 'static {
 }
 
 pub trait ClientMethod: Sized + Serialize + 'static {
-  fn name() -> &'static str;
+  const NAME: &'static str;
 
   type Result: Sized + DeserializeOwned + 'static;
 
   fn declaration() -> MethodDeclaration {
     MethodDeclaration {
       client: true,
-      name: Self::name(),
+      name: Self::NAME,
       deserialize_incoming: |json| Ok(Box::new(serde_json::from_str::<Self::Result>(json.get())?)),
       serialize_outgoing: |any| to_raw_value(&any.downcast::<Self>().unwrap()),
       handle_call: |_bk, _any| unreachable!("called handle_call on a client method"),
@@ -259,8 +259,6 @@ impl fmt::Debug for MethodDeclaration {
       .finish()
   }
 }
-
-inventory::collect!(MethodDeclaration);
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FieldsSelection {
@@ -451,8 +449,7 @@ impl Backend {
   pub fn new(transport: Box<dyn Transport>) -> Self {
     let mut methods_registry = HashMap::new();
     let mut client_methods_registry = HashMap::new();
-    for decl in inventory::iter::<MethodDeclaration> {
-      let decl: &MethodDeclaration = decl;
+    for decl in handlers::ALL_HANDLERS.iter() {
       let map = if decl.client { &mut client_methods_registry } else { &mut methods_registry };
       if map.insert(decl.name, decl).is_some() {
         panic!("Duplicate method registered for name: {:?}", decl.name);
@@ -641,10 +638,10 @@ impl Backend {
 
   pub fn send_request<M: ClientMethod>(&mut self, params: M) -> AnyResult<M::Result> {
     let method_decl: &'static MethodDeclaration =
-      self.client_methods_registry.get(M::name()).unwrap();
+      self.client_methods_registry.get(M::NAME).unwrap();
     let params = (method_decl.serialize_outgoing)(Box::new(params))
       .context("Failed to serialize client message parameters")?;
-    let result = self.send_request_impl(Cow::Borrowed(M::name()), Cow::Owned(params))?;
+    let result = self.send_request_impl(Cow::Borrowed(M::NAME), Cow::Owned(params))?;
     let result = (method_decl.deserialize_incoming)(&*result)
       .context("Failed to deserialize client message result")?;
     Ok(*result.downcast::<M::Result>().unwrap())

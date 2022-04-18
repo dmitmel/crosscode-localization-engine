@@ -173,16 +173,18 @@ pub trait Exporter: fmt::Debug + Send + Sync {
   }
 }
 
-inventory::collect!(ExporterDeclaration);
-
 pub static REGISTRY: Lazy<utils::StrategicalRegistry<ExporterConfig, Box<dyn Exporter>>> =
-  Lazy::new(utils::StrategicalRegistry::new);
+  Lazy::new(|| {
+    utils::StrategicalRegistry::new(&[
+      LocalizeMeTrPackExporter::declaration(),
+      GettextPoExporter::declaration(),
+    ])
+  });
 
 #[derive(Debug)]
 pub struct LocalizeMeTrPackExporter {
   json_fmt: json::UltimateFormatter,
 }
-inventory::submit!(LocalizeMeTrPackExporter::declaration());
 
 impl LocalizeMeTrPackExporter {
   pub const ID: &'static str = "lm-tr-pack";
@@ -294,7 +296,6 @@ impl Exporter for LocalizeMeTrPackExporter {
 
 #[derive(Debug)]
 pub struct GettextPoExporter;
-inventory::submit!(GettextPoExporter::declaration());
 
 impl GettextPoExporter {
   pub const ID: &'static str = "po";

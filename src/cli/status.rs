@@ -9,8 +9,6 @@ use std::path::PathBuf;
 #[derive(Debug)]
 pub struct StatusCommand;
 
-inventory::submit!(&StatusCommand as &dyn super::Command);
-
 impl super::Command for StatusCommand {
   fn name(&self) -> &'static str { "status" }
 

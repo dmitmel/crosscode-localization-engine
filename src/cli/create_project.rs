@@ -13,8 +13,6 @@ use std::rc::Rc;
 #[derive(Debug)]
 pub struct CreateProjectCommand;
 
-inventory::submit!(&CreateProjectCommand as &dyn super::Command);
-
 impl super::Command for CreateProjectCommand {
   fn name(&self) -> &'static str { "create-project" }
 

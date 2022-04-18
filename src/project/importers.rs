@@ -62,14 +62,16 @@ pub trait Importer: fmt::Debug + Send + Sync {
   }
 }
 
-inventory::collect!(ImporterDeclaration);
-
-pub static REGISTRY: Lazy<utils::StrategicalRegistry<(), Box<dyn Importer>>> =
-  Lazy::new(utils::StrategicalRegistry::new);
+pub static REGISTRY: Lazy<utils::StrategicalRegistry<(), Box<dyn Importer>>> = Lazy::new(|| {
+  utils::StrategicalRegistry::new(&[
+    LocalizeMeTrPackImporter::declaration(),
+    CcRuChapterFragmentsImporter::declaration(),
+    GettextPoImporter::declaration(),
+  ])
+});
 
 #[derive(Debug)]
 pub struct LocalizeMeTrPackImporter;
-inventory::submit!(LocalizeMeTrPackImporter::declaration());
 
 impl LocalizeMeTrPackImporter {
   pub const ID: &'static str = "lm-tr-pack";
@@ -139,7 +141,6 @@ impl Importer for LocalizeMeTrPackImporter {
 
 #[derive(Debug)]
 pub struct CcRuChapterFragmentsImporter;
-inventory::submit!(CcRuChapterFragmentsImporter::declaration());
 
 impl CcRuChapterFragmentsImporter {
   pub const ID: &'static str = "cc-ru-chapter-fragments";
@@ -212,7 +213,6 @@ impl Importer for CcRuChapterFragmentsImporter {
 
 #[derive(Debug)]
 pub struct GettextPoImporter;
-inventory::submit!(GettextPoImporter::declaration());
 
 impl GettextPoImporter {
   pub const ID: &'static str = "po";

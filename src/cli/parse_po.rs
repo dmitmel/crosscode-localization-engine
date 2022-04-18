@@ -13,8 +13,6 @@ use std::path::PathBuf;
 #[derive(Debug)]
 pub struct ParsePoCommand;
 
-inventory::submit!(&ParsePoCommand as &dyn super::Command);
-
 impl super::Command for ParsePoCommand {
   fn name(&self) -> &'static str { "parse-po" }
 

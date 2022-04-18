@@ -18,8 +18,6 @@ use std::rc::Rc;
 #[derive(Debug)]
 pub struct ConvertCommand;
 
-inventory::submit!(&ConvertCommand as &dyn super::Command);
-
 impl super::Command for ConvertCommand {
   fn name(&self) -> &'static str { "convert" }
 

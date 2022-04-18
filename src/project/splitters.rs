@@ -43,10 +43,15 @@ pub trait Splitter: fmt::Debug + Send + Sync {
   }
 }
 
-inventory::collect!(SplitterDeclaration);
-
-pub static REGISTRY: Lazy<utils::StrategicalRegistry<(), Box<dyn Splitter>>> =
-  Lazy::new(utils::StrategicalRegistry::new);
+pub static REGISTRY: Lazy<utils::StrategicalRegistry<(), Box<dyn Splitter>>> = Lazy::new(|| {
+  utils::StrategicalRegistry::new(&[
+    MonolithicFileSplitter::declaration(),
+    SameFileTreeSplitter::declaration(),
+    LocalizeMeFileTreeSplitter::declaration(),
+    NotabenoidChaptersSplitter::declaration(),
+    NextGenerationSplitter::declaration(),
+  ])
+});
 
 impl<'de> serde::Deserialize<'de> for Box<dyn Splitter> {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -69,7 +74,6 @@ impl serde::Serialize for Box<dyn Splitter> {
 
 #[derive(Debug)]
 pub struct MonolithicFileSplitter;
-inventory::submit!(MonolithicFileSplitter::declaration());
 
 impl MonolithicFileSplitter {
   pub const ID: &'static str = "monolithic-file";
@@ -106,7 +110,6 @@ impl Splitter for MonolithicFileSplitter {
 
 #[derive(Debug)]
 pub struct SameFileTreeSplitter;
-inventory::submit!(SameFileTreeSplitter::declaration());
 
 impl SameFileTreeSplitter {
   pub const ID: &'static str = "same-file-tree";
@@ -144,7 +147,6 @@ impl Splitter for SameFileTreeSplitter {
 
 #[derive(Debug)]
 pub struct LocalizeMeFileTreeSplitter;
-inventory::submit!(LocalizeMeFileTreeSplitter::declaration());
 
 impl LocalizeMeFileTreeSplitter {
   pub const ID: &'static str = "lm-file-tree";
@@ -183,7 +185,6 @@ impl Splitter for LocalizeMeFileTreeSplitter {
 
 #[derive(Debug)]
 pub struct NotabenoidChaptersSplitter;
-inventory::submit!(NotabenoidChaptersSplitter::declaration());
 
 impl NotabenoidChaptersSplitter {
   pub const ID: &'static str = "notabenoid-chapters";
@@ -288,7 +289,6 @@ impl Splitter for NotabenoidChaptersSplitter {
 
 #[derive(Debug)]
 pub struct NextGenerationSplitter;
-inventory::submit!(NextGenerationSplitter::declaration());
 
 impl NextGenerationSplitter {
   pub const ID: &'static str = "next-generation";

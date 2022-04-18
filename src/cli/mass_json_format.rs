@@ -15,8 +15,6 @@ use std::sync::mpsc;
 #[derive(Debug)]
 pub struct MassJsonFormatCommand;
 
-inventory::submit!(&MassJsonFormatCommand as &dyn super::Command);
-
 impl super::Command for MassJsonFormatCommand {
   fn name(&self) -> &'static str { "mass-json-format" }
 

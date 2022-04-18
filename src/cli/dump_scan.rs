@@ -12,8 +12,6 @@ use std::rc::Rc;
 #[derive(Debug)]
 pub struct DumpScanCommand;
 
-inventory::submit!(&DumpScanCommand as &dyn super::Command);
-
 impl super::Command for DumpScanCommand {
   fn name(&self) -> &'static str { "dump-scan" }
 

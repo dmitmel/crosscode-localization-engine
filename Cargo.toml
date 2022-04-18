@@ -37,7 +37,6 @@ time = { version = "0.2.27" }
 # textwrap = { version = "0.11.0" }
 atty = { version = "0.2.14" }
 threadpool = { version = "1.8.1" }
-inventory = { version = "0.1.10" }
 serde-transcode = { version = "1.1.1" }
 
 [target.'cfg(unix)'.dependencies]

@@ -15,6 +15,7 @@ pub mod status;
 use crate::impl_prelude::*;
 use crate::progress::ProgressReporter;
 
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -94,7 +95,7 @@ impl GlobalOpts {
 }
 
 assert_trait_is_object_safe!(Command);
-pub trait Command {
+pub trait Command: Send + Sync {
   fn name(&self) -> &'static str;
   fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help>;
   fn run(
@@ -105,16 +106,31 @@ pub trait Command {
   ) -> AnyResult<()>;
 }
 
-inventory::collect!(&'static dyn Command);
+pub static ALL_COMMANDS: Lazy<Vec<&'static dyn Command>> = Lazy::new(|| {
+  vec![
+    &backend::BackendCommand,
+    &completions::CompletionsCommand,
+    &convert::ConvertCommand,
+    &create_project::CreateProjectCommand,
+    &dump_project::DumpProjectCommand,
+    &dump_scan::DumpScanCommand,
+    &export::ExportCommand,
+    &import::ImportCommand,
+    &mass_json_format::MassJsonFormatCommand,
+    &parse_po::ParsePoCommand,
+    &scan::ScanCommand,
+    &status::StatusCommand,
+  ]
+});
 
 pub fn create_complete_arg_parser<'help>(
 ) -> (clap::Command<'help>, HashMap<&'static str, &'static dyn Command>) {
   let mut arg_parser = GlobalOpts::create_arg_parser();
   let mut all_commands_map = HashMap::new();
-  for &command in inventory::iter::<&dyn Command> {
+  for command in ALL_COMMANDS.iter() {
     arg_parser =
       arg_parser.subcommand(command.create_arg_parser(clap::Command::new(command.name())));
-    all_commands_map.insert(command.name(), command);
+    all_commands_map.insert(command.name(), &**command);
   }
   (arg_parser, all_commands_map)
 }

@@ -7,8 +7,6 @@ use crate::progress::ProgressReporter;
 #[derive(Debug)]
 pub struct BackendCommand;
 
-inventory::submit!(&BackendCommand as &dyn super::Command);
-
 impl super::Command for BackendCommand {
   fn name(&self) -> &'static str { "backend" }
 

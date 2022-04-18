@@ -23,8 +23,6 @@ use std::sync::{mpsc, Arc};
 #[derive(Debug)]
 pub struct ScanCommand;
 
-inventory::submit!(&ScanCommand as &dyn super::Command);
-
 impl super::Command for ScanCommand {
   fn name(&self) -> &'static str { "scan" }
 

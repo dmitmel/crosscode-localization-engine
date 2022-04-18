@@ -379,14 +379,11 @@ pub struct StrategicalRegistry<A, R> {
   _phantom: PhantomData<(A, R)>,
 }
 
-impl<A, R> StrategicalRegistry<A, R>
-where
-  StrategyDeclaration<A, R>: inventory::Collect,
-{
-  pub fn new() -> Self {
+impl<A, R> StrategicalRegistry<A, R> {
+  pub fn new(declarations: &[StrategyDeclaration<A, R>]) -> Self {
     let mut ids = Vec::new();
     let mut map = HashMap::new();
-    for decl in inventory::iter::<StrategyDeclaration<A, R>> {
+    for decl in declarations {
       ids.push(decl.id);
       if map.insert(decl.id, decl.ctor).is_some() {
         panic!("Duplicate strategy was registered for: {:?}", decl.id);

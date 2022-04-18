@@ -14,8 +14,6 @@ use std::str;
 #[derive(Debug)]
 pub struct DumpProjectCommand;
 
-inventory::submit!(&DumpProjectCommand as &dyn super::Command);
-
 impl super::Command for DumpProjectCommand {
   fn name(&self) -> &'static str { "dump-project" }
 
