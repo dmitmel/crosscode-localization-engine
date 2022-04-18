@@ -366,13 +366,13 @@ impl Splitter for NextGenerationSplitter {
   ) -> MaybeStaticStr {
     let components: Vec<_> = file_path.strip_prefix(asset_root).unwrap().split('/').collect();
     let json_components: Vec<_> = json_path.split('/').collect();
-    let tr_file_path =
+    let tr_file_path: MaybeStaticStr =
       SameFileTreeSplitter.get_tr_file_for_entire_game_file(asset_root, file_path).unwrap();
 
     match components[0] {
       "data" if components.len() > 1 => match components[1] {
         "database.json" if components.len() == 2 => {
-          return utils::fast_concat(&[&tr_file_path, "/", match json_components[0] {
+          return utils::fast_concat(&[&*tr_file_path, "/", match json_components[0] {
             // "achievements" => "achievements",
             "commonEvents" => "commonEvents",
             "enemies" => "enemies",

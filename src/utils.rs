@@ -5,7 +5,6 @@ pub mod serde;
 use crate::impl_prelude::*;
 
 use indexmap::IndexMap;
-use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
@@ -129,26 +128,14 @@ pub fn get_timestamp() -> Timestamp {
     .expect("hello, fellow programmers and CrossCode translators of the future!")
 }
 
-pub fn fast_concat(strings: &[&str]) -> String {
+pub fn fast_concat<T: AsRef<str>>(strings: &[T]) -> String {
   let mut capacity = 0;
   for s in strings {
-    capacity += s.len();
+    capacity += s.as_ref().len();
   }
   let mut result = String::with_capacity(capacity);
   for s in strings {
-    result.push_str(s);
-  }
-  result
-}
-
-pub fn fast_concat_cow(strings: &[Cow<str>]) -> String {
-  let mut capacity = 0;
-  for s in strings {
-    capacity += s.len();
-  }
-  let mut result = String::with_capacity(capacity);
-  for s in strings {
-    result.push_str(s);
+    result.push_str(s.as_ref());
   }
   result
 }

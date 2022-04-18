@@ -8,6 +8,7 @@ use crate::utils::{self, RcExt, Timestamp};
 
 use once_cell::sync::Lazy;
 use serde_json::ser::Formatter;
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::io::{self, Write};
@@ -365,7 +366,7 @@ impl Exporter for GettextPoExporter {
       time::OffsetDateTime::from_unix_timestamp(timestamp).lazy_format("%Y-%m-%d %H:%M")
     }
 
-    let metadata_block = utils::fast_concat_cow(&[
+    let metadata_block = utils::fast_concat::<Cow<str>>(&[
       if let Some(game_version) = &project_meta.game_version {
         format!("Project-Id-Version: crosscode {}\n", game_version).into()
       } else {
@@ -437,7 +438,7 @@ impl Exporter for GettextPoExporter {
       writer.write_all(b"msgctxt ")?;
       write_po_string(
         writer,
-        &utils::fast_concat(&[&fragment.file_path, "//", &fragment.json_path]),
+        &utils::fast_concat(&[fragment.file_path.as_str(), "//", fragment.json_path.as_str()]),
       )?;
       writer.write_all(b"msgid ")?;
       write_po_string(writer, &fragment.original_text)?;

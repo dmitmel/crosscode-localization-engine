@@ -139,7 +139,7 @@ impl super::Command for ExportCommand {
     let mut fragments_by_export_path = IndexMap::<RcString, Vec<ExportedFragment>>::new();
     let mut exported_files_mapping = IndexMap::<RcString, RcString>::new();
 
-    let export_file_extension = exporter.file_extension();
+    let export_file_ext = exporter.file_extension();
 
     for game_file in project.virtual_game_files().values() {
       let game_file_path = game_file.path();
@@ -166,7 +166,7 @@ impl super::Command for ExportCommand {
             };
 
             let export_file_path =
-              RcString::from(utils::fast_concat(&[&export_file_path, ".", export_file_extension]));
+              RcString::from(utils::fast_concat(&[&*export_file_path, ".", export_file_ext]));
 
             let mapping_game_file_path = if opt_mapping_lm_paths {
               RcString::from(localize_me::serialize_file_path(game_file_path))

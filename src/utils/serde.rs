@@ -39,7 +39,7 @@ impl MultilineStringHelper {
     T: From<String>,
   {
     let lines = Vec::<Cow<'de, str>>::deserialize(deserializer)?;
-    Ok(super::fast_concat_cow(&lines).into())
+    Ok(super::fast_concat(&lines).into())
   }
 }
 

@@ -257,9 +257,9 @@ impl Importer for GettextPoImporter {
           bail!("{}", e.nice_formatter(&file_path.file_name().unwrap().to_string_lossy(), input))
         }
       };
-      let msgctxt = utils::fast_concat_cow(&message.msgctxt);
-      let msgid = utils::fast_concat_cow(&message.msgid);
-      let msgstr = utils::fast_concat_cow(&message.msgstr);
+      let msgctxt = utils::fast_concat(&message.msgctxt);
+      let msgid = utils::fast_concat(&message.msgid);
+      let msgstr = utils::fast_concat(&message.msgstr);
       if msgid.is_empty() || msgctxt.is_empty() {
         continue;
       }

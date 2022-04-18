@@ -238,7 +238,7 @@ impl super::Command for ConvertCommand {
     let mut fragments_by_export_path = IndexMap::<RcString, Vec<ExportedFragment>>::new();
     let mut exported_files_mapping = IndexMap::<RcString, RcString>::new();
 
-    let export_file_extension = exporter.file_extension();
+    let export_file_ext = exporter.file_extension();
 
     for (game_file_path, fragments_in_import_file) in all_imported_fragments {
       // Don't stop on not found files just yet, so that we can report an error
@@ -291,7 +291,7 @@ impl super::Command for ConvertCommand {
             };
 
             let export_file_path =
-              RcString::from(utils::fast_concat(&[&export_file_path, ".", export_file_extension]));
+              RcString::from(utils::fast_concat(&[&*export_file_path, ".", export_file_ext]));
 
             let mapping_game_file_path = if opt_mapping_lm_paths {
               RcString::from(localize_me::serialize_file_path(&game_file_path))
