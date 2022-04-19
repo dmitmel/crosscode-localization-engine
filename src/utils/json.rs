@@ -4,7 +4,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 
-pub use serde_json::{Map, Value};
+pub use serde_json::{map, Map, Value};
 
 #[allow(missing_debug_implementations)]
 pub enum ValueEntriesIter<'a> {

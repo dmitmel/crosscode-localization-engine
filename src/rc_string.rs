@@ -86,6 +86,16 @@ impl Clone for RcString {
   fn clone_from(&mut self, source: &Self) { self.0.clone_from(&source.0) }
 }
 
+impl From<RcString> for String {
+  #[inline(always)]
+  fn from(s: RcString) -> Self { (*s.0).clone() }
+}
+
+impl From<RcString> for Arc<String> {
+  #[inline(always)]
+  fn from(s: RcString) -> Self { s.0 }
+}
+
 impl Default for RcString {
   #[inline(always)]
   fn default() -> Self { Self(Arc::new(String::default())) }

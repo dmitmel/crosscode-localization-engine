@@ -1,12 +1,13 @@
 use super::{Fragment, ProjectMeta, Translation};
 use crate::gettext_po;
 use crate::impl_prelude::*;
-use crate::localize_me;
+use crate::localize_me::{self, OptiTrPackEntrySerde, OptiTrPackSerde};
 use crate::rc_string::RcString;
 use crate::utils::json;
 use crate::utils::{self, RcExt, Timestamp};
 
 use once_cell::sync::Lazy;
+use serde::Serialize;
 use serde_json::ser::Formatter;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
@@ -18,6 +19,16 @@ use uuid::Uuid;
 #[derive(Debug)]
 pub struct ExporterConfig {
   pub compact: bool,
+}
+
+impl ExporterConfig {
+  pub fn json_formatter_config(&self) -> json::UltimateFormatterConfig {
+    json::UltimateFormatterConfig {
+      compact: self.compact,
+      indent: if self.compact { None } else { Some(json::DEFAULT_INDENT) },
+      ..Default::default()
+    }
+  }
 }
 
 // assert_trait_is_object_safe!(ExportedProjectMeta);
@@ -179,12 +190,13 @@ pub static REGISTRY: Lazy<utils::StrategicalRegistry<ExporterConfig, Box<dyn Exp
     utils::StrategicalRegistry::new(&[
       LocalizeMeTrPackExporter::declaration(),
       GettextPoExporter::declaration(),
+      OptimizedTrPackExporter::declaration(),
     ])
   });
 
 #[derive(Debug)]
 pub struct LocalizeMeTrPackExporter {
-  json_fmt: json::UltimateFormatter,
+  json_fmt_config: json::UltimateFormatterConfig,
 }
 
 impl LocalizeMeTrPackExporter {
@@ -205,13 +217,7 @@ impl Exporter for LocalizeMeTrPackExporter {
   where
     Self: Sized,
   {
-    Box::new(Self {
-      json_fmt: json::UltimateFormatter::new(json::UltimateFormatterConfig {
-        compact: config.compact,
-        indent: if config.compact { None } else { Some(json::DEFAULT_INDENT) },
-        ..Default::default()
-      }),
-    })
+    Box::new(Self { json_fmt_config: config.json_formatter_config() })
   }
 
   #[inline(always)]
@@ -229,14 +235,14 @@ impl Exporter for LocalizeMeTrPackExporter {
     fragments: &[ExportedFragment],
     writer: &mut dyn Write,
   ) -> AnyResult<()> {
-    let fmt = &mut self.json_fmt;
+    let fmt = &mut json::UltimateFormatter::new(self.json_fmt_config.clone());
 
     fmt.begin_object(writer)?;
     let mut is_first_entry = true;
     for fragment in fragments {
       let translation_text = match &fragment.best_translation {
-        Some(tr) => tr.text.share_rc(),
-        None => RcString::from(""),
+        Some(tr) => tr.text.as_str(),
+        None => "",
       };
 
       let localize_me_file_path = localize_me::serialize_file_path(&fragment.file_path);
@@ -279,7 +285,7 @@ impl Exporter for LocalizeMeTrPackExporter {
           fmt.end_object_key(writer)?;
           fmt.begin_object_value(writer)?;
           {
-            json::format_escaped_str(writer, fmt, &translation_text)?;
+            json::format_escaped_str(writer, fmt, translation_text)?;
           }
           fmt.end_object_value(writer)?;
         }
@@ -446,6 +452,80 @@ impl Exporter for GettextPoExporter {
       write_po_string(writer, translation_text)?;
     }
 
+    Ok(())
+  }
+}
+
+#[derive(Debug)]
+pub struct OptimizedTrPackExporter {
+  json_fmt_config: json::UltimateFormatterConfig,
+}
+
+impl OptimizedTrPackExporter {
+  pub const ID: &'static str = "opti-tr-pack";
+}
+
+impl Exporter for OptimizedTrPackExporter {
+  #[inline(always)]
+  fn id_static() -> &'static str
+  where
+    Self: Sized,
+  {
+    Self::ID
+  }
+
+  #[inline(always)]
+  fn new_boxed(config: ExporterConfig) -> Box<dyn Exporter>
+  where
+    Self: Sized,
+  {
+    Box::new(Self { json_fmt_config: config.json_formatter_config() })
+  }
+
+  #[inline(always)]
+  fn id(&self) -> &'static str { Self::ID }
+
+  #[inline(always)]
+  fn file_extension(&self) -> &'static str { "json" }
+
+  #[inline(always)]
+  fn supports_multiple_translations_for_fragments(&self) -> bool { false }
+
+  fn export(
+    &mut self,
+    _project_meta: &ExportedProjectMeta,
+    fragments: &[ExportedFragment],
+    writer: &mut dyn Write,
+  ) -> AnyResult<()> {
+    let fmt = json::UltimateFormatter::new(self.json_fmt_config.clone());
+
+    let mut tr_pack = OptiTrPackSerde::new();
+
+    for fragment in fragments {
+      let file_path = localize_me::serialize_file_path(&fragment.file_path);
+      let original_text = &fragment.original_text;
+      let translation_text = match &fragment.best_translation {
+        Some(tr) => tr.text.as_str(),
+        None => "",
+      };
+
+      let mut pack_entry = tr_pack
+        .file_entries
+        .entry(Cow::Borrowed(file_path))
+        .or_insert_with(OptiTrPackEntrySerde::new);
+      for component in fragment.json_path.split('/') {
+        pack_entry = pack_entry
+          .children
+          .entry(Cow::Borrowed(component))
+          .or_insert_with(OptiTrPackEntrySerde::new);
+      }
+      pack_entry.original_text = Some(Cow::Borrowed(original_text));
+      pack_entry.translation_text = Some(Cow::Borrowed(translation_text));
+    }
+
+    let mut serializer = serde_json::Serializer::with_formatter(&mut *writer, fmt);
+    tr_pack.serialize(&mut serializer)?;
+    writer.write_all(b"\n")?;
     Ok(())
   }
 }

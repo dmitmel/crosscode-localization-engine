@@ -1,7 +1,7 @@
 use crate::utils;
 
 use indexmap::IndexMap;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
 /// See <https://github.com/L-Sherry/Localize-me/blob/9d0ff32abde457997ff58c35f20864d37ac8b2bf/Documentation.md#file_dict_path_str>.
@@ -37,9 +37,12 @@ pub fn deserialize_file_path(lm_file_path: &str) -> Cow<str> {
 /// See <https://github.com/L-Sherry/Localize-me/blob/9d0ff32abde457997ff58c35f20864d37ac8b2bf/Documentation.md#plain-text-variant>.
 #[derive(Debug, Deserialize)]
 pub struct TrPackEntrySerde<'a> {
+  #[serde(borrow)]
   pub orig: Cow<'a, str>,
+  #[serde(borrow)]
   pub text: Cow<'a, str>,
   pub quality: Option<Quality>,
+  #[serde(borrow)]
   pub note: Option<Cow<'a, str>>,
 }
 
@@ -58,4 +61,54 @@ pub enum Quality {
 pub struct TrPackSerde<'a> {
   #[serde(borrow)]
   pub entries: IndexMap<Cow<'a, str>, TrPackEntrySerde<'a>>,
+}
+
+#[derive(Debug)]
+pub struct OptiTrPackEntrySerde<'a> {
+  pub original_text: Option<Cow<'a, str>>,
+  pub translation_text: Option<Cow<'a, str>>,
+  pub children: IndexMap<Cow<'a, str>, OptiTrPackEntrySerde<'a>>,
+}
+
+impl<'a> OptiTrPackEntrySerde<'a> {
+  pub fn new() -> Self {
+    Self { original_text: None, translation_text: None, children: IndexMap::new() }
+  }
+}
+
+impl<'a> Serialize for OptiTrPackEntrySerde<'a> {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    use serde::ser::SerializeMap as _;
+
+    let mut map_len = self.children.len();
+    map_len += self.original_text.is_some() as usize;
+    map_len += self.translation_text.is_some() as usize;
+    let mut map = serializer.serialize_map(Some(map_len))?;
+
+    if let Some(value) = &self.original_text {
+      map.serialize_entry("o", &value)?;
+    }
+    if let Some(value) = &self.translation_text {
+      map.serialize_entry("t", &value)?;
+    }
+    for (key, value) in &self.children {
+      map.serialize_entry(&utils::fast_concat(&["/", &*key]), value)?;
+    }
+
+    map.end()
+  }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(transparent)]
+pub struct OptiTrPackSerde<'a> {
+  #[serde(borrow)]
+  pub file_entries: IndexMap<Cow<'a, str>, OptiTrPackEntrySerde<'a>>,
+}
+
+impl<'a> OptiTrPackSerde<'a> {
+  pub fn new() -> Self { Self { file_entries: IndexMap::new() } }
 }
