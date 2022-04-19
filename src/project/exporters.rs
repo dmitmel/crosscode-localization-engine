@@ -1,13 +1,13 @@
 use super::{Fragment, ProjectMeta, Translation};
 use crate::gettext_po;
 use crate::impl_prelude::*;
-use crate::localize_me::{self, OptiTrPackEntrySerde, OptiTrPackSerde};
+use crate::localize_me;
 use crate::rc_string::RcString;
 use crate::utils::json;
 use crate::utils::{self, RcExt, Timestamp};
 
+use indexmap::IndexMap;
 use once_cell::sync::Lazy;
-use serde::Serialize;
 use serde_json::ser::Formatter;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
@@ -467,9 +467,22 @@ impl Exporter for OptimizedTrPackExporter {
     fragments: &[ExportedFragment],
     writer: &mut dyn Write,
   ) -> AnyResult<()> {
-    let fmt = json::UltimateFormatter::new(self.json_fmt_config.clone());
+    let fmt = &mut json::UltimateFormatter::new(self.json_fmt_config.clone());
 
-    let mut tr_pack = OptiTrPackSerde::new();
+    #[derive(Debug)]
+    pub struct OptiTrPackEntry<'a> {
+      pub original_text: Option<Cow<'a, str>>,
+      pub translation_text: Option<Cow<'a, str>>,
+      pub children: IndexMap<Cow<'a, str>, OptiTrPackEntry<'a>>,
+    }
+
+    impl<'a> OptiTrPackEntry<'a> {
+      pub fn new() -> Self {
+        Self { original_text: None, translation_text: None, children: IndexMap::new() }
+      }
+    }
+
+    let mut root_files_map = IndexMap::<Cow<str>, OptiTrPackEntry>::new();
 
     for fragment in fragments {
       let file_path = localize_me::serialize_file_path(&fragment.file_path);
@@ -479,22 +492,58 @@ impl Exporter for OptimizedTrPackExporter {
         None => "",
       };
 
-      let mut pack_entry = tr_pack
-        .file_entries
-        .entry(Cow::Borrowed(file_path))
-        .or_insert_with(OptiTrPackEntrySerde::new);
+      let mut pack_entry =
+        root_files_map.entry(Cow::Borrowed(file_path)).or_insert_with(OptiTrPackEntry::new);
       for component in fragment.json_path.split('/') {
-        pack_entry = pack_entry
-          .children
-          .entry(Cow::Borrowed(component))
-          .or_insert_with(OptiTrPackEntrySerde::new);
+        pack_entry =
+          pack_entry.children.entry(Cow::Borrowed(component)).or_insert_with(OptiTrPackEntry::new);
       }
       pack_entry.original_text = Some(Cow::Borrowed(original_text));
       pack_entry.translation_text = Some(Cow::Borrowed(translation_text));
     }
 
-    let mut serializer = serde_json::Serializer::with_formatter(&mut *writer, fmt);
-    tr_pack.serialize(&mut serializer)?;
+    let mut stack: Vec<(bool, indexmap::map::Iter<Cow<str>, OptiTrPackEntry>)> =
+      vec![(true, root_files_map.iter())];
+    fmt.begin_object(writer)?;
+
+    while let Some((first, current_iter)) = stack.last_mut() {
+      if let Some((json_path, entry)) = current_iter.next() {
+        fmt.begin_object_key(writer, *first)?;
+        fmt.begin_string(writer)?;
+        fmt.write_string_fragment(writer, "/")?;
+        json::format_escaped_str_contents(writer, fmt, json_path)?;
+        fmt.end_string(writer)?;
+        fmt.end_object_key(writer)?;
+        *first = false;
+
+        fmt.begin_object_value(writer)?;
+        fmt.begin_object(writer)?;
+
+        let mut first = true;
+        if let Some(value) = &entry.original_text {
+          fmt.write_static_object_key(writer, first, "o")?;
+          fmt.write_escaped_string_object_value(writer, value)?;
+          first = false;
+        }
+        if let Some(value) = &entry.translation_text {
+          fmt.write_static_object_key(writer, first, "t")?;
+          fmt.write_escaped_string_object_value(writer, value)?;
+          first = false;
+        }
+
+        stack.push((first, entry.children.iter()));
+      } else {
+        stack.pop().unwrap();
+
+        if !stack.is_empty() {
+          fmt.end_object(writer)?;
+          fmt.end_object_value(writer)?;
+        }
+      }
+    }
+
+    fmt.end_object(writer)?;
+
     writer.write_all(b"\n")?;
     Ok(())
   }
