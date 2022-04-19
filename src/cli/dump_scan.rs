@@ -1,4 +1,4 @@
-use super::dump_common::{self as common, write_static_object_key};
+use super::dump_common as common;
 use crate::impl_prelude::*;
 use crate::progress::ProgressReporter;
 use crate::scan;
@@ -68,79 +68,59 @@ pub fn dump_the_scan_db(
   for game_file in scan_db.game_files().values() {
     for fragment in game_file.fragments().values() {
       stream_helper.begin_value(fmt, out)?;
-      {
-        fmt.begin_object(out)?;
 
-        write_static_object_key(fmt, out, true, "file_asset_root")?;
-        fmt.begin_object_value(out)?;
-        json::format_escaped_str(out, fmt, fragment.file_asset_root())?;
-        fmt.end_object_value(out)?;
+      crate::json_fmt_helper!(wrap_object, fmt, out, {
+        fmt.write_static_object_key(out, true, "file_asset_root")?;
+        fmt.write_escaped_string_object_value(out, fragment.file_asset_root())?;
 
-        write_static_object_key(fmt, out, false, "file_path")?;
-        fmt.begin_object_value(out)?;
-        json::format_escaped_str(out, fmt, fragment.file_path())?;
-        fmt.end_object_value(out)?;
+        fmt.write_static_object_key(out, false, "file_path")?;
+        fmt.write_escaped_string_object_value(out, fragment.file_path())?;
 
-        write_static_object_key(fmt, out, false, "json_path")?;
-        fmt.begin_object_value(out)?;
-        json::format_escaped_str(out, fmt, fragment.json_path())?;
-        fmt.end_object_value(out)?;
+        fmt.write_static_object_key(out, false, "json_path")?;
+        fmt.write_escaped_string_object_value(out, fragment.json_path())?;
 
-        write_static_object_key(fmt, out, false, "lang_uid")?;
-        fmt.begin_object_value(out)?;
-        fmt.write_i32(out, fragment.lang_uid())?;
-        fmt.end_object_value(out)?;
+        fmt.write_static_object_key(out, false, "lang_uid")?;
+        crate::json_fmt_helper!(wrap_object_value, fmt, out, {
+          fmt.write_i32(out, fragment.lang_uid())?;
+        });
 
-        write_static_object_key(fmt, out, false, "description")?;
-        fmt.begin_object_value(out)?;
-        {
-          fmt.begin_array(out)?;
-          let mut first = true;
-          for line in fragment.description().iter() {
-            fmt.begin_array_value(out, first)?;
-            json::format_escaped_str(out, fmt, line)?;
-            fmt.end_array_value(out)?;
-            first = false;
-          }
-          fmt.end_array(out)?;
-        }
-        fmt.end_object_value(out)?;
+        fmt.write_static_object_key(out, false, "description")?;
+        crate::json_fmt_helper!(wrap_object_value, fmt, out, {
+          crate::json_fmt_helper!(wrap_array, fmt, out, {
+            for (i, line) in fragment.description().iter().enumerate() {
+              crate::json_fmt_helper!(wrap_array_value, fmt, out, i == 0, {
+                fmt.write_escaped_string(out, line)?;
+              });
+            }
+          });
+        });
 
-        write_static_object_key(fmt, out, false, "flags")?;
-        fmt.begin_object_value(out)?;
-        {
-          fmt.begin_array(out)?;
-          let mut first = true;
-          for flag in fragment.flags().iter() {
-            fmt.begin_array_value(out, first)?;
-            json::format_escaped_str(out, fmt, flag)?;
-            fmt.end_array_value(out)?;
-            first = false;
-          }
-          fmt.end_array(out)?;
-        }
-        fmt.end_object_value(out)?;
+        fmt.write_static_object_key(out, false, "flags")?;
+        crate::json_fmt_helper!(wrap_object_value, fmt, out, {
+          crate::json_fmt_helper!(wrap_array, fmt, out, {
+            for (i, flag) in fragment.flags().iter().enumerate() {
+              crate::json_fmt_helper!(wrap_array_value, fmt, out, i == 0, {
+                fmt.write_escaped_string(out, flag)?;
+              });
+            }
+          });
+        });
 
-        write_static_object_key(fmt, out, false, "text")?;
-        fmt.begin_object_value(out)?;
-        {
-          fmt.begin_object(out)?;
-          let mut first = true;
-          for (locale, text) in fragment.text().iter() {
-            fmt.begin_object_key(out, first)?;
-            json::format_escaped_str(out, fmt, locale)?;
-            fmt.end_object_key(out)?;
-            fmt.begin_object_value(out)?;
-            json::format_escaped_str(out, fmt, text)?;
-            fmt.end_object_value(out)?;
-            first = false;
-          }
-          fmt.end_object(out)?;
-        }
-        fmt.end_object_value(out)?;
+        fmt.write_static_object_key(out, false, "text")?;
+        crate::json_fmt_helper!(wrap_object_value, fmt, out, {
+          crate::json_fmt_helper!(wrap_object, fmt, out, {
+            for (i, (locale, text)) in fragment.text().iter().enumerate() {
+              crate::json_fmt_helper!(wrap_object_key, fmt, out, i == 0, {
+                fmt.write_escaped_string(out, locale)?;
+              });
+              crate::json_fmt_helper!(wrap_object_value, fmt, out, {
+                fmt.write_escaped_string(out, text)?;
+              });
+            }
+          });
+        });
+      });
 
-        fmt.end_object(out)?;
-      }
       stream_helper.end_value(fmt, out)?;
     }
   }

@@ -219,6 +219,96 @@ impl UltimateFormatter {
     }
     Ok(())
   }
+
+  #[inline]
+  pub fn write_static_str(
+    &mut self,
+    writer: &mut (impl Write + ?Sized),
+    first: bool,
+    key: &'static str,
+  ) -> io::Result<()> {
+    self.begin_object_key(writer, first)?;
+    self.begin_string(writer)?;
+    self.write_string_fragment(writer, key)?;
+    self.end_string(writer)?;
+    self.end_object_key(writer)?;
+    Ok(())
+  }
+
+  /// Copied from <https://github.com/serde-rs/json/blob/9b64e0b17ca73e7fbecace37758ff19bc35dea05/src/ser.rs#L2066-L2075>.
+  #[inline]
+  pub fn write_escaped_string(
+    &mut self,
+    writer: &mut (impl Write + ?Sized),
+    value: &str,
+  ) -> io::Result<()> {
+    self.begin_string(writer)?;
+    format_escaped_str_contents(writer, self, value)?;
+    self.end_string(writer)?;
+    Ok(())
+  }
+
+  #[inline]
+  pub fn write_static_object_key(
+    &mut self,
+    writer: &mut (impl Write + ?Sized),
+    first: bool,
+    key: &'static str,
+  ) -> io::Result<()> {
+    self.begin_object_key(writer, first)?;
+    self.begin_string(writer)?;
+    self.write_string_fragment(writer, key)?;
+    self.end_string(writer)?;
+    self.end_object_key(writer)?;
+    Ok(())
+  }
+
+  #[inline]
+  pub fn write_escaped_string_object_value(
+    &mut self,
+    writer: &mut (impl Write + ?Sized),
+    value: &str,
+  ) -> io::Result<()> {
+    self.begin_object_value(writer)?;
+    self.begin_string(writer)?;
+    format_escaped_str_contents(writer, self, value)?;
+    self.end_string(writer)?;
+    self.end_object_value(writer)?;
+    Ok(())
+  }
+}
+
+#[macro_export]
+macro_rules! json_fmt_helper {
+  (wrap_array, $fmt:expr, $writer:expr, $body:expr) => {{
+    $fmt.begin_array($writer)?;
+    $body;
+    $fmt.end_array($writer)?;
+  }};
+
+  (wrap_array_value, $fmt:expr, $writer:expr, $first:expr, $body:expr) => {{
+    $fmt.begin_array_value($writer, $first)?;
+    $body;
+    $fmt.end_array_value($writer)?;
+  }};
+
+  (wrap_object, $fmt:expr, $writer:expr, $body:expr) => {{
+    $fmt.begin_object($writer)?;
+    $body;
+    $fmt.end_object($writer)?;
+  }};
+
+  (wrap_object_key, $fmt:expr, $writer:expr, $first:expr, $body:expr) => {{
+    $fmt.begin_object_key($writer, $first)?;
+    $body;
+    $fmt.end_object_key($writer)?;
+  }};
+
+  (wrap_object_value, $fmt:expr, $writer:expr, $body:expr) => {{
+    $fmt.begin_object_value($writer)?;
+    $body;
+    $fmt.end_object_value($writer)?;
+  }};
 }
 
 impl Formatter for UltimateFormatter {

@@ -1,4 +1,4 @@
-use super::dump_common::{self as common, write_static_object_key};
+use super::dump_common as common;
 use crate::impl_prelude::*;
 use crate::progress::ProgressReporter;
 use crate::project;
@@ -71,224 +71,152 @@ pub fn dump_the_project(
     for fragment in game_file.fragments().values() {
       let tr_file = fragment.tr_file();
       stream_helper.begin_value(fmt, out)?;
-      {
-        fmt.begin_object(out)?;
 
-        write_static_object_key(fmt, out, true, "id")?;
-        fmt.begin_object_value(out)?;
-        {
-          let bytes = utils::encode_compact_uuid(&fragment.id());
-          json::format_escaped_str(out, fmt, str::from_utf8(&bytes).unwrap())?;
-        }
-        fmt.end_object_value(out)?;
+      crate::json_fmt_helper!(wrap_object, fmt, out, {
+        fmt.write_static_object_key(out, true, "id")?;
+        let bytes = utils::encode_compact_uuid(&fragment.id());
+        fmt.write_escaped_string_object_value(out, str::from_utf8(&bytes).unwrap())?;
 
-        write_static_object_key(fmt, out, false, "tr_file_id")?;
-        fmt.begin_object_value(out)?;
-        {
-          let bytes = utils::encode_compact_uuid(&tr_file.id());
-          json::format_escaped_str(out, fmt, str::from_utf8(&bytes).unwrap())?;
-        }
-        fmt.end_object_value(out)?;
+        fmt.write_static_object_key(out, false, "tr_file_id")?;
+        let bytes = utils::encode_compact_uuid(&tr_file.id());
+        fmt.write_escaped_string_object_value(out, str::from_utf8(&bytes).unwrap())?;
 
-        write_static_object_key(fmt, out, false, "tr_file_path")?;
-        fmt.begin_object_value(out)?;
-        json::format_escaped_str(out, fmt, tr_file.relative_path())?;
-        fmt.end_object_value(out)?;
+        fmt.write_static_object_key(out, false, "tr_file_path")?;
+        fmt.write_escaped_string_object_value(out, tr_file.relative_path())?;
 
-        write_static_object_key(fmt, out, false, "file_asset_root")?;
-        fmt.begin_object_value(out)?;
-        json::format_escaped_str(out, fmt, game_file.asset_root())?;
-        fmt.end_object_value(out)?;
+        fmt.write_static_object_key(out, false, "file_asset_root")?;
+        fmt.write_escaped_string_object_value(out, game_file.asset_root())?;
 
-        write_static_object_key(fmt, out, false, "file_path")?;
-        fmt.begin_object_value(out)?;
-        json::format_escaped_str(out, fmt, fragment.file_path())?;
-        fmt.end_object_value(out)?;
+        fmt.write_static_object_key(out, false, "file_path")?;
+        fmt.write_escaped_string_object_value(out, fragment.file_path())?;
 
-        write_static_object_key(fmt, out, false, "json_path")?;
-        fmt.begin_object_value(out)?;
-        json::format_escaped_str(out, fmt, fragment.json_path())?;
-        fmt.end_object_value(out)?;
+        fmt.write_static_object_key(out, false, "json_path")?;
+        fmt.write_escaped_string_object_value(out, fragment.json_path())?;
 
-        write_static_object_key(fmt, out, false, "lang_uid")?;
-        fmt.begin_object_value(out)?;
-        fmt.write_i32(out, fragment.lang_uid())?;
-        fmt.end_object_value(out)?;
+        fmt.write_static_object_key(out, false, "lang_uid")?;
+        crate::json_fmt_helper!(wrap_object_value, fmt, out, {
+          fmt.write_i32(out, fragment.lang_uid())?;
+        });
 
-        write_static_object_key(fmt, out, false, "description")?;
-        fmt.begin_object_value(out)?;
-        {
-          fmt.begin_array(out)?;
-          let mut first = true;
-          for line in fragment.description().iter() {
-            fmt.begin_array_value(out, first)?;
-            json::format_escaped_str(out, fmt, line)?;
-            fmt.end_array_value(out)?;
-            first = false;
-          }
-          fmt.end_array(out)?;
-        }
-        fmt.end_object_value(out)?;
-
-        write_static_object_key(fmt, out, false, "original_text")?;
-        fmt.begin_object_value(out)?;
-        json::format_escaped_str(out, fmt, fragment.original_text())?;
-        fmt.end_object_value(out)?;
-
-        write_static_object_key(fmt, out, false, "reference_texts")?;
-        fmt.begin_object_value(out)?;
-        {
-          fmt.begin_object(out)?;
-          let mut first = true;
-          for (locale, text) in fragment.reference_texts().iter() {
-            fmt.begin_object_key(out, first)?;
-            json::format_escaped_str(out, fmt, locale)?;
-            fmt.end_object_key(out)?;
-            fmt.begin_object_value(out)?;
-            json::format_escaped_str(out, fmt, text)?;
-            fmt.end_object_value(out)?;
-            first = false;
-          }
-          fmt.end_object(out)?;
-        }
-        fmt.end_object_value(out)?;
-
-        write_static_object_key(fmt, out, false, "flags")?;
-        fmt.begin_object_value(out)?;
-        {
-          fmt.begin_array(out)?;
-          let mut first = true;
-          for flag in fragment.flags().iter() {
-            fmt.begin_array_value(out, first)?;
-            json::format_escaped_str(out, fmt, flag)?;
-            fmt.end_array_value(out)?;
-            first = false;
-          }
-          fmt.end_array(out)?;
-        }
-        fmt.end_object_value(out)?;
-
-        write_static_object_key(fmt, out, false, "translations")?;
-        fmt.begin_object_value(out)?;
-        {
-          fmt.begin_array(out)?;
-          let mut first = true;
-          for translation in fragment.translations().iter() {
-            fmt.begin_array_value(out, first)?;
-            {
-              fmt.begin_object(out)?;
-
-              write_static_object_key(fmt, out, true, "id")?;
-              fmt.begin_object_value(out)?;
-              {
-                let bytes = utils::encode_compact_uuid(&translation.id());
-                json::format_escaped_str(out, fmt, str::from_utf8(&bytes).unwrap())?;
-              }
-              fmt.end_object_value(out)?;
-
-              write_static_object_key(fmt, out, false, "author_username")?;
-              fmt.begin_object_value(out)?;
-              json::format_escaped_str(out, fmt, translation.author_username())?;
-              fmt.end_object_value(out)?;
-
-              write_static_object_key(fmt, out, false, "editor_username")?;
-              fmt.begin_object_value(out)?;
-              json::format_escaped_str(out, fmt, &translation.editor_username())?;
-              fmt.end_object_value(out)?;
-
-              write_static_object_key(fmt, out, false, "creation_timestamp")?;
-              fmt.begin_object_value(out)?;
-              fmt.write_i64(out, translation.creation_timestamp())?;
-              fmt.end_object_value(out)?;
-
-              write_static_object_key(fmt, out, false, "modification_timestamp")?;
-              fmt.begin_object_value(out)?;
-              fmt.write_i64(out, translation.modification_timestamp())?;
-              fmt.end_object_value(out)?;
-
-              write_static_object_key(fmt, out, false, "text")?;
-              fmt.begin_object_value(out)?;
-              json::format_escaped_str(out, fmt, &translation.text())?;
-              fmt.end_object_value(out)?;
-
-              write_static_object_key(fmt, out, false, "flags")?;
-              fmt.begin_object_value(out)?;
-              {
-                fmt.begin_array(out)?;
-                let mut first = true;
-                for flag in translation.flags().iter() {
-                  fmt.begin_array_value(out, first)?;
-                  json::format_escaped_str(out, fmt, flag)?;
-                  fmt.end_array_value(out)?;
-                  first = false;
-                }
-                fmt.end_array(out)?;
-              }
-              fmt.end_object_value(out)?;
-
-              fmt.end_object(out)?;
+        fmt.write_static_object_key(out, false, "description")?;
+        crate::json_fmt_helper!(wrap_object_value, fmt, out, {
+          crate::json_fmt_helper!(wrap_array, fmt, out, {
+            for (i, line) in fragment.description().iter().enumerate() {
+              crate::json_fmt_helper!(wrap_array_value, fmt, out, i == 0, {
+                fmt.write_escaped_string(out, line)?;
+              });
             }
-            fmt.end_array_value(out)?;
-            first = false;
-          }
-          fmt.end_array(out)?;
-        }
-        fmt.end_object_value(out)?;
+          });
+        });
 
-        write_static_object_key(fmt, out, false, "comments")?;
-        fmt.begin_object_value(out)?;
-        {
-          fmt.begin_array(out)?;
-          let mut first = true;
-          for comment in fragment.comments().iter() {
-            fmt.begin_array_value(out, first)?;
-            {
-              fmt.begin_object(out)?;
+        fmt.write_static_object_key(out, false, "original_text")?;
+        fmt.write_escaped_string_object_value(out, fragment.original_text())?;
 
-              write_static_object_key(fmt, out, true, "id")?;
-              fmt.begin_object_value(out)?;
-              {
-                let bytes = utils::encode_compact_uuid(&comment.id());
-                json::format_escaped_str(out, fmt, str::from_utf8(&bytes).unwrap())?;
-              }
-              fmt.end_object_value(out)?;
-
-              write_static_object_key(fmt, out, false, "author_username")?;
-              fmt.begin_object_value(out)?;
-              json::format_escaped_str(out, fmt, comment.author_username())?;
-              fmt.end_object_value(out)?;
-
-              write_static_object_key(fmt, out, false, "editor_username")?;
-              fmt.begin_object_value(out)?;
-              json::format_escaped_str(out, fmt, &comment.editor_username())?;
-              fmt.end_object_value(out)?;
-
-              write_static_object_key(fmt, out, false, "creation_timestamp")?;
-              fmt.begin_object_value(out)?;
-              fmt.write_i64(out, comment.creation_timestamp())?;
-              fmt.end_object_value(out)?;
-
-              write_static_object_key(fmt, out, false, "modification_timestamp")?;
-              fmt.begin_object_value(out)?;
-              fmt.write_i64(out, comment.modification_timestamp())?;
-              fmt.end_object_value(out)?;
-
-              write_static_object_key(fmt, out, false, "text")?;
-              fmt.begin_object_value(out)?;
-              json::format_escaped_str(out, fmt, &comment.text())?;
-              fmt.end_object_value(out)?;
-
-              fmt.end_object(out)?;
+        fmt.write_static_object_key(out, false, "reference_texts")?;
+        crate::json_fmt_helper!(wrap_object_value, fmt, out, {
+          crate::json_fmt_helper!(wrap_object, fmt, out, {
+            for (i, (locale, text)) in fragment.reference_texts().iter().enumerate() {
+              crate::json_fmt_helper!(wrap_object_key, fmt, out, i == 0, {
+                fmt.write_escaped_string(out, locale)?;
+              });
+              crate::json_fmt_helper!(wrap_object_value, fmt, out, {
+                fmt.write_escaped_string(out, text)?;
+              });
             }
-            fmt.end_array_value(out)?;
-            first = false;
-          }
-          fmt.end_array(out)?;
-        }
-        fmt.end_object_value(out)?;
+          });
+        });
 
-        fmt.end_object(out)?;
-      }
+        fmt.write_static_object_key(out, false, "flags")?;
+        crate::json_fmt_helper!(wrap_object_value, fmt, out, {
+          crate::json_fmt_helper!(wrap_array, fmt, out, {
+            for (i, flag) in fragment.flags().iter().enumerate() {
+              crate::json_fmt_helper!(wrap_array_value, fmt, out, i == 0, {
+                fmt.write_escaped_string(out, flag)?;
+              });
+            }
+          });
+        });
+
+        fmt.write_static_object_key(out, false, "translations")?;
+        crate::json_fmt_helper!(wrap_object_value, fmt, out, {
+          crate::json_fmt_helper!(wrap_array, fmt, out, {
+            for (i, translation) in fragment.translations().iter().enumerate() {
+              crate::json_fmt_helper!(wrap_array_value, fmt, out, i == 0, {
+                crate::json_fmt_helper!(wrap_object, fmt, out, {
+                  fmt.write_static_object_key(out, true, "id")?;
+                  let bytes = utils::encode_compact_uuid(&translation.id());
+                  fmt.write_escaped_string_object_value(out, str::from_utf8(&bytes).unwrap())?;
+
+                  fmt.write_static_object_key(out, false, "author_username")?;
+                  fmt.write_escaped_string_object_value(out, translation.author_username())?;
+
+                  fmt.write_static_object_key(out, false, "editor_username")?;
+                  fmt.write_escaped_string_object_value(out, &translation.editor_username())?;
+
+                  fmt.write_static_object_key(out, false, "creation_timestamp")?;
+                  crate::json_fmt_helper!(wrap_object_value, fmt, out, {
+                    fmt.write_i64(out, translation.creation_timestamp())?;
+                  });
+
+                  fmt.write_static_object_key(out, false, "modification_timestamp")?;
+                  crate::json_fmt_helper!(wrap_object_value, fmt, out, {
+                    fmt.write_i64(out, translation.modification_timestamp())?;
+                  });
+
+                  fmt.write_static_object_key(out, false, "text")?;
+                  fmt.write_escaped_string_object_value(out, &translation.text())?;
+
+                  fmt.write_static_object_key(out, false, "flags")?;
+                  crate::json_fmt_helper!(wrap_object_value, fmt, out, {
+                    crate::json_fmt_helper!(wrap_array, fmt, out, {
+                      for (i, flag) in translation.flags().iter().enumerate() {
+                        crate::json_fmt_helper!(wrap_array_value, fmt, out, i == 0, {
+                          fmt.write_escaped_string(out, flag)?;
+                        });
+                      }
+                    });
+                  });
+                });
+              });
+            }
+          });
+        });
+
+        fmt.write_static_object_key(out, false, "comments")?;
+        crate::json_fmt_helper!(wrap_object_value, fmt, out, {
+          crate::json_fmt_helper!(wrap_array, fmt, out, {
+            for (i, comment) in fragment.comments().iter().enumerate() {
+              crate::json_fmt_helper!(wrap_array_value, fmt, out, i == 0, {
+                crate::json_fmt_helper!(wrap_object, fmt, out, {
+                  fmt.write_static_object_key(out, true, "id")?;
+                  let bytes = utils::encode_compact_uuid(&comment.id());
+                  fmt.write_escaped_string_object_value(out, str::from_utf8(&bytes).unwrap())?;
+
+                  fmt.write_static_object_key(out, false, "author_username")?;
+                  fmt.write_escaped_string_object_value(out, comment.author_username())?;
+
+                  fmt.write_static_object_key(out, false, "editor_username")?;
+                  fmt.write_escaped_string_object_value(out, &comment.editor_username())?;
+
+                  fmt.write_static_object_key(out, false, "creation_timestamp")?;
+                  crate::json_fmt_helper!(wrap_object_value, fmt, out, {
+                    fmt.write_i64(out, comment.creation_timestamp())?;
+                  });
+
+                  fmt.write_static_object_key(out, false, "modification_timestamp")?;
+                  crate::json_fmt_helper!(wrap_object_value, fmt, out, {
+                    fmt.write_i64(out, comment.modification_timestamp())?;
+                  });
+
+                  fmt.write_static_object_key(out, false, "text")?;
+                  fmt.write_escaped_string_object_value(out, &comment.text())?;
+                });
+              });
+            }
+          });
+        });
+      });
+
       stream_helper.end_value(fmt, out)?;
     }
   }

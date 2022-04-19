@@ -237,64 +237,34 @@ impl Exporter for LocalizeMeTrPackExporter {
   ) -> AnyResult<()> {
     let fmt = &mut json::UltimateFormatter::new(self.json_fmt_config.clone());
 
-    fmt.begin_object(writer)?;
-    let mut is_first_entry = true;
-    for fragment in fragments {
-      let translation_text = match &fragment.best_translation {
-        Some(tr) => tr.text.as_str(),
-        None => "",
-      };
+    crate::json_fmt_helper!(wrap_object, fmt, writer, {
+      for (i, fragment) in fragments.iter().enumerate() {
+        let translation_text = match &fragment.best_translation {
+          Some(tr) => tr.text.as_str(),
+          None => "",
+        };
 
-      let localize_me_file_path = localize_me::serialize_file_path(&fragment.file_path);
+        let localize_me_file_path = localize_me::serialize_file_path(&fragment.file_path);
 
-      fmt.begin_object_key(writer, is_first_entry)?;
-      is_first_entry = false;
-      {
-        fmt.begin_string(writer)?;
-        json::format_escaped_str_contents(writer, fmt, localize_me_file_path)?;
-        fmt.write_string_fragment(writer, "/")?;
-        json::format_escaped_str_contents(writer, fmt, &fragment.json_path)?;
-        fmt.end_string(writer)?;
+        crate::json_fmt_helper!(wrap_object_key, fmt, writer, i == 0, {
+          fmt.begin_string(writer)?;
+          json::format_escaped_str_contents(writer, fmt, localize_me_file_path)?;
+          fmt.write_string_fragment(writer, "/")?;
+          json::format_escaped_str_contents(writer, fmt, &fragment.json_path)?;
+          fmt.end_string(writer)?;
+        });
+
+        crate::json_fmt_helper!(wrap_object_value, fmt, writer, {
+          crate::json_fmt_helper!(wrap_object, fmt, writer, {
+            fmt.write_static_object_key(writer, true, "orig")?;
+            fmt.write_escaped_string_object_value(writer, &fragment.original_text)?;
+
+            fmt.write_static_object_key(writer, false, "text")?;
+            fmt.write_escaped_string_object_value(writer, translation_text)?;
+          });
+        });
       }
-      fmt.end_object_key(writer)?;
-
-      fmt.begin_object_value(writer)?;
-      {
-        fmt.begin_object(writer)?;
-
-        {
-          fmt.begin_object_key(writer, true)?;
-          {
-            fmt.begin_string(writer)?;
-            fmt.write_string_fragment(writer, "orig")?;
-            fmt.end_string(writer)?;
-          }
-          fmt.end_object_key(writer)?;
-          fmt.begin_object_value(writer)?;
-          {
-            json::format_escaped_str(writer, fmt, &fragment.original_text)?;
-          }
-          fmt.end_object_value(writer)?;
-
-          fmt.begin_object_key(writer, false)?;
-          {
-            fmt.begin_string(writer)?;
-            fmt.write_string_fragment(writer, "text")?;
-            fmt.end_string(writer)?;
-          }
-          fmt.end_object_key(writer)?;
-          fmt.begin_object_value(writer)?;
-          {
-            json::format_escaped_str(writer, fmt, translation_text)?;
-          }
-          fmt.end_object_value(writer)?;
-        }
-
-        fmt.end_object(writer)?;
-      }
-      fmt.end_object_value(writer)?;
-    }
-    fmt.end_object(writer)?;
+    });
 
     writer.write_all(b"\n")?;
     Ok(())

@@ -161,17 +161,3 @@ impl DumpStreamHelper {
     Ok(())
   }
 }
-
-pub fn write_static_object_key(
-  fmt: &mut json::UltimateFormatter,
-  out: &mut (impl io::Write + ?Sized),
-  first: bool,
-  key: &'static str,
-) -> io::Result<()> {
-  fmt.begin_object_key(out, first)?;
-  fmt.begin_string(out)?;
-  fmt.write_string_fragment(out, key)?;
-  fmt.end_string(out)?;
-  fmt.end_object_key(out)?;
-  Ok(())
-}
