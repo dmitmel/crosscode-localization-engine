@@ -170,6 +170,18 @@ class _Main:
         if should_fetch:
           components_to_fetch.add(component_id)
 
+      out_credits_file = self.project.get_conf(
+        "weblate", "credits_file", self.project.get_conf_path, fallback=None
+      )
+      if out_credits_file is not None:
+        print("Downloading contributor statistics from Weblate")
+        credits_data = self.weblate_client.fetch_credits(project_locale)
+        out_credits_file.parent.mkdir(parents=True, exist_ok=True)
+        with out_credits_file.open("w") as file:
+          write_json(file, credits_data)
+          file.write("\n")
+          file.flush()
+
       if len(components_to_fetch) != 0:
         print(f"Downloading {len(components_to_fetch)} components from Weblate")
         with ThreadPool(self.project.get_conf("project", "network_threads", int)) as pool:
@@ -264,6 +276,7 @@ class _Main:
       out_mapping_file = self.project.get_conf(
         "project", "localize_me_mapping_file", self.project.get_conf_path
       )
+      out_mapping_file.parent.mkdir(parents=True, exist_ok=True)
       with out_mapping_file.open("w") as file:
         write_json(file, compiler.packs_mapping)
         file.write("\n")
@@ -305,6 +318,7 @@ class Project:
       # "original_locale": None,
       # "locale": None,
       "components_exclude": "glossary",
+      # "credits_file": None,
     },
     "distributables": {
       # "mod_files_patterns": None,
@@ -523,6 +537,18 @@ class WeblateClient:
     return self.make_request(
       f"/download/{self.project_name}/{component_name}/{locale}/?format={format}"
     )
+
+  def fetch_credits(self, locale: str) -> Any:
+    with self.make_request(f"/api/projects/{self.project_name}/credits/") as response:
+      api_response = json.load(self.http_client.get_response_content_reader(response))
+      entries: list[Any] = []
+      for language_data in api_response:
+        if language_data["code"] == locale:
+          for author_data in language_data["authors"]:
+            entry = {k: author_data.get(k) for k in ("full_name", "change_count")}
+            entries.append(entry)
+          break
+      return entries
 
 
 class _tqdm_fallback:
