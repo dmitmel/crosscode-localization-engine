@@ -3,12 +3,13 @@ from __future__ import annotations
 import gzip
 import urllib.parse
 import urllib.request
-from contextlib import contextmanager
 from http.client import HTTPResponse
 from io import BufferedIOBase
-from typing import IO, Generator, Iterable, MutableMapping, Tuple
+from typing import Any, TypeAlias
 
 from . import __version__
+
+HTTPRequest: TypeAlias = urllib.request.Request
 
 
 # TODO: retry on failure
@@ -38,31 +39,26 @@ class HTTPClient:
       ("accept-encoding", "gzip"),
     ]
 
-  @contextmanager
-  def request(
-    self,
-    method: str,
-    url: str,
-    headers: MutableMapping[str, str] | None = None,
-    body: bytes | IO[bytes] | Iterable[bytes] | None = None,
-  ) -> Generator[Tuple[HTTPResponse, BufferedIOBase], None, None]:
-    print("Requesting " + repr(f"{method} {url}"))
-    req = urllib.request.Request(
-      method=method, url=url, headers=headers if headers is not None else {}, data=body
-    )
-
-    res: object
-    with self.opener.open(req, timeout=self.network_timeout) as res:
+  def request(self, req: HTTPRequest) -> HTTPResponse:
+    print("Requesting " + repr(f"{req.get_method()} {req.get_full_url()}"))
+    res: Any = None
+    try:
+      res = self.opener.open(req, timeout=self.network_timeout)
       if not isinstance(res, HTTPResponse):
         raise Exception("Expected an HTTPResponse")
-
-      # <https://github.com/kurtmckee/feedparser/blob/727ee7f08f77d8f0a0f085ec3dfbc58e09f69a4b/feedparser/http.py#L166-L188>
-      reader: BufferedIOBase = res
-      content_encoding = res.getheader("content-encoding")
-      if content_encoding == "gzip":
-        reader = gzip.GzipFile(fileobj=res)
-
-      yield res, reader
+      return res
+    except BaseException:
+      if res is not None and hasattr(res, "close"):
+        res.close()
+      raise
 
   def close(self) -> None:
     self.opener.close()
+
+  # <https://github.com/kurtmckee/feedparser/blob/727ee7f08f77d8f0a0f085ec3dfbc58e09f69a4b/feedparser/http.py#L166-L188>
+  def get_response_content_reader(self, res: HTTPResponse) -> BufferedIOBase:
+    content_encoding = res.getheader("content-encoding")
+    if content_encoding == "gzip":
+      return gzip.GzipFile(fileobj=res)
+    else:
+      return res
