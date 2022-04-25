@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import configparser
+import contextlib
+import functools
 import io
 import json
 import os.path
-import shutil
 import sys
 import traceback
 import urllib.parse
@@ -12,7 +13,14 @@ from datetime import datetime, timezone
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, Callable, Mapping, NoReturn, TypeAlias, TypeVar, overload
+from typing import (
+  TYPE_CHECKING, Any, Callable, Generator, Mapping, NoReturn, TypeAlias, TypeVar, overload
+)
+
+try:
+  from tqdm import tqdm
+except ImportError:
+  tqdm = None
 
 from . import BINARY_NAME
 from .cli import ArgumentError, ArgumentNamespace, ArgumentParser, ArgumentParserExit
@@ -47,30 +55,32 @@ def main(args: list[str], bin_name: str = BINARY_NAME) -> None:
 class _Main:
 
   def main(self, raw_args: list[str], bin_name: str) -> None:
-    self.arg_parser: ArgumentParser = self.build_arg_parser(bin_name)
+    with wrap_print_for_tqdm():
 
-    try:
-      self.cli_args: ArgumentNamespace = self.arg_parser.parse_args(raw_args)
-    except (ArgumentError, ArgumentParserExit) as err:
-      setattr(err, "parser", self.arg_parser)
-      raise err
+      self.arg_parser: ArgumentParser = self.build_arg_parser(bin_name)
 
-    self.project: Project = Project(self.cli_args.project)
-    for path in [self.project.work_dir, self.project.download_dir, self.project.components_dir]:
-      path.mkdir(exist_ok=True, parents=True)
+      try:
+        self.cli_args: ArgumentNamespace = self.arg_parser.parse_args(raw_args)
+      except (ArgumentError, ArgumentParserExit) as err:
+        setattr(err, "parser", self.arg_parser)
+        raise err
 
-    self.http_client: HTTPClient = HTTPClient(
-      network_timeout=self.project.get_conf("project", "network_timeout", int, fallback=None),
-    )
+      self.project: Project = Project(self.cli_args.project)
+      for path in [self.project.work_dir, self.project.download_dir, self.project.components_dir]:
+        path.mkdir(exist_ok=True, parents=True)
 
-    self.weblate_client: WeblateClient = WeblateClient(
-      http_client=self.http_client,
-      root_url=self.project.get_conf("weblate", "root_url"),
-      auth_token=self.project.get_conf("weblate", "auth_token", fallback=None),
-      project_name=self.project.get_conf("weblate", "project"),
-    )
+      self.http_client: HTTPClient = HTTPClient(
+        network_timeout=self.project.get_conf("project", "network_timeout", int, fallback=None),
+      )
 
-    self.cli_args.command_fn()
+      self.weblate_client: WeblateClient = WeblateClient(
+        http_client=self.http_client,
+        root_url=self.project.get_conf("weblate", "root_url"),
+        auth_token=self.project.get_conf("weblate", "auth_token", fallback=None),
+        project_name=self.project.get_conf("weblate", "project"),
+      )
+
+      self.cli_args.command_fn()
 
   def build_arg_parser(self, bin_name: str) -> ArgumentParser:
     parser = ArgumentParser(prog=bin_name, exit_on_error=False)
@@ -152,21 +162,58 @@ class _Main:
         with ThreadPool(self.project.get_conf("project", "network_threads", int)) as pool:
           print(f"Downloading {len(components_to_fetch)} components from Weblate")
 
-          def download_callback(cmp_id: str) -> str:
-            with self.weblate_client.download_component(cmp_id, project_locale, "po") as response:
-              with self.project.path_for_component(cmp_id).open("wb") as output_file:
-                shutil.copyfileobj(
-                  self.http_client.get_response_content_reader(response), output_file
-                )
-            return cmp_id
+          def download_worker_callback(component_id: str) -> str:
+            with (
+              tqdm(
+                miniters=1,
+                leave=False,
+                desc=component_id,
+                unit="B",
+                unit_scale=True,
+                unit_divisor=1024,
+              ) if tqdm is not None else contextlib.nullcontext(None)
+            ) as progress:
+              with (
+                self.weblate_client.download_component(component_id, project_locale, "po")
+              ) as response:
+                response_reader = self.http_client.get_response_content_reader(response)
+                if progress is not None:
+                  content_length = response.headers.get("content-length", None)
+                  content_length = int(content_length) if content_length is not None else None
+                  # Also calls progress.refresh()
+                  progress.reset(content_length)  # type: ignore
 
-          downloaded_count = 0
-          for cmp_id in pool.imap_unordered(download_callback, components_to_fetch):
-            downloaded_count += 1
-            print(f"Downloaded {downloaded_count}/{len(components_to_fetch)} {cmp_id!r}")
-            local_components_state.data[cmp_id] = remote_components_state[cmp_id]
-            local_components_state.dirty = True
-            local_components_state.save()
+                with self.project.path_for_component(component_id).open("wb") as output_file:
+                  buf_size = 8 * 1024
+                  while True:
+                    buf = response_reader.read(buf_size)
+                    if progress is not None:
+                      progress.update(len(buf))
+                    if len(buf) == 0:
+                      break
+                    output_file.write(buf)
+
+            return component_id
+
+          with (
+            tqdm(
+              miniters=1,
+              leave=False,
+              desc="Downloaded components",
+              total=len(components_to_fetch),
+            ) if tqdm is not None else contextlib.nullcontext(None)
+          ) as progress:
+            downloaded_count = 0
+            for cmp_id in pool.imap_unordered(download_worker_callback, components_to_fetch):
+              downloaded_count += 1
+              if progress is not None:
+                progress.update()
+              else:
+                print(f"Downloaded {downloaded_count}/{len(components_to_fetch)} {cmp_id}")
+              local_components_state.data[cmp_id] = remote_components_state[cmp_id]
+              local_components_state.dirty = True
+              local_components_state.save()
+
       else:
         print("Every component is up to date")
 
@@ -423,3 +470,24 @@ class WeblateClient:
     return self.make_request(
       f"/download/{self.project_name}/{component_name}/{locale}/?format={format}"
     )
+
+
+@contextlib.contextmanager
+def wrap_print_for_tqdm() -> Generator[None, None, None]:
+  if tqdm is None:
+    yield
+    return
+
+  old_print = __builtins__["print"]
+  try:
+
+    @functools.wraps(old_print)
+    def new_print(*args: object, **kwargs: object) -> object:
+      with tqdm.external_write_mode(kwargs.get("file", None)):  # type: ignore
+        return old_print(*args, **kwargs)
+
+    __builtins__["print"] = new_print
+    yield
+
+  finally:
+    __builtins__["print"] = old_print
