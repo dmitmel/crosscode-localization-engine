@@ -57,7 +57,7 @@ class HTTPClient:
 
   # <https://github.com/kurtmckee/feedparser/blob/727ee7f08f77d8f0a0f085ec3dfbc58e09f69a4b/feedparser/http.py#L166-L188>
   def get_response_content_reader(self, res: HTTPResponse) -> BufferedIOBase:
-    content_encoding = res.getheader("content-encoding")
+    content_encoding = res.headers.get("content-encoding")
     if content_encoding == "gzip":
       return gzip.GzipFile(fileobj=res)
     else:

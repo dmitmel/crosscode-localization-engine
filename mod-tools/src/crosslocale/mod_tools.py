@@ -184,45 +184,69 @@ class _Main:
 
       if len(components_to_fetch) != 0:
         print(f"Downloading {len(components_to_fetch)} components from Weblate")
+
+        def download_worker_callback(component_id: str) -> tuple[str, int]:
+          with maybe_tqdm(
+            miniters=1,
+            leave=False,
+            desc=component_id,
+            unit="B",
+            unit_scale=True,
+            unit_divisor=1024,
+          ) as progress:
+            with (
+              self.weblate_client.download_component(component_id, project_locale, "po")
+            ) as response:
+              response_reader = self.http_client.get_response_content_reader(response)
+              # Also calls progress.refresh()
+              progress.reset(response.length)
+              downloaded_size = 0
+
+              orig_response_read = response.read
+
+              @functools.wraps(orig_response_read)
+              def wrapped_response_read(amt: int | None = None) -> bytes:
+                nonlocal downloaded_size
+                data = orig_response_read(amt)
+                downloaded_size += len(data)
+                progress.update(len(data))
+                return data
+
+              response.read = wrapped_response_read
+
+              with self.project.path_for_component(component_id).open("wb") as output_file:
+                buf_size = 8 * 1024
+                while True:
+                  buf = response_reader.read(buf_size)
+                  if len(buf) == 0:
+                    break
+                  output_file.write(buf)
+
+              progress.refresh()
+
+          return component_id, downloaded_size
+
         with ThreadPool(self.project.get_conf("project", "network_threads", int)) as pool:
-
-          def download_worker_callback(component_id: str) -> str:
-            with maybe_tqdm(
-              miniters=1,
-              leave=False,
-              desc=component_id,
-              unit="B",
-              unit_scale=True,
-              unit_divisor=1024,
-            ) as progress:
-              with (
-                self.weblate_client.download_component(component_id, project_locale, "po")
-              ) as response:
-                response_reader = self.http_client.get_response_content_reader(response)
-                content_length = response.headers.get("content-length", None)
-                # Also calls progress.refresh()
-                progress.reset(int(content_length) if content_length is not None else None)
-
-                with self.project.path_for_component(component_id).open("wb") as output_file:
-                  buf_size = 8 * 1024
-                  while True:
-                    buf = response_reader.read(buf_size)
-                    progress.update(len(buf))
-                    if len(buf) == 0:
-                      break
-                    output_file.write(buf)
-
-            return component_id
-
           with maybe_tqdm(
             miniters=1, leave=False, desc="Downloaded components", total=len(components_to_fetch)
           ) as total_progress:
             downloaded_count = 0
-            for component_id in pool.imap_unordered(download_worker_callback, components_to_fetch):
+            total_downloaded_size = 0
+            for component_id, downloaded_size in pool.imap_unordered(
+              download_worker_callback, components_to_fetch
+            ):
               downloaded_count += 1
+              total_downloaded_size += downloaded_size
               total_progress.update()
-              if total_progress.disable:
-                print(f"Downloaded {downloaded_count}/{len(components_to_fetch)} {component_id}")
+              downloaded_size_str = maybe_tqdm.format_sizeof(
+                downloaded_size, suffix="B", divisor=1024
+              )
+              total_downloaded_size_str = maybe_tqdm.format_sizeof(
+                total_downloaded_size, suffix="B", divisor=1024
+              )
+              print(
+                f"Downloaded {downloaded_count}/{len(components_to_fetch)} {component_id} - {downloaded_size_str}, {total_downloaded_size_str} total"
+              )
               local_components_state.data[component_id] = remote_components_state[component_id]
               local_components_state.dirty = True
               local_components_state.save()
@@ -242,8 +266,7 @@ class _Main:
         ) as progress:
           compiler = TrPackCompiler()
           for component_id in local_components_state.data.keys():
-            if total_progress.disable:
-              print(f"Parsing {component_id}")
+            print(f"Parsing {component_id}")
             progress.desc = component_id
             progress.refresh()
             with self.project.path_for_component(component_id).open("r") as reader:
@@ -508,16 +531,23 @@ class WeblateClient:
     self.auth_token: str | None = auth_token
     self.project_name: str = project_name
 
+  def make_url(self, path: str, **params: str | None) -> str:
+    return urllib.parse.urlunsplit(
+      urllib.parse.urlsplit(self.root_url)._replace(
+        path=urllib.parse.quote(path),
+        query=urllib.parse.urlencode({k: v for k, v in params.items() if v is not None}),
+      )
+    )
+
   def make_request(self, url: str) -> HTTPResponse:
-    req = HTTPRequest(url=urllib.parse.urljoin(self.root_url, url))
+    req = HTTPRequest(url)
     if self.auth_token is not None:
       req.add_header("authorization", f"Token {self.auth_token}")
     return self.http_client.request(req)
 
   def fetch_components_state(self, locale: str) -> ComponentsState.Data:
     components: ComponentsState.Data = {}
-    next_api_url: str
-    next_api_url = f"/api/projects/{self.project_name}/statistics/{locale}/"
+    next_api_url: str = self.make_url(f"/api/projects/{self.project_name}/statistics/{locale}/")
     while next_api_url is not None:
       with self.make_request(next_api_url) as response:
         api_response = json.load(self.http_client.get_response_content_reader(response))
@@ -533,13 +563,17 @@ class WeblateClient:
           components[c_id] = mtime
     return components
 
-  def download_component(self, component_name: str, locale: str, format: str = "") -> HTTPResponse:
+  def download_component(
+    self, component_name: str, locale: str, format: str | None = None
+  ) -> HTTPResponse:
     return self.make_request(
-      f"/download/{self.project_name}/{component_name}/{locale}/?format={format}"
+      self.make_url(f"/download/{self.project_name}/{component_name}/{locale}/", format=format)
     )
 
   def fetch_credits(self, locale: str) -> Any:
-    with self.make_request(f"/api/projects/{self.project_name}/credits/") as response:
+    with self.make_request(
+      self.make_url(f"/api/projects/{self.project_name}/credits/")
+    ) as response:
       api_response = json.load(self.http_client.get_response_content_reader(response))
       entries: list[Any] = []
       for language_data in api_response:
@@ -552,6 +586,19 @@ class WeblateClient:
 
 
 class _tqdm_fallback:
+
+  # Just copied from <https://github.com/tqdm/tqdm/blob/v4.64.0/tqdm/std.py#L258-L286>.
+  @staticmethod
+  def format_sizeof(num: float, suffix: str = "", divisor: float = 1000) -> str:
+    for unit in ["", "k", "M", "G", "T", "P", "E", "Z"]:
+      if abs(num) < 999.5:
+        if abs(num) < 99.95:
+          if abs(num) < 9.995:
+            return "{0:1.2f}".format(num) + unit + suffix
+          return "{0:2.1f}".format(num) + unit + suffix
+        return "{0:3.0f}".format(num) + unit + suffix
+      num /= divisor
+    return "{0:3.1f}Y".format(num) + suffix
 
   @classmethod
   @contextlib.contextmanager
@@ -573,7 +620,7 @@ class _tqdm_fallback:
     unit_divisor: float | None = ...,
   ) -> None:
     self.desc: str = desc if desc is not None else ""
-    self.disable = False
+    self.disable = True
     self.n: float = 0
 
   def __enter__(self) -> _tqdm_fallback:
