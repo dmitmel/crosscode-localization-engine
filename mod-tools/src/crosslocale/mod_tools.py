@@ -547,8 +547,8 @@ class Project:
 
     self.work_dir: Path = self.root_dir / self.get_conf("project", "work_dir", Path)
     self.download_dir: Path = self.work_dir / "download"
-    self.components_dir: Path = self.download_dir / "components"
-    self.components_state_file: Path = self.download_dir / "components.json"
+    self.components_dir: Path = self.work_dir / "components"
+    self.components_state_file: Path = self.work_dir / "components.json"
     self.dist_archives_dir: Path = self.work_dir / "dist"
 
   COMPONENT_FILE_EXT = ".po"
