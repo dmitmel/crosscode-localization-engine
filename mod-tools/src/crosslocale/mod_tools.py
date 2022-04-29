@@ -6,6 +6,7 @@ import functools
 import io
 import json
 import os.path
+import subprocess
 import sys
 import time
 import traceback
@@ -25,8 +26,10 @@ except ImportError:
   tqdm = None
 
 from . import BINARY_NAME, gettext_po, utils
+from .archives import ArchiveAdapter, TarGzArchiveAdapter, ZipArchiveAdapter
 from .cli import ArgumentError, ArgumentNamespace, ArgumentParser, ArgumentParserExit
 from .http_client import HTTPClient, HTTPRequest, HTTPResponse
+from tarfile import TarFile
 
 _T = TypeVar("_T")
 _UNSET: Any = object()
@@ -118,7 +121,7 @@ class _Main:
 
       existing_component_files: set[Path] = set(
         path for path in self.project.components_dir.iterdir()
-        if path.name.endswith(Project.COMPONENT_FILE_EXT)
+        if path.is_file() and path.name.endswith(Project.COMPONENT_FILE_EXT)
       )
 
       for component_id in list(local_components_state.data.keys()):
@@ -186,44 +189,11 @@ class _Main:
         print(f"Downloading {len(components_to_fetch)} components from Weblate")
 
         def download_worker_callback(component_id: str) -> tuple[str, int]:
-          with maybe_tqdm(
-            miniters=1,
-            leave=False,
-            desc=component_id,
-            unit="B",
-            unit_scale=True,
-            unit_divisor=1024,
-          ) as progress:
-            with (
-              self.weblate_client.download_component(component_id, project_locale, "po")
-            ) as response:
-              response_reader = self.http_client.get_response_content_reader(response)
-              # Also calls progress.refresh()
-              progress.reset(response.length)
-              downloaded_size = 0
-
-              orig_response_read = response.read
-
-              @functools.wraps(orig_response_read)
-              def wrapped_response_read(amt: int | None = None) -> bytes:
-                nonlocal downloaded_size
-                data = orig_response_read(amt)
-                downloaded_size += len(data)
-                progress.update(len(data))
-                return data
-
-              response.read = wrapped_response_read
-
-              with self.project.path_for_component(component_id).open("wb") as output_file:
-                buf_size = 8 * 1024
-                while True:
-                  buf = response_reader.read(buf_size)
-                  if len(buf) == 0:
-                    break
-                  output_file.write(buf)
-
-              progress.refresh()
-
+          downloaded_size = self.download_file(
+            component_id,
+            lambda: self.weblate_client.download_component(component_id, project_locale, "po"),
+            lambda: self.project.path_for_component(component_id).open("wb"),
+          )
           return component_id, downloaded_size
 
         with ThreadPool(self.project.get_conf("project", "network_threads", int)) as pool:
@@ -238,14 +208,8 @@ class _Main:
               downloaded_count += 1
               total_downloaded_size += downloaded_size
               total_progress.update()
-              downloaded_size_str = maybe_tqdm.format_sizeof(
-                downloaded_size, suffix="B", divisor=1024
-              )
-              total_downloaded_size_str = maybe_tqdm.format_sizeof(
-                total_downloaded_size, suffix="B", divisor=1024
-              )
               print(
-                f"Downloaded {downloaded_count}/{len(components_to_fetch)} {component_id} - {downloaded_size_str}, {total_downloaded_size_str} total"
+                f"Downloaded {downloaded_count}/{len(components_to_fetch)} {component_id} - net {format_bytes(downloaded_size)}, {format_bytes(total_downloaded_size)} total"
               )
               local_components_state.data[component_id] = remote_components_state[component_id]
               local_components_state.dirty = True
@@ -306,7 +270,159 @@ class _Main:
         file.flush()
 
   def cmd_make_dist(self) -> None:
-    raise NotImplementedError()
+
+    print("Downloading dependencies")
+
+    def download_dependency(name: str) -> Path:
+      url = self.project.get_conf("dependencies", f"{name}_url")
+      filename = self.project.get_conf("dependencies", f"{name}_file")
+      download_path = self.project.download_dir / filename
+      if not download_path.exists():
+        downloaded_size = self.download_file(
+          name,
+          lambda: self.http_client.request(HTTPRequest(url)),
+          lambda: download_path.open("wb"),
+        )
+        print(f"{name} downloaded - net {format_bytes(downloaded_size)}")
+      else:
+        print(f"{name} already downloaded")
+      return download_path
+
+    localize_me_file = download_dependency("localize_me")
+    ccloader_file = download_dependency("ccloader")
+    ultimate_ui_file = download_dependency("ultimate_ui")
+
+    print("Collecting metadata")
+
+    with (self.project.root_dir / "ccmod.json").open("r") as manifest_file:
+      manifest = json.load(manifest_file)
+      mod_id: str = manifest["id"]
+      mod_version: str = manifest["version"]
+
+    mod_files: list[Path] = []
+    for pattern in self.project.get_conf(
+      "distributables", "mod_files_patterns", self.project.get_conf_list
+    ):
+      mod_files.extend(
+        path.relative_to(self.project.root_dir) for path in self.project.root_dir.glob(pattern)
+      )
+    # Note that paths here are sorted as lists of their components and not as
+    # strings, so the path separators will not be taken into account when
+    # sorting.
+    mod_files.sort()
+
+    commiter_time = int(
+      subprocess.run(
+        ["git", "log", "--max-count=1", "--date=unix", "--pretty=format:%cd"],
+        check=True,
+        stdout=subprocess.PIPE,
+        cwd=self.project.root_dir,
+      ).stdout
+    )
+
+    print("Making packages")
+
+    def archive_add_mod_files(archived_prefix: Path) -> None:
+      print("Adding mod files")
+      for file in mod_files:
+        archive.add_real_file(
+          str(self.project.root_dir / file),
+          str(archived_prefix / file),
+          recursive=False,
+          mtime=commiter_time,
+        )
+
+    def archive_add_dependency(
+      archived_prefix: Path, dependency_path: Path, strip_components: int
+    ) -> None:
+      print(f"Adding files from {dependency_path.name}")
+      with TarFile.gzopen(dependency_path) as dependency_archive:
+        for file_info in dependency_archive:
+          archived_path = str(
+            Path(
+              archived_prefix,
+              *Path(file_info.name).parts[strip_components:],
+            )
+          )
+          if file_info.isreg():
+            file_reader = dependency_archive.extractfile(file_info)
+            assert file_reader is not None
+            archive.add_file_entry(archived_path, file_reader.read(), mtime=file_info.mtime)
+          elif file_info.issym():
+            archive.add_symlink_entry(archived_path, file_info.linkname, mtime=file_info.mtime)
+          elif file_info.isdir():
+            # Directories are deliberately ignored because the previous setup
+            # didn't put them into resulting archives, and their entries are
+            # useless to us anyway.
+            pass
+          else:
+            # Other file types (character devices, block devices and named
+            # pipes) are UNIX-specific and can't be handled by Zip, but it's
+            # not like they are used in dependencies anyway. Correction: well,
+            # after checking APPNOTE.TXT section 4.5.7 I noticed that these
+            # exotic file types may be supported, but it's not like any modding
+            # projects use those.
+            pass
+
+    all_archive_adapters: list[type[ArchiveAdapter]] = [TarGzArchiveAdapter, ZipArchiveAdapter]
+    for archive_cls in all_archive_adapters:
+
+      archive_name = f"{mod_id}_v{mod_version}{archive_cls.DEFAULT_EXTENSION}"
+      print(f"Making {archive_name}")
+      with archive_cls.create(self.project.work_dir / archive_name) as archive:
+        archive_add_mod_files(Path(mod_id))
+
+      # TODO: Sort all files in quick install archives
+      archive_name = f"{mod_id}_quick-install_v{mod_version}{archive_cls.DEFAULT_EXTENSION}"
+      print(f"Making {archive_name}")
+      with archive_cls.create(self.project.work_dir / archive_name) as archive:
+        archive_add_mod_files(Path("assets", "mods", mod_id))
+        archive_add_dependency(Path("assets", "mods", "Localize-me"), localize_me_file, 1)
+        archive_add_dependency(Path("assets", "mods"), ultimate_ui_file, 0)
+        archive_add_dependency(Path(), ccloader_file, 0)
+
+  def download_file(
+    self,
+    progress_desc: str,
+    request_thunk: Callable[[], HTTPResponse],
+    output_file_thunk: Callable[[], IO[bytes]],
+  ) -> int:
+    with maybe_tqdm(
+      miniters=1,
+      leave=False,
+      desc=progress_desc,
+      unit="B",
+      unit_scale=True,
+      unit_divisor=1024,
+    ) as progress:
+      with request_thunk() as response:
+        # Also calls progress.refresh()
+        progress.reset(response.length)
+        response_reader = self.http_client.get_response_content_reader(response)
+        downloaded_size = 0
+
+        orig_response_read = response.read
+
+        @functools.wraps(orig_response_read)
+        def wrapped_response_read(amt: int | None = None) -> bytes:
+          nonlocal downloaded_size
+          data = orig_response_read(amt)
+          downloaded_size += len(data)
+          progress.update(len(data))
+          return data
+
+        response.read = wrapped_response_read
+
+        with output_file_thunk() as output_file:
+          buf_size = 8 * 1024
+          while True:
+            buf = response_reader.read(buf_size)
+            if len(buf) == 0:
+              break
+            output_file.write(buf)
+
+        progress.refresh()
+        return downloaded_size
 
 
 class Project:
@@ -668,6 +784,10 @@ def wrap_print_for_tqdm() -> Generator[None, None, None]:
 
   finally:
     __builtins__["print"] = old_print
+
+
+def format_bytes(n: float) -> str:
+  return maybe_tqdm.format_sizeof(n, suffix="B", divisor=1024)
 
 
 class TrPackEntry(TypedDict):
