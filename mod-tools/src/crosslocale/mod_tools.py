@@ -114,165 +114,187 @@ class _Main:
     return parser
 
   def cmd_download(self) -> None:
-    with ComponentsState(self.project.components_state_file) as local_components_state:
 
-      print("Downloading the list of components")
-      project_locale = self.project.get_conf("weblate", "locale")
-      remote_components_state = self.weblate_client.fetch_components_state(project_locale)
-      for component_id in (
-        self.project.get_conf("weblate", "components_exclude", self.project.get_conf_list)
-      ):
-        remote_components_state.pop(component_id, None)
+    local_data_repo_path = self.project.get_conf(
+      "weblate", "local_data_repo_path", self.project.get_conf_path, fallback=None
+    )
+    components_to_compile: dict[str, Path]
+    if local_data_repo_path is not None:
+      print(f"Using the local data repository in {str(local_data_repo_path)!r}")
+      project_locale = self.project.get_conf("translation", "locale")
+      components_to_compile = {}
+      for path in (local_data_repo_path / "po" / project_locale / "components").iterdir():
+        if not path.is_dir() and path.name.endswith(Project.COMPONENT_FILE_EXT):
+          component_id = path.name[:-len(Project.COMPONENT_FILE_EXT)]
+          components_to_compile[component_id] = path
 
-      existing_component_files: set[Path] = set(
-        path for path in self.project.components_dir.iterdir()
-        if path.is_file() and path.name.endswith(Project.COMPONENT_FILE_EXT)
-      )
-
-      for component_id in list(local_components_state.data.keys()):
-        component_path = self.project.path_for_component(component_id)
-        if (
-          component_path not in existing_component_files or
-          component_id not in remote_components_state
+    else:
+      with ComponentsState(self.project.components_state_file) as local_components_state:
+        print("Downloading the list of components")
+        project_locale = self.project.get_conf("weblate", "locale")
+        remote_components_state = self.weblate_client.fetch_components_state(project_locale)
+        for component_id in (
+          self.project.get_conf("weblate", "components_exclude", self.project.get_conf_list)
         ):
-          local_components_state.data.pop(component_id, None)
-          local_components_state.dirty = True
-        existing_component_files.discard(component_path)
-      local_components_state.save()
+          remote_components_state.pop(component_id, None)
 
-      for component_path in existing_component_files:
-        try:
-          component_path.unlink()
-        except OSError:
-          pass
+        existing_component_files: set[Path] = set(
+          path for path in self.project.components_dir.iterdir()
+          if not path.is_dir() and path.name.endswith(Project.COMPONENT_FILE_EXT)
+        )
 
-      components_to_fetch: set[str] = set()
+        for component_id in list(local_components_state.data.keys()):
+          component_path = self.project.path_for_component(component_id)
+          if (
+            component_path not in existing_component_files or
+            component_id not in remote_components_state
+          ):
+            local_components_state.data.pop(component_id, None)
+            local_components_state.dirty = True
+          existing_component_files.discard(component_path)
+        local_components_state.save()
 
-      for component_id, remote_mtime in remote_components_state.items():
-        should_fetch = False
+        for component_path in existing_component_files:
+          try:
+            component_path.unlink()
+          except OSError:
+            pass
 
-        if component_id not in local_components_state.data:
-          # We don't have this component downloaded, it has probably been
-          # created.
-          should_fetch = True
+        components_to_fetch: set[str] = set()
+
+        for component_id, remote_mtime in remote_components_state.items():
+          should_fetch = False
+
+          if component_id not in local_components_state.data:
+            # We don't have this component downloaded, it has probably been
+            # created.
+            should_fetch = True
+          else:
+            # Notice that missing timestamps mean that the component has never
+            # been modified so far.
+            local_mtime = local_components_state.data[component_id]
+
+            if remote_mtime is None and local_mtime is None:
+              # We have downloaded an empty component and there are still no
+              # changes affecting it.
+              should_fetch = False
+            elif remote_mtime is not None and local_mtime is None:
+              # Got the first ever changes!
+              should_fetch = True
+            elif remote_mtime is None and local_mtime is not None:
+              # We have already downloaded some changed version of the component,
+              # but it has probably been reset to an empty state since.
+              should_fetch = True
+            elif remote_mtime is not None and local_mtime is not None:
+              # The sane and normal code path.
+              should_fetch = remote_mtime > local_mtime
+
+          if should_fetch:
+            components_to_fetch.add(component_id)
+
+        if len(components_to_fetch) != 0:
+          print(f"Downloading {len(components_to_fetch)} components from Weblate")
+
+          def download_worker_callback(component_id: str) -> tuple[str, int]:
+            downloaded_size = self.download_file(
+              component_id,
+              lambda: self.weblate_client.download_component(component_id, project_locale, "po"),
+              lambda: self.project.path_for_component(component_id).open("wb"),
+            )
+            return component_id, downloaded_size
+
+          with ThreadPool(self.project.get_conf("project", "network_threads", int)) as pool:
+            with maybe_tqdm(
+              miniters=1,
+              leave=False,
+              desc="Downloaded components",
+              total=len(components_to_fetch)
+            ) as total_progress:
+              downloaded_count = 0
+              total_downloaded_size = 0
+              for component_id, downloaded_size in pool.imap_unordered(
+                download_worker_callback, components_to_fetch
+              ):
+                downloaded_count += 1
+                total_downloaded_size += downloaded_size
+                total_progress.update()
+                print(
+                  f"Downloaded {downloaded_count}/{len(components_to_fetch)} {component_id} - net {format_bytes(downloaded_size)}, {format_bytes(total_downloaded_size)} total"
+                )
+                local_components_state.data[component_id] = remote_components_state[component_id]
+                local_components_state.dirty = True
+                local_components_state.save()
+
         else:
-          # Notice that missing timestamps mean that the component has never
-          # been modified so far.
-          local_mtime = local_components_state.data[component_id]
+          print("Every component is up to date")
 
-          if remote_mtime is None and local_mtime is None:
-            # We have downloaded an empty component and there are still no
-            # changes affecting it.
-            should_fetch = False
-          elif remote_mtime is not None and local_mtime is None:
-            # Got the first ever changes!
-            should_fetch = True
-          elif remote_mtime is None and local_mtime is not None:
-            # We have already downloaded some changed version of the component,
-            # but it has probably been reset to an empty state since.
-            should_fetch = True
-          elif remote_mtime is not None and local_mtime is not None:
-            # The sane and normal code path.
-            should_fetch = remote_mtime > local_mtime
+        components_to_compile = {
+          component_id: self.project.path_for_component(component_id)
+          for component_id in local_components_state.data.keys()
+        }
 
-        if should_fetch:
-          components_to_fetch.add(component_id)
-
-      out_credits_file = self.project.get_conf(
-        "weblate", "credits_file", self.project.get_conf_path, fallback=None
-      )
-      if out_credits_file is not None:
-        print("Downloading contributor statistics from Weblate")
-        credits_data = self.weblate_client.fetch_credits(project_locale)
-        out_credits_file.parent.mkdir(parents=True, exist_ok=True)
-        with out_credits_file.open("w") as file:
-          write_json(file, credits_data)
-          file.write("\n")
-          file.flush()
-
-      if len(components_to_fetch) != 0:
-        print(f"Downloading {len(components_to_fetch)} components from Weblate")
-
-        def download_worker_callback(component_id: str) -> tuple[str, int]:
-          downloaded_size = self.download_file(
-            component_id,
-            lambda: self.weblate_client.download_component(component_id, project_locale, "po"),
-            lambda: self.project.path_for_component(component_id).open("wb"),
-          )
-          return component_id, downloaded_size
-
-        with ThreadPool(self.project.get_conf("project", "network_threads", int)) as pool:
-          with maybe_tqdm(
-            miniters=1, leave=False, desc="Downloaded components", total=len(components_to_fetch)
-          ) as total_progress:
-            downloaded_count = 0
-            total_downloaded_size = 0
-            for component_id, downloaded_size in pool.imap_unordered(
-              download_worker_callback, components_to_fetch
-            ):
-              downloaded_count += 1
-              total_downloaded_size += downloaded_size
-              total_progress.update()
-              print(
-                f"Downloaded {downloaded_count}/{len(components_to_fetch)} {component_id} - net {format_bytes(downloaded_size)}, {format_bytes(total_downloaded_size)} total"
-              )
-              local_components_state.data[component_id] = remote_components_state[component_id]
-              local_components_state.dirty = True
-              local_components_state.save()
-
-      else:
-        print("Every component is up to date")
-
-      print(f"Parsing and compiling {len(local_components_state.data)} components")
-      with maybe_tqdm(
-        miniters=1, leave=False, desc="Parsed components", total=len(local_components_state.data)
-      ) as total_progress:
-        with maybe_tqdm(
-          leave=False,
-          unit="B",
-          unit_scale=True,
-          unit_divisor=1024,
-        ) as progress:
-          compiler = TrPackCompiler()
-          for component_id in local_components_state.data.keys():
-            print(f"Parsing {component_id}")
-            progress.desc = component_id
-            progress.refresh()
-            with self.project.path_for_component(component_id).open("r") as reader:
-              parser = gettext_po.Parser(reader.read())
-              # Also calls progress.refresh()
-              progress.reset(len(parser.lexer.src))
-              while True:
-                message: gettext_po.ParsedMessage | None = parser.parse_next_message()
-                if message is None:
-                  break
-                compiler.add_fragment(message)
-                progress.update(parser.lexer.next_char_index - progress.n)
-            total_progress.update()
-
-      print(f"Writing {len(compiler.packs)} compiled translation packs")
-      out_packs_dir = self.project.get_conf(
-        "project", "localize_me_packs_dir", self.project.get_conf_path
-      )
-      with maybe_tqdm(miniters=1, leave=False, total=len(compiler.packs)) as progress:
-        for rel_pack_path, pack in compiler.packs.items():
-          pack_path = out_packs_dir.joinpath(rel_pack_path)
-          pack_path.parent.mkdir(parents=True, exist_ok=True)
-          with pack_path.open("w") as pack_file:
-            write_json(pack_file, pack)
-            pack_file.write("\n")
-            pack_file.flush()
-          progress.update()
-
-      print("Writing the mapping file")
-      out_mapping_file = self.project.get_conf(
-        "project", "localize_me_mapping_file", self.project.get_conf_path
-      )
-      out_mapping_file.parent.mkdir(parents=True, exist_ok=True)
-      with out_mapping_file.open("w") as file:
-        write_json(file, compiler.packs_mapping)
+    out_credits_file = self.project.get_conf(
+      "weblate", "credits_file", self.project.get_conf_path, fallback=None
+    )
+    if out_credits_file is not None:
+      print("Downloading contributor statistics from Weblate")
+      credits_data = self.weblate_client.fetch_credits(project_locale)
+      out_credits_file.parent.mkdir(parents=True, exist_ok=True)
+      with out_credits_file.open("w") as file:
+        write_json(file, credits_data)
         file.write("\n")
         file.flush()
+
+    print(f"Parsing and compiling {len(components_to_compile)} components")
+    with maybe_tqdm(
+      miniters=1, leave=False, desc="Parsed components", total=len(components_to_compile)
+    ) as total_progress:
+      with maybe_tqdm(
+        leave=False,
+        unit="B",
+        unit_scale=True,
+        unit_divisor=1024,
+      ) as progress:
+        compiler = TrPackCompiler()
+        for component_id, component_path in components_to_compile.items():
+          print(f"Parsing {component_id}")
+          progress.desc = component_id
+          progress.refresh()
+          with component_path.open("r") as reader:
+            parser = gettext_po.Parser(reader.read())
+            # Also calls progress.refresh()
+            progress.reset(len(parser.lexer.src))
+            while True:
+              message: gettext_po.ParsedMessage | None = parser.parse_next_message()
+              if message is None:
+                break
+              compiler.add_fragment(message)
+              progress.update(parser.lexer.next_char_index - progress.n)
+          total_progress.update()
+
+    print(f"Writing {len(compiler.packs)} compiled translation packs")
+    out_packs_dir = self.project.get_conf(
+      "project", "localize_me_packs_dir", self.project.get_conf_path
+    )
+    with maybe_tqdm(miniters=1, leave=False, total=len(compiler.packs)) as progress:
+      for rel_pack_path, pack in compiler.packs.items():
+        pack_path = out_packs_dir.joinpath(rel_pack_path)
+        pack_path.parent.mkdir(parents=True, exist_ok=True)
+        with pack_path.open("w") as pack_file:
+          write_json(pack_file, pack)
+          pack_file.write("\n")
+          pack_file.flush()
+        progress.update()
+
+    print("Writing the mapping file")
+    out_mapping_file = self.project.get_conf(
+      "project", "localize_me_mapping_file", self.project.get_conf_path
+    )
+    out_mapping_file.parent.mkdir(parents=True, exist_ok=True)
+    with out_mapping_file.open("w") as file:
+      write_json(file, compiler.packs_mapping)
+      file.write("\n")
+      file.flush()
 
   def cmd_make_dist(self) -> None:
 
@@ -463,6 +485,8 @@ class Project:
       # "locale": None,
       "components_exclude": "glossary",
       # "credits_file": None,
+      # "local_data_repo_path": None,
+      # "use_local_data_repo": None,
     },
     "distributables": {
       # "mod_files_patterns": None,
@@ -571,7 +595,11 @@ class Project:
     return [x for x in s.splitlines() if len(x) > 0]
 
   def get_conf_path(self, s: str) -> Path:
-    return self.root_dir.joinpath(s)
+    return self.root_dir.joinpath(s).resolve()
+
+  def get_conf_bool(self, s: str) -> bool:
+    config_any: Any = self._config
+    return config_any._convert_to_boolean(s)
 
 
 class ComponentsState:
