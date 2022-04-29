@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import configparser
 import contextlib
 import functools
@@ -60,16 +61,19 @@ def main(args: list[str], bin_name: str = BINARY_NAME) -> None:
 class _Main:
 
   def main(self, raw_args: list[str], bin_name: str) -> None:
-    with wrap_print_for_tqdm():
+    self.arg_parser: ArgumentParser = self.build_arg_parser(bin_name)
 
-      self.arg_parser: ArgumentParser = self.build_arg_parser(bin_name)
+    try:
+      self.cli_args: ArgumentNamespace = self.arg_parser.parse_args(raw_args)
+    except (ArgumentError, ArgumentParserExit) as err:
+      setattr(err, "parser", self.arg_parser)
+      raise err
 
-      try:
-        self.cli_args: ArgumentNamespace = self.arg_parser.parse_args(raw_args)
-      except (ArgumentError, ArgumentParserExit) as err:
-        setattr(err, "parser", self.arg_parser)
-        raise err
+    self.tqdm: type[_tqdm_fallback] = _tqdm_fallback
+    if tqdm is not None and self.cli_args.progress_bars:
+      self.tqdm = cast("type[_tqdm_fallback]", tqdm)
 
+    with self.wrap_print_for_tqdm():
       start_time = time.perf_counter()
 
       self.project: Project = Project(self.cli_args.project)
@@ -101,6 +105,7 @@ class _Main:
     parser = ArgumentParser(prog=bin_name, exit_on_error=False)
 
     parser.add_argument("--project", type=Path, default=Path.cwd())
+    parser.add_argument("--progress-bars", action=argparse.BooleanOptionalAction, default=True)
 
     # Empty help strings are necessary for subparsers to show up in help.
     subparsers = parser.add_subparsers(required=True, metavar="COMMAND")
@@ -204,7 +209,7 @@ class _Main:
             return component_id, downloaded_size
 
           with ThreadPool(self.project.get_conf("project", "network_threads", int)) as pool:
-            with maybe_tqdm(
+            with self.tqdm(
               miniters=1,
               leave=False,
               desc="Downloaded components",
@@ -219,7 +224,7 @@ class _Main:
                 total_downloaded_size += downloaded_size
                 total_progress.update()
                 print(
-                  f"Downloaded {downloaded_count}/{len(components_to_fetch)} {component_id} - net {format_bytes(downloaded_size)}, {format_bytes(total_downloaded_size)} total"
+                  f"Downloaded {downloaded_count}/{len(components_to_fetch)} {component_id} - net {self.format_bytes(downloaded_size)}, {self.format_bytes(total_downloaded_size)} total"
                 )
                 local_components_state.data[component_id] = remote_components_state[component_id]
                 local_components_state.dirty = True
@@ -246,10 +251,10 @@ class _Main:
         file.flush()
 
     print(f"Parsing and compiling {len(components_to_compile)} components")
-    with maybe_tqdm(
+    with self.tqdm(
       miniters=1, leave=False, desc="Parsed components", total=len(components_to_compile)
     ) as total_progress:
-      with maybe_tqdm(
+      with self.tqdm(
         leave=False,
         unit="B",
         unit_scale=True,
@@ -276,7 +281,7 @@ class _Main:
     out_packs_dir = self.project.get_conf(
       "project", "localize_me_packs_dir", self.project.get_conf_path
     )
-    with maybe_tqdm(miniters=1, leave=False, total=len(compiler.packs)) as progress:
+    with self.tqdm(miniters=1, leave=False, total=len(compiler.packs)) as progress:
       for rel_pack_path, pack in compiler.packs.items():
         pack_path = out_packs_dir.joinpath(rel_pack_path)
         pack_path.parent.mkdir(parents=True, exist_ok=True)
@@ -310,7 +315,7 @@ class _Main:
           lambda: self.http_client.request(HTTPRequest(url)),
           lambda: download_path.open("wb"),
         )
-        print(f"{name} downloaded - net {format_bytes(downloaded_size)}")
+        print(f"{name} downloaded - net {self.format_bytes(downloaded_size)}")
       else:
         print(f"{name} already downloaded")
       return download_path
@@ -414,7 +419,7 @@ class _Main:
     request_thunk: Callable[[], HTTPResponse],
     output_file_thunk: Callable[[], IO[bytes]],
   ) -> int:
-    with maybe_tqdm(
+    with self.tqdm(
       miniters=1,
       leave=False,
       desc=progress_desc,
@@ -450,6 +455,29 @@ class _Main:
 
         progress.refresh()
         return downloaded_size
+
+  @contextlib.contextmanager
+  def wrap_print_for_tqdm(self) -> Generator[None, None, None]:
+    if tqdm is None:
+      yield
+      return
+
+    old_print = __builtins__["print"]
+    try:
+
+      @functools.wraps(old_print)
+      def new_print(*args: Any, **kwargs: Any) -> object:
+        with self.tqdm.external_write_mode(kwargs.get("file", None)):
+          return old_print(*args, **kwargs)
+
+      __builtins__["print"] = new_print
+      yield
+
+    finally:
+      __builtins__["print"] = old_print
+
+  def format_bytes(self, n: float) -> str:
+    return self.tqdm.format_sizeof(n, suffix="B", divisor=1024)
 
 
 class Project:
@@ -794,34 +822,6 @@ class _tqdm_fallback:
 
   def reset(self, total: float | None) -> None:
     pass
-
-
-maybe_tqdm = cast("type[_tqdm_fallback]", tqdm) if tqdm is not None else _tqdm_fallback
-
-
-@contextlib.contextmanager
-def wrap_print_for_tqdm() -> Generator[None, None, None]:
-  if tqdm is None:
-    yield
-    return
-
-  old_print = __builtins__["print"]
-  try:
-
-    @functools.wraps(old_print)
-    def new_print(*args: Any, **kwargs: Any) -> object:
-      with maybe_tqdm.external_write_mode(kwargs.get("file", None)):
-        return old_print(*args, **kwargs)
-
-    __builtins__["print"] = new_print
-    yield
-
-  finally:
-    __builtins__["print"] = old_print
-
-
-def format_bytes(n: float) -> str:
-  return maybe_tqdm.format_sizeof(n, suffix="B", divisor=1024)
 
 
 class TrPackEntry(TypedDict):
