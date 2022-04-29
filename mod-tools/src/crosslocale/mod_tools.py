@@ -14,6 +14,7 @@ import urllib.parse
 from datetime import datetime, timezone
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
+from tarfile import TarFile
 from types import TracebackType
 from typing import (
   IO, TYPE_CHECKING, Any, Callable, Generator, Iterable, Mapping, NoReturn, TypeAlias, TypedDict,
@@ -29,7 +30,6 @@ from . import BINARY_NAME, gettext_po, utils
 from .archives import ArchiveAdapter, TarGzArchiveAdapter, ZipArchiveAdapter
 from .cli import ArgumentError, ArgumentNamespace, ArgumentParser, ArgumentParserExit
 from .http_client import HTTPClient, HTTPRequest, HTTPResponse
-from tarfile import TarFile
 
 _T = TypeVar("_T")
 _UNSET: Any = object()
@@ -73,7 +73,12 @@ class _Main:
       start_time = time.perf_counter()
 
       self.project: Project = Project(self.cli_args.project)
-      for path in [self.project.work_dir, self.project.download_dir, self.project.components_dir]:
+      for path in [
+        self.project.work_dir,
+        self.project.download_dir,
+        self.project.components_dir,
+        self.project.dist_archives_dir,
+      ]:
         path.mkdir(exist_ok=True, parents=True)
 
       self.http_client: HTTPClient = HTTPClient(
@@ -369,13 +374,13 @@ class _Main:
 
       archive_name = f"{mod_id}_v{mod_version}{archive_cls.DEFAULT_EXTENSION}"
       print(f"Making {archive_name}")
-      with archive_cls.create(self.project.work_dir / archive_name) as archive:
+      with archive_cls.create(self.project.dist_archives_dir / archive_name) as archive:
         archive_add_mod_files(Path(mod_id))
 
       # TODO: Sort all files in quick install archives
       archive_name = f"{mod_id}_quick-install_v{mod_version}{archive_cls.DEFAULT_EXTENSION}"
       print(f"Making {archive_name}")
-      with archive_cls.create(self.project.work_dir / archive_name) as archive:
+      with archive_cls.create(self.project.dist_archives_dir / archive_name) as archive:
         archive_add_mod_files(Path("assets", "mods", mod_id))
         archive_add_dependency(Path("assets", "mods", "Localize-me"), localize_me_file, 1)
         archive_add_dependency(Path("assets", "mods"), ultimate_ui_file, 0)
@@ -520,6 +525,7 @@ class Project:
     self.download_dir: Path = self.work_dir / "download"
     self.components_dir: Path = self.download_dir / "components"
     self.components_state_file: Path = self.download_dir / "components.json"
+    self.dist_archives_dir: Path = self.work_dir / "dist"
 
   COMPONENT_FILE_EXT = ".po"
 
