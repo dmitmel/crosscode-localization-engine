@@ -1,23 +1,33 @@
 from __future__ import annotations
 
 import gzip
+import sys
+import time
 import urllib.parse
 import urllib.request
 from http.client import HTTPResponse
 from io import BufferedIOBase
 from typing import Any, TypeAlias
+from urllib.error import URLError
 
 from . import __version__
+from .utils import or_default
 
 HTTPRequest: TypeAlias = urllib.request.Request
 
 
-# TODO: retry on failure
 class HTTPClient:
 
-  def __init__(self, network_timeout: int | None = None) -> None:
+  def __init__(
+    self,
+    network_timeout: int | None = None,
+    network_max_retries: int | None = None,
+    network_retry_wait: int | None = None,
+  ) -> None:
     self.opener: urllib.request.OpenerDirector = urllib.request.OpenerDirector()
     self.network_timeout: int | None = network_timeout
+    self.network_max_retries: int = or_default(network_max_retries, 0)
+    self.network_retry_wait: int = or_default(network_retry_wait, 0)
 
     handlers: list[urllib.request.BaseHandler] = [
       urllib.request.ProxyHandler(),
@@ -40,17 +50,29 @@ class HTTPClient:
     ]
 
   def request(self, req: HTTPRequest) -> HTTPResponse:
-    print("Requesting " + repr(f"{req.get_method()} {req.get_full_url()}"))
-    res: Any = None
-    try:
-      res = self.opener.open(req, timeout=self.network_timeout)
-      if not isinstance(res, HTTPResponse):
-        raise Exception("Expected an HTTPResponse")
-      return res
-    except BaseException:
-      if res is not None and hasattr(res, "close"):
-        res.close()
-      raise
+    retry = 0
+    while True:
+      retry += 1
+
+      print("Requesting " + repr(f"{req.get_method()} {req.get_full_url()}"))
+      res: Any = None
+      try:
+        res = self.opener.open(req, timeout=self.network_timeout)
+        if not isinstance(res, HTTPResponse):
+          raise Exception("Expected an HTTPResponse")
+        return res
+
+      except BaseException as err:
+        if res is not None and hasattr(res, "close"):
+          res.close()
+
+        if isinstance(err, URLError) and isinstance(err.reason, OSError):
+          print(err, file=sys.stderr)
+          if retry <= self.network_max_retries:
+            time.sleep(1)
+            continue
+
+        raise
 
   def close(self) -> None:
     self.opener.close()

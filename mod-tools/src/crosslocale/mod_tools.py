@@ -87,6 +87,12 @@ class _Main:
 
       self.http_client: HTTPClient = HTTPClient(
         network_timeout=self.project.get_conf("project", "network_timeout", int, fallback=None),
+        network_max_retries=self.project.get_conf(
+          "project", "network_max_retries", int, fallback=None
+        ),
+        network_retry_wait=self.project.get_conf(
+          "project", "network_retry_wait", int, fallback=None
+        ),
       )
 
       self.weblate_client: WeblateClient = WeblateClient(
@@ -493,6 +499,8 @@ class Project:
       "work_dir": "./crosslocale-work",
       "network_timeout": "60",
       "network_threads": "10",
+      "network_max_retries": "3",
+      "network_retry_wait": "1",
       "localize_me_packs_dir": "./packs",
       "localize_me_mapping_file": "./packs-mapping.json",
     },
