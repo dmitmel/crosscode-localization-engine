@@ -7,13 +7,13 @@ import urllib.parse
 import urllib.request
 from http.client import HTTPResponse
 from io import BufferedIOBase
-from typing import Any, TypeAlias
+from typing import Any
 from urllib.error import URLError
 
 from . import __version__
 from .utils import or_default
 
-HTTPRequest: TypeAlias = urllib.request.Request
+HTTPRequest = urllib.request.Request
 
 
 class HTTPClient:

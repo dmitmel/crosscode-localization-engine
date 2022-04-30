@@ -18,8 +18,8 @@ from pathlib import Path
 from tarfile import TarFile
 from types import TracebackType
 from typing import (
-  IO, TYPE_CHECKING, Any, Callable, Generator, Iterable, Mapping, NoReturn, TypeAlias, TypedDict,
-  TypeVar, cast, overload
+  IO, TYPE_CHECKING, Any, Callable, Generator, Iterable, Mapping, NoReturn, TypedDict, TypeVar,
+  cast, overload
 )
 
 try:
@@ -640,7 +640,7 @@ class Project:
 
 class ComponentsState:
   if TYPE_CHECKING:
-    Data: TypeAlias = dict[str, datetime | None]
+    Data = dict[str, datetime | None]
 
   def __init__(self, path: Path) -> None:
     self.file_path: Path = path
