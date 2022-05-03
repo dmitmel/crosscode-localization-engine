@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import configparser
 import contextlib
 import functools
@@ -27,7 +26,7 @@ try:
 except ImportError:
   tqdm = None
 
-from . import BINARY_NAME, gettext_po, utils
+from . import BINARY_NAME, cli, gettext_po, utils
 from .archives import ArchiveAdapter, TarGzArchiveAdapter, ZipArchiveAdapter
 from .cli import ArgumentError, ArgumentNamespace, ArgumentParser, ArgumentParserExit
 from .http_client import HTTPClient, HTTPRequest, HTTPResponse
@@ -108,10 +107,14 @@ class _Main:
       print("Done in {:.2f}s".format(elapsed_time))
 
   def build_arg_parser(self, bin_name: str) -> ArgumentParser:
-    parser = ArgumentParser(prog=bin_name, exit_on_error=False)
+    if sys.version_info >= (3, 9):
+      parser = ArgumentParser(prog=bin_name, exit_on_error=False)
+    else:
+      parser = ArgumentParser(prog=bin_name)
+      parser.exit_on_error = False
 
     parser.add_argument("--project", type=Path, default=Path.cwd())
-    parser.add_argument("--progress-bars", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--progress-bars", action=cli.FlagAction, default=True)
 
     # Empty help strings are necessary for subparsers to show up in help.
     subparsers = parser.add_subparsers(required=True, metavar="COMMAND")
