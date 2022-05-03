@@ -8,33 +8,18 @@ from enum import Enum
 from typing import List, NoReturn, TypeVar
 
 
-@dataclass()
-class CharPos:
-  __slots__ = ("char_index", "line", "column")
-  char_index: int
-  line: int
-  column: int
-
-  @staticmethod
-  def default() -> CharPos:
-    return CharPos(0, 0, 0)
-
-  def clone(self) -> CharPos:
-    return CharPos(self.char_index, self.line, self.column)
-
-
 class ParsingError(Exception):
 
-  def __init__(self, message: str, pos: CharPos) -> None:
+  def __init__(self, message: str, pos: int) -> None:
     super().__init__(message)
     self.message: str = message
-    self.pos: CharPos = pos
+    self.pos: int = pos
 
 
 @dataclass()
 class Token:
-  start_pos: CharPos = field(init=False, default_factory=CharPos.default)
-  end_pos: CharPos = field(init=False, default_factory=CharPos.default)
+  start_pos: int = field(init=False, default=0)
+  end_pos: int = field(init=False, default=0)
 
 
 @dataclass()
@@ -93,8 +78,8 @@ class Lexer:
   def __init__(self, src: str) -> None:
     self.src: str = src
     self.done: bool = False
-    self.token_start_pos: CharPos = CharPos.default()
-    self.current_pos: CharPos = CharPos.default()
+    self.token_start_pos: int = 0
+    self.current_pos: int = 0
     self.next_char_index: int = 0
     self.is_previous_entry: bool = False
 
@@ -105,12 +90,7 @@ class Lexer:
     except IndexError:
       self.done = True
       return None
-    self.current_pos.char_index = i
-    if i == 0 or self.src[i - 1] == "\n":
-      self.current_pos.column = 1
-      self.current_pos.line += 1
-    else:
-      self.current_pos.column += 1
+    self.current_pos = i
     self.next_char_index = i + 1
     if c == "\n":
       self.reset_current_line_flags()
@@ -123,22 +103,18 @@ class Lexer:
       return None
 
   def begin_token(self) -> None:
-    self.token_start_pos = self.current_pos.clone()
+    self.token_start_pos = self.current_pos
 
   _TokenT = TypeVar("_TokenT", bound=Token)
 
   def end_token(self, token: _TokenT) -> _TokenT:
     token.start_pos = self.token_start_pos
-    token.end_pos = CharPos(
-      char_index=self.next_char_index,
-      column=self.current_pos.column + 1,
-      line=self.current_pos.line,
-    )
+    token.end_pos = self.next_char_index
     return token
 
   def emit_error(self, message: str) -> NoReturn:
     self.done = True
-    raise ParsingError(message, self.current_pos.clone())
+    raise ParsingError(message, self.current_pos)
 
   def reset_current_line_flags(self) -> None:
     self.is_previous_entry = False
@@ -230,7 +206,7 @@ class Lexer:
       if c == '"':
         break
       elif c == "\\":
-        literal_text = self.src[literal_text_start_index:self.current_pos.char_index]
+        literal_text = self.src[literal_text_start_index:self.current_pos]
         c = self.peek_char()
         if c is None:
           return self.emit_error("expected a character to escape")
@@ -244,7 +220,7 @@ class Lexer:
         text_buf.append(unescaped_char)
         literal_text_start_index = self.next_char_index
 
-    last_literal_text = self.src[literal_text_start_index:self.current_pos.char_index]
+    last_literal_text = self.src[literal_text_start_index:self.current_pos]
     text_buf.append(last_literal_text)
     return TokenString(is_previous=self.is_previous_entry, text="".join(text_buf))
 
@@ -257,7 +233,7 @@ class Lexer:
         self.next_char()
       else:
         break
-    keyword = self.src[self.token_start_pos.char_index:self.next_char_index]
+    keyword = self.src[self.token_start_pos:self.next_char_index]
 
     if keyword == "domain":
       self.emit_error(
@@ -309,15 +285,13 @@ class Parser:
   def emit_error(self, message: str) -> NoReturn:
     self.done = True
     raise ParsingError(
-      message,
-      self.current_token.start_pos.clone() if self.current_token is not None else CharPos.default()
+      message, self.current_token.start_pos if self.current_token is not None else 0
     )
 
   def emit_error_after(self, message: str) -> NoReturn:
     self.done = True
     raise ParsingError(
-      message,
-      self.current_token.end_pos.clone() if self.current_token is not None else CharPos.default()
+      message, self.current_token.end_pos if self.current_token is not None else 0
     )
 
   def parse_next_message(self) -> ParsedMessage | None:
