@@ -3,6 +3,7 @@ use crate::rc_string::RcString;
 use crate::utils;
 
 use once_cell::sync::Lazy;
+use std::borrow::Cow;
 use std::ffi::OsStr;
 use std::fs;
 use std::io;
@@ -129,7 +130,7 @@ fn read_extensions_dir(
       }
 
       let asset_root =
-        RcString::from(utils::fast_concat(&[path_to_str_with_error(&extension_dir)?, "/"]));
+        RcString::from(utils::fast_concat(&[&*path_to_str_with_error(&extension_dir)?, "/"]));
       let path = RcString::from(path_to_str_with_error(&metadata_file)?);
 
       extension_count += 1;
@@ -150,6 +151,12 @@ fn read_extensions_dir(
   Ok(extension_count)
 }
 
-fn path_to_str_with_error(path: &Path) -> AnyResult<&str> {
-  path.to_str().ok_or_else(|| format_err!("Non-utf8 file path: {:?}", path))
+fn path_to_str_with_error(path: &Path) -> AnyResult<Cow<str>> {
+  let path_str = path.to_str().ok_or_else(|| format_err!("Non-utf8 file path: {:?}", path))?;
+  let sep = std::path::MAIN_SEPARATOR;
+  if sep != '/' {
+    Ok(Cow::Owned(path_str.replace(sep, "/")))
+  } else {
+    Ok(Cow::Borrowed(path_str))
+  }
 }
