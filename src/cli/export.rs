@@ -166,7 +166,7 @@ impl super::Command for ExportCommand {
             };
 
             let export_file_path =
-              RcString::from(utils::fast_concat(&[&*export_file_path, ".", export_file_ext]));
+              RcString::from(strcat!(&*export_file_path, ".", export_file_ext));
 
             let mapping_game_file_path = if opt_mapping_lm_paths {
               RcString::from(localize_me::serialize_file_path(game_file_path))

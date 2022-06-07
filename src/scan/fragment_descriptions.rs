@@ -1,6 +1,5 @@
 use crate::impl_prelude::*;
 use crate::rc_string::RcString;
-use crate::utils;
 use crate::utils::json::{self, Value};
 
 use std::borrow::Cow;
@@ -144,7 +143,7 @@ fn generate_for_json_object<'json>(
                 (person.get("person"), person.get("expression"))
               {
                 state.words.push(person.into());
-                state.words.push(utils::fast_concat(&["@", expression]).into());
+                state.words.push(strcat!("@", expression).into());
               }
             }
             _ => {}

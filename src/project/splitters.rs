@@ -372,14 +372,14 @@ impl Splitter for NextGenerationSplitter {
     match components[0] {
       "data" if components.len() > 1 => match components[1] {
         "database.json" if components.len() == 2 => {
-          return utils::fast_concat(&[&*tr_file_path, "/", match json_components[0] {
+          return strcat!(&*tr_file_path, "/", match json_components[0] {
             // "achievements" => "achievements",
             "commonEvents" => "commonEvents",
             "enemies" => "enemies",
             "lore" => "lore",
             "quests" => "quests",
             _ => "other",
-          }])
+          })
           .into();
         }
         _ => {}

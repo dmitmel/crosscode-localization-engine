@@ -82,7 +82,7 @@ fn print_messages_json<'src>(iter: impl Iterator<Item = ParsedMessage<'src>>) ->
     add_comments("flags_comments", &message.flags_comments);
 
     let mut add_section = |name: &'static str, strings: &[Cow<str>]| {
-      let joined_string = utils::fast_concat(strings);
+      let joined_string = utils::concat_strings(strings);
       if !joined_string.is_empty() {
         message_obj.insert(name.to_owned(), json::Value::String(joined_string));
       }
@@ -160,6 +160,6 @@ fn print_messages_po<'src>(iter: impl Iterator<Item = ParsedMessage<'src>>) -> A
 }
 
 fn resplit_po_string<'a>(strings: &[Cow<str>], out_joined_string: &'a mut String) -> Vec<&'a str> {
-  *out_joined_string = utils::fast_concat(strings);
+  *out_joined_string = utils::concat_strings(strings);
   utils::LinesWithEndings::new(out_joined_string).collect()
 }

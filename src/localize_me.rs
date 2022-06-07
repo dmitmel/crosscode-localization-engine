@@ -1,5 +1,3 @@
-use crate::utils;
-
 use indexmap::IndexMap;
 use serde::Deserialize;
 use std::borrow::Cow;
@@ -30,7 +28,7 @@ pub fn deserialize_file_path(lm_file_path: &str) -> Cow<str> {
   if lm_file_path.starts_with("extension") {
     Cow::Borrowed(lm_file_path)
   } else {
-    Cow::Owned(utils::fast_concat(&["data/", lm_file_path]))
+    Cow::Owned(strcat!("data/", lm_file_path))
   }
 }
 

@@ -1,6 +1,5 @@
 use crate::impl_prelude::*;
 use crate::rc_string::RcString;
-use crate::utils;
 
 use once_cell::sync::Lazy;
 use std::borrow::Cow;
@@ -129,8 +128,7 @@ fn read_extensions_dir(
         continue;
       }
 
-      let asset_root =
-        RcString::from(utils::fast_concat(&[&*path_to_str_with_error(&extension_dir)?, "/"]));
+      let asset_root = RcString::from(strcat!(&*path_to_str_with_error(&extension_dir)?, "/"));
       let path = RcString::from(path_to_str_with_error(&metadata_file)?);
 
       extension_count += 1;

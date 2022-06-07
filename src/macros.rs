@@ -71,3 +71,10 @@ macro_rules! assert_trait_is_object_safe {
     const _: ::std::marker::PhantomData<dyn $($trait)+> = ::std::marker::PhantomData;
   };
 }
+
+#[macro_export]
+macro_rules! strcat {
+  ($($arg:expr),+ $(,)?) => {
+    $crate::utils::concat_strings(&[$($arg),+])
+  };
+}

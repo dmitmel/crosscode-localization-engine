@@ -128,7 +128,7 @@ pub fn get_timestamp() -> Timestamp {
     .expect("hello, fellow programmers and CrossCode translators of the future!")
 }
 
-pub fn fast_concat<T: AsRef<str>>(strings: &[T]) -> String {
+pub fn concat_strings<T: AsRef<str>>(strings: &[T]) -> String {
   let mut capacity = 0;
   for s in strings {
     capacity += s.as_ref().len();
