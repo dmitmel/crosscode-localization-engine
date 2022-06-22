@@ -254,7 +254,7 @@ class _Main:
       print("Downloading contributor statistics from Weblate")
       credits_data = self.weblate_client.fetch_credits(project_locale)
       out_credits_file.parent.mkdir(parents=True, exist_ok=True)
-      with out_credits_file.open("w") as file:
+      with out_credits_file.open("w", encoding="utf8") as file:
         write_json(file, credits_data)
         file.write("\n")
         file.flush()
@@ -274,7 +274,7 @@ class _Main:
           print(f"Parsing {component_id}")
           progress.desc = component_id
           progress.refresh()
-          with component_path.open("r") as reader:
+          with component_path.open("r", encoding="utf8") as reader:
             parser = gettext_po.Parser(reader.read())
             # Also calls progress.refresh()
             progress.reset(len(parser.lexer.src))
@@ -294,7 +294,7 @@ class _Main:
       for rel_pack_path, pack in compiler.packs.items():
         pack_path = out_packs_dir.joinpath(rel_pack_path)
         pack_path.parent.mkdir(parents=True, exist_ok=True)
-        with pack_path.open("w") as pack_file:
+        with pack_path.open("w", encoding="utf8") as pack_file:
           write_json(pack_file, pack)
           pack_file.write("\n")
           pack_file.flush()
@@ -305,7 +305,7 @@ class _Main:
       "project", "localize_me_mapping_file", self.project.get_conf_path
     )
     out_mapping_file.parent.mkdir(parents=True, exist_ok=True)
-    with out_mapping_file.open("w") as file:
+    with out_mapping_file.open("w", encoding="utf8") as file:
       write_json(file, compiler.packs_mapping)
       file.write("\n")
       file.flush()
@@ -335,7 +335,7 @@ class _Main:
 
     print("Collecting metadata")
 
-    with (self.project.root_dir / "ccmod.json").open("r") as manifest_file:
+    with (self.project.root_dir / "ccmod.json").open("r", encoding="utf8") as manifest_file:
       manifest = json.load(manifest_file)
       mod_id: str = manifest["id"]
       mod_version: str = manifest["version"]
@@ -572,7 +572,7 @@ class Project:
       file_path = self.root_dir / filename
       print(f"Loading project config from {str(file_path)!r}")
       try:
-        file = file_path.open("r")
+        file = file_path.open("r", encoding="utf8")
       except FileNotFoundError as err:
         if i == 0:
           raise
@@ -653,7 +653,7 @@ class ComponentsState:
 
   def open(self, write: bool) -> io.TextIOWrapper:
     if self.file is None:
-      self.file = self.file_path.open("a+" if write else "r+")
+      self.file = self.file_path.open("a+" if write else "r+", encoding="utf8")
       self.file.seek(0)
     return self.file
 
