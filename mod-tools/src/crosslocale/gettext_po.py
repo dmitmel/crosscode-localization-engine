@@ -366,16 +366,3 @@ class Parser:
         out.reference_comments.append(token.text)
       elif token.comment_type == CommentType.Flags:
         out.flags_comments.append(token.text)
-
-
-if __name__ == "__main__":
-  with open(
-    "/home/dmitmel/crosscode/crosscode-localization-data/po/pt_BR/components/database.po", "r"
-  ) as f:
-    text = f.read()
-  parser = Parser(text)
-  while True:
-    msg = parser.parse_next_message()
-    if msg is None:
-      break
-    # print(msg)
