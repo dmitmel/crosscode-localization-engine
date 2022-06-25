@@ -5,6 +5,7 @@ import contextlib
 import functools
 import io
 import json
+import os
 import os.path
 import subprocess
 import sys
@@ -12,6 +13,7 @@ import time
 import traceback
 import urllib.parse
 from datetime import datetime, timezone
+from multiprocessing import Pool
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
 from tarfile import TarFile
@@ -259,32 +261,40 @@ class _Main:
         file.write("\n")
         file.flush()
 
-    print(f"Parsing and compiling {len(components_to_compile)} components")
+    print(f"Compiling {len(components_to_compile)} components")
     with self.tqdm(
-      miniters=1, leave=False, desc="Parsed components", total=len(components_to_compile)
+      miniters=1, leave=False, desc="Compiled components", total=len(components_to_compile)
     ) as total_progress:
-      with self.tqdm(
-        leave=False,
-        unit="B",
-        unit_scale=True,
-        unit_divisor=1024,
-      ) as progress:
-        compiler = TrPackCompiler()
-        for component_id, component_path in components_to_compile.items():
-          print(f"Parsing {component_id}")
-          progress.desc = component_id
-          progress.refresh()
-          with component_path.open("r", encoding="utf8") as reader:
-            parser = gettext_po.Parser(reader.read())
-            # Also calls progress.refresh()
-            progress.reset(len(parser.lexer.src))
-            while True:
-              message: gettext_po.ParsedMessage | None = parser.parse_next_message()
-              if message is None:
-                break
-              compiler.add_fragment(message)
-              progress.update(parser.lexer.next_char_index - progress.n)
-          total_progress.update()
+      compiler = TrPackCompiler()
+
+      threads = self.project.get_conf("translation", "compiler_threads", int, fallback=0)
+      if threads >= 0:
+        with Pool(processes=threads if threads > 0 else os.cpu_count()) as pool:
+          for component_id, fragments in pool.imap_unordered(
+            self.component_compiler_work_callback,
+            ((total_progress.disable, k, v) for k, v in components_to_compile.items())
+          ):
+            for fragment in fragments:
+              compiler.add_fragment(fragment)
+            total_progress.update()
+
+      else:
+        with self.tqdm(leave=False, unit="B", unit_scale=True, unit_divisor=1024) as progress:
+          for component_id, component_path in components_to_compile.items():
+            print(f"Compiling {component_id}")
+            progress.desc = component_id
+            progress.refresh()
+            with component_path.open("r", encoding="utf8") as reader:
+              parser = gettext_po.Parser(reader.read())
+              # Also calls progress.refresh()
+              progress.reset(len(parser.lexer.src))
+              while True:
+                message: gettext_po.ParsedMessage | None = parser.parse_next_message()
+                if message is None:
+                  break
+                compiler.add_fragment(message)
+                progress.update(parser.lexer.next_char_index - progress.n)
+            total_progress.update()
 
     print(f"Writing {len(compiler.packs)} compiled translation packs")
     out_packs_dir = self.project.get_conf(
@@ -309,6 +319,23 @@ class _Main:
       write_json(file, compiler.packs_mapping)
       file.write("\n")
       file.flush()
+
+  @classmethod
+  def component_compiler_work_callback(
+    cls, args: tuple[bool, str, Path]
+  ) -> tuple[str, list[gettext_po.ParsedMessage]]:
+    progress_disabled, component_id, component_path = args
+    fragments: list[gettext_po.ParsedMessage] = []
+    if progress_disabled:
+      print(f"Compiling {component_id}")
+    with component_path.open("r", encoding="utf8") as reader:
+      parser = gettext_po.Parser(reader.read())
+      while True:
+        message: gettext_po.ParsedMessage | None = parser.parse_next_message()
+        if message is None:
+          break
+        fragments.append(message)
+    return component_id, fragments
 
   def cmd_make_dist(self) -> None:
 
@@ -515,6 +542,7 @@ class Project:
       # "scan_database_url": (
       #   "https://raw.githubusercontent.com/dmitmel/crosslocale-scans/master/scan-${target_game_version}.json"
       # ),
+      # "compiler_threads": None,
     },
     "weblate": {
       "root_url": "https://weblate.openkrosskod.org",
@@ -525,7 +553,6 @@ class Project:
       "components_exclude": "glossary",
       # "credits_file": None,
       # "local_data_repo_path": None,
-      # "use_local_data_repo": None,
     },
     "distributables": {
       # "mod_files_patterns": None,
@@ -797,6 +824,14 @@ class _tqdm_fallback:
     nolock: bool = ...,
   ) -> Generator[None, None, None]:
     yield
+
+  @classmethod
+  def set_lock(cls, lock: object) -> None:
+    pass
+
+  @classmethod
+  def get_lock(cls) -> object:
+    return None
 
   def __init__(
     self,
