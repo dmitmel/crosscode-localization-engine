@@ -50,7 +50,7 @@ pub static META_FILE_NAME: Lazy<&'static Path> =
 
 #[derive(Debug, Deserialize)]
 pub struct ProjectMetaSerde {
-  #[serde(with = "UniqueIdHelper")]
+  #[serde(with = "UniqueIdContext")]
   pub id: Uuid,
   #[serde(rename = "ctime")]
   pub creation_timestamp: Timestamp,
@@ -67,7 +67,7 @@ pub struct ProjectMetaSerde {
 
 #[derive(Debug, Deserialize)]
 pub struct TrFileSerde {
-  #[serde(with = "UniqueIdHelper")]
+  #[serde(with = "UniqueIdContext")]
   pub id: Uuid,
   #[serde(rename = "ctime")]
   pub creation_timestamp: Timestamp,
@@ -85,7 +85,7 @@ pub struct GameFileChunkSerde {
 
 #[derive(Debug, Deserialize)]
 pub struct FragmentSerde {
-  #[serde(with = "UniqueIdHelper")]
+  #[serde(with = "UniqueIdContext")]
   pub id: Uuid,
   #[serde(default, rename = "luid")]
   pub lang_uid: i32,
@@ -106,7 +106,7 @@ pub struct FragmentSerde {
 
 #[derive(Debug, Deserialize)]
 pub struct TranslationSerde {
-  #[serde(with = "UniqueIdHelper")]
+  #[serde(with = "UniqueIdContext")]
   pub id: Uuid,
   #[serde(rename = "author")]
   pub author_username: RcString,
@@ -124,7 +124,7 @@ pub struct TranslationSerde {
 
 #[derive(Debug, Deserialize)]
 pub struct CommentSerde {
-  #[serde(with = "UniqueIdHelper")]
+  #[serde(with = "UniqueIdContext")]
   pub id: Uuid,
   #[serde(rename = "author")]
   pub author_username: RcString,
@@ -147,7 +147,7 @@ pub struct ProjectMeta {
   #[serde(skip)]
   project: RcWeak<Project>,
 
-  #[serde(with = "UniqueIdHelper")]
+  #[serde(with = "UniqueIdContext")]
   id: Uuid,
   #[serde(rename = "ctime")]
   creation_timestamp: Timestamp,
@@ -298,7 +298,7 @@ impl Project {
 
   pub fn open(root_dir: PathBuf) -> AnyResult<Rc<Self>> {
     let meta_file_path = ProjectMeta::resolve_fs_path(&root_dir);
-    UniqueIdHelper::clear_registry();
+    let unique_id_ctx = UniqueIdContext::begin();
     let meta_raw: ProjectMetaSerde = json::read_file(&meta_file_path, &mut Vec::new())
       .with_context(|| format!("Failed to deserialize from JSON file {:?}", meta_file_path))?;
 
@@ -377,8 +377,8 @@ impl Project {
 
       tr_file.dirty_flag.set(false);
     }
-    UniqueIdHelper::clear_registry();
 
+    unique_id_ctx.end();
     Ok(myself)
   }
 
@@ -462,7 +462,7 @@ pub struct TrFile {
   #[serde(skip)]
   project: RcWeak<Project>,
 
-  #[serde(with = "UniqueIdHelper")]
+  #[serde(with = "UniqueIdContext")]
   id: Uuid,
   #[serde(rename = "ctime")]
   creation_timestamp: Timestamp,
@@ -690,7 +690,7 @@ pub struct Fragment {
   #[serde(skip)]
   virtual_game_file: RcWeak<VirtualGameFile>,
 
-  #[serde(with = "UniqueIdHelper")]
+  #[serde(with = "UniqueIdContext")]
   id: Uuid,
   #[serde(skip)]
   file_path: RcString,
@@ -847,7 +847,7 @@ pub struct Translation {
   #[serde(skip)]
   fragment: RcWeak<Fragment>,
 
-  #[serde(with = "UniqueIdHelper")]
+  #[serde(with = "UniqueIdContext")]
   id: Uuid,
   #[serde(rename = "author")]
   author_username: RcString,
@@ -936,7 +936,7 @@ pub struct Comment {
   #[serde(skip)]
   fragment: RcWeak<Fragment>,
 
-  #[serde(with = "UniqueIdHelper")]
+  #[serde(with = "UniqueIdContext")]
   id: Uuid,
   #[serde(rename = "author")]
   author_username: RcString,
@@ -1035,21 +1035,35 @@ impl VirtualGameFile {
 ////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct UniqueIdHelper;
+pub struct UniqueIdContext;
 
-impl UniqueIdHelper {
+impl UniqueIdContext {
   thread_local! {
-    pub static REGISTRY: RefCell<HashSet<Uuid>> = RefCell::new(HashSet::new());
+    pub static REGISTRY: RefCell<Option<HashSet<Uuid>>> = RefCell::new(None);
   }
 
-  pub fn clear_registry() {
+  pub fn begin() -> Self {
     Self::REGISTRY.with(|registry| {
-      registry.borrow_mut().clear();
-    })
+      let mut registry = registry.borrow_mut();
+      assert!(registry.is_none(), "unique ID contexts can't be nested");
+      *registry = Some(HashSet::new());
+    });
+    Self
+  }
+
+  #[inline(always)]
+  pub fn end(self) { drop(self); }
+}
+
+impl Drop for UniqueIdContext {
+  fn drop(&mut self) {
+    Self::REGISTRY.with(|registry| {
+      *registry.borrow_mut() = None;
+    });
   }
 }
 
-impl UniqueIdHelper {
+impl UniqueIdContext {
   #[inline(always)]
   pub fn serialize<S>(value: &Uuid, serializer: S) -> Result<S::Ok, S::Error>
   where
@@ -1064,13 +1078,16 @@ impl UniqueIdHelper {
   {
     let id = utils::serde::CompactUuidHelper::deserialize(deserializer)?;
     Self::REGISTRY.with(|registry| {
-      let is_unique = registry.borrow_mut().insert(id);
+      let is_unique = match registry.borrow_mut().as_mut() {
+        Some(registry) => registry.insert(id),
+        None => true,
+      };
       if is_unique {
         Ok(id)
       } else {
         let bytes = utils::encode_compact_uuid(&id);
         Err(<D::Error as serde::de::Error>::custom(format_args!(
-          "Found a non-unique ID (a duplicate exists somewhere in the project): {}",
+          "Found a duplicate of this ID somewhere else in the project: {}",
           str::from_utf8(&bytes).unwrap()
         )))
       }

@@ -102,23 +102,32 @@ pub fn set_stdio_logger(logger: Option<env_logger::Logger>) {
   })
 }
 
-pub fn add_listener(
-  filter: env_logger::filter::Filter,
-  callback: Box<dyn Fn(&log::Record) + Send + Sync>,
-) -> usize {
-  with_logger_instance_write(|myself| {
-    let id = &*callback as *const _ as *const () as usize;
-    myself.listeners.push(Listener { callback, filter });
-    id
-  })
+#[derive(Debug)]
+pub struct LogListener {
+  id: usize,
 }
 
-pub fn remove_listener(id: usize) {
-  with_logger_instance_write(|myself| {
-    myself.listeners.retain(|listener| {
-      &*listener.callback as *const _ as *const () as usize == id //
-    });
-  })
+impl LogListener {
+  pub fn add(
+    filter: env_logger::filter::Filter,
+    callback: Box<dyn Fn(&log::Record) + Send + Sync>,
+  ) -> Self {
+    with_logger_instance_write(|myself| {
+      let id = &*callback as *const _ as *const () as usize;
+      myself.listeners.push(Listener { callback, filter });
+      Self { id }
+    })
+  }
+}
+
+impl Drop for LogListener {
+  fn drop(&mut self) {
+    with_logger_instance_write(|myself| {
+      myself.listeners.retain(|listener| {
+        &*listener.callback as *const _ as *const () as usize == self.id //
+      });
+    })
+  }
 }
 
 pub fn print_banner_message() {

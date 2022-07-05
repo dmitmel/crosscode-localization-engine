@@ -442,7 +442,7 @@ pub struct Backend {
   client_methods_registry: HashMap<&'static str, &'static MethodDeclaration>,
   client_request_id: IdAllocator,
   client_responses: HashMap<Id, Message<'static>>,
-  log_listener_id: usize,
+  _log_listener: logging::LogListener,
 }
 
 impl Backend {
@@ -458,10 +458,10 @@ impl Backend {
 
     let transport = Arc::new(Mutex::new(transport));
 
-    let log_listener_id = {
+    let log_listener = {
       let transport = transport.share_rc_weak();
       logging::ensure_installed();
-      logging::add_listener(
+      logging::LogListener::add(
         env_logger::filter::Builder::new().filter_level(log::LevelFilter::max()).build(),
         Box::new(move |record| {
           if let Some(transport) = transport.upgrade() {
@@ -492,7 +492,7 @@ impl Backend {
       client_methods_registry,
       client_request_id: IdAllocator::new(),
       client_responses: HashMap::new(),
-      log_listener_id,
+      _log_listener: log_listener,
     }
   }
 
@@ -661,10 +661,6 @@ impl Backend {
       Message::ErrorResponse { message, .. } => bail!("client error: {}", message),
     }
   }
-}
-
-impl Drop for Backend {
-  fn drop(&mut self) { logging::remove_listener(self.log_listener_id); }
 }
 
 #[derive(Debug, Clone)]
