@@ -8,6 +8,8 @@ license = "MIT"
 repository = "https://github.com/dmitmel/crosscode-localization-engine.git"
 homepage = "https://github.com/dmitmel/crosscode-localization-engine"
 
+[workspace]
+
 [[bin]]
 name = "crosslocale"
 path = "src/main.rs"
@@ -23,27 +25,25 @@ path = "src/lib.rs"
 [dependencies]
 serde = { version = "1.0.118", features = ["derive", "rc"] }
 serde_json = { version = "1.0.61", features = ["preserve_order", "raw_value"] }
-simd-json = { version = "0.4.7", optional = true }
+simd-json = { version = "0.7.0", optional = true }
 env_logger = { version = "0.9.0", default-features = false, features = ["termcolor", "atty", "humantime"] }
 log = { version = "0.4.11" }
-clap = { version = "3.0.7", default-features = false, features = ["color", "std"] }
-clap_complete = { version = "3.0.4" }
+clap = { version = "4.0.26", default-features = false, features = ["std", "color", "help", "wrap_help", "usage", "error-context", "deprecated"] }
+clap_complete = { version = "4.0.5" }
 anyhow = { version = "1.0.38" }
 walkdir = { version = "2.3.1" }
 indexmap = { version = "1.6.1", features = ["serde-1"] }
-uuid = { version = "0.8.2", features = ["serde", "v4"] }
+uuid = { version = "1.2.2", features = ["serde", "v4"] }
 once_cell = { version = "1.5.2" }
 time = { version = "0.2.27" }
 # textwrap = { version = "0.11.0" }
 atty = { version = "0.2.14" }
 threadpool = { version = "1.8.1" }
 serde-transcode = { version = "1.1.1" }
+terminal_size = "0.2.2"
 
-[target.'cfg(unix)'.dependencies]
-libc = { version = "0.2" }
-
-[target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["handleapi", "processenv", "winbase", "wincon", "winnt"] }
+[patch.crates-io]
+terminal_size = { path = "./terminal-size" }
 
 [features]
 clap_debug = ["clap/debug", "clap_complete/debug"]

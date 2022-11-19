@@ -17,7 +17,7 @@ pub struct DumpProjectCommand;
 impl super::Command for DumpProjectCommand {
   fn name(&self) -> &'static str { "dump-project" }
 
-  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
+  fn create_arg_parser(&self, app: clap::Command) -> clap::Command {
     common::DumpCommandCommonOpts::add_to_arg_parser(
       app
         .about(
@@ -28,7 +28,7 @@ impl super::Command for DumpProjectCommand {
           clap::Arg::new("project_dir")
             .value_name("PROJECT")
             .value_hint(clap::ValueHint::DirPath)
-            .allow_invalid_utf8(true)
+            .value_parser(clap::value_parser!(PathBuf))
             .required(true)
             .help("Path to the project directory."),
         ),
@@ -41,14 +41,15 @@ impl super::Command for DumpProjectCommand {
     matches: &clap::ArgMatches,
     _progress: Box<dyn ProgressReporter>,
   ) -> AnyResult<()> {
-    let opt_project_dir = PathBuf::from(matches.value_of_os("project_dir").unwrap());
+    let opt_project_dir = matches.get_one::<PathBuf>("project_dir").unwrap();
     let common_opt = common::DumpCommandCommonOpts::from_matches(matches);
 
     let mut fmt = json::UltimateFormatter::new(common_opt.ultimate_formatter_config());
     let mut out = io::stdout();
     let mut stream_helper = common_opt.dump_stream_helper();
 
-    let project = project::Project::open(opt_project_dir).context("Failed to open the projet")?;
+    let project =
+      project::Project::open(opt_project_dir.clone()).context("Failed to open the projet")?;
 
     match dump_the_project(project, &mut fmt, &mut out, &mut stream_helper) {
       Err(e) if e.kind() == io::ErrorKind::BrokenPipe => {}

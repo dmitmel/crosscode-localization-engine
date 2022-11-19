@@ -10,7 +10,7 @@ pub struct BackendCommand;
 impl super::Command for BackendCommand {
   fn name(&self) -> &'static str { "backend" }
 
-  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
+  fn create_arg_parser(&self, app: clap::Command) -> clap::Command {
     app
       .about(
         "Starts the translation tool backend in a given project. This command should not be used \
@@ -22,7 +22,7 @@ impl super::Command for BackendCommand {
           .value_hint(clap::ValueHint::Other)
           .required(true)
           .long("protocol-version")
-          .possible_value(backend::PROTOCOL_VERSION_STR.as_str()),
+          .value_parser([backend::PROTOCOL_VERSION_STR.as_str()]),
       )
       .arg(
         clap::Arg::new("transport")
@@ -30,7 +30,7 @@ impl super::Command for BackendCommand {
           .value_hint(clap::ValueHint::Other)
           .required(true)
           .long("transport")
-          .possible_value("stdio"),
+          .value_parser(["stdio"]),
       )
   }
 

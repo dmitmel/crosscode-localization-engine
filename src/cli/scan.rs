@@ -26,7 +26,7 @@ pub struct ScanCommand;
 impl super::Command for ScanCommand {
   fn name(&self) -> &'static str { "scan" }
 
-  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
+  fn create_arg_parser(&self, app: clap::Command) -> clap::Command {
     app
       .about(
         "Scans the assets directory of the game and extracts the localizable strings and other \
@@ -36,7 +36,7 @@ impl super::Command for ScanCommand {
         clap::Arg::new("assets_dir")
           .value_name("ASSETS")
           .value_hint(clap::ValueHint::DirPath)
-          .allow_invalid_utf8(true)
+          .value_parser(clap::value_parser!(PathBuf))
           .required(true)
           .help("Path to the primary assets directory."),
       )
@@ -44,7 +44,7 @@ impl super::Command for ScanCommand {
         clap::Arg::new("output")
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
-          .allow_invalid_utf8(true)
+          .value_parser(clap::value_parser!(PathBuf))
           .short('o')
           .long("output")
           .required(true)
@@ -54,21 +54,22 @@ impl super::Command for ScanCommand {
         clap::Arg::new("locales")
           .value_name("LOCALE")
           .value_hint(clap::ValueHint::Other)
-          .multiple_values(true)
-          .number_of_values(1)
+          .action(clap::ArgAction::Append)
           .short('l')
           .long("locales")
           .help("Locales to extract. By default only the main locale is extracted.")
-          .default_values(&[lang_label_extractor::MAIN_LOCALE]),
+          .default_value(lang_label_extractor::MAIN_LOCALE),
       )
       .arg(
         clap::Arg::new("all_locales")
+          .action(clap::ArgAction::SetTrue)
           .long("all-locales")
           .conflicts_with("locales")
           .help("Extact absolutely all locales."),
       )
       .arg(
         clap::Arg::new("compact")
+          .action(clap::ArgAction::SetTrue)
           .short('c')
           .long("compact")
           .help("Disable pretty-printing of the resulting JSON file."),
@@ -81,16 +82,15 @@ impl super::Command for ScanCommand {
             "The number of parallel worker threads allocated for the scanner. Zero means using \
             as many threads as there are CPU cores available.",
           )
-          .validator(|s| usize::from_str(s).map(|_| ()))
+          .value_parser(clap::value_parser!(usize))
           .default_value("0"),
       )
       .arg(
         clap::Arg::new("assets_overrides_dirs")
           .value_name("ASSETS")
           .value_hint(clap::ValueHint::DirPath)
-          .allow_invalid_utf8(true)
-          .multiple_values(true)
-          .number_of_values(1)
+          .value_parser(clap::value_parser!(PathBuf))
+          .action(clap::ArgAction::Append)
           .long("add-assets-overrides-dir")
           .help(
             "Appends a directory to the list of assets overrides directories: for each file \
@@ -108,17 +108,17 @@ impl super::Command for ScanCommand {
     matches: &clap::ArgMatches,
     mut progress: Box<dyn ProgressReporter>,
   ) -> AnyResult<()> {
-    let opt_assets_dir = PathBuf::from(matches.value_of_os("assets_dir").unwrap());
-    let opt_output = PathBuf::from(matches.value_of_os("output").unwrap());
+    let opt_assets_dir = matches.get_one::<PathBuf>("assets_dir").unwrap().clone();
+    let opt_output = matches.get_one::<PathBuf>("output").unwrap();
     let opt_extra_locales: HashSet<_> = matches
-      .values_of("locales")
+      .get_many::<String>("locales")
       .map_or_else(HashSet::new, |values| values.map(RcString::from).collect());
-    let opt_all_locales = matches.is_present("all_locales");
-    let opt_compact = matches.is_present("compact");
-    let opt_jobs = usize::from_str(matches.value_of("jobs").unwrap()).unwrap();
+    let opt_all_locales = matches.get_flag("all_locales");
+    let opt_compact = matches.get_flag("compact");
+    let opt_jobs = *matches.get_one::<usize>("jobs").unwrap();
     let opt_assets_overrides_dirs: Vec<_> = matches
-      .values_of("assets_overrides_dirs")
-      .map_or_else(Vec::new, |values| values.map(PathBuf::from).collect());
+      .get_many::<PathBuf>("assets_overrides_dirs")
+      .map_or_else(Vec::new, |values| values.cloned().collect());
 
     info!("Performing a scan of game files in the assets dir {:?}", opt_assets_dir);
 
@@ -142,7 +142,7 @@ impl super::Command for ScanCommand {
         // Anyway, the concatenation with the path `.` will be ignored on
         // absolute paths and on relative ones the subsequent `parent()`
         // invocation will return the current directory as a fallback.
-        match Path::new(".").join(utils::normalize_path(&opt_output)).parent() {
+        match Path::new(".").join(utils::normalize_path(opt_output)).parent() {
           Some(output_dir) => !output_dir.exists(),
           // We are at the FS root (the parent is None), but it (the root)
           // doesn't exist? But anyway, the root is always a directory to my
@@ -164,7 +164,8 @@ impl super::Command for ScanCommand {
       .context("Failed to find all JSON files in the assets dir")?;
     info!("Found {} JSON files in total", all_json_files.len());
 
-    let scan_db = scan::ScanDb::create(opt_output, scan::ScanDbCreateOpts { game_version });
+    let scan_db =
+      scan::ScanDb::create(opt_output.clone(), scan::ScanDbCreateOpts { game_version });
 
     info!("Extracting localizable strings");
     let extractor_opts = Arc::new(lang_label_extractor::ExtractionOptions {

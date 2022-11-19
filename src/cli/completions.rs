@@ -12,7 +12,7 @@ pub struct CompletionsCommand;
 impl super::Command for CompletionsCommand {
   fn name(&self) -> &'static str { "completions" }
 
-  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
+  fn create_arg_parser(&self, app: clap::Command) -> clap::Command {
     app
       .about("Generates completion scripts for various shells.")
       //
@@ -21,7 +21,7 @@ impl super::Command for CompletionsCommand {
           .value_name("SHELL")
           .value_hint(clap::ValueHint::Other)
           .required(true)
-          .possible_values(&["bash", "elvish", "fish", "powershell", "zsh"]),
+          .value_parser(clap::value_parser!(Shell)),
       )
   }
 
@@ -31,19 +31,11 @@ impl super::Command for CompletionsCommand {
     matches: &clap::ArgMatches,
     _progress: Box<dyn ProgressReporter>,
   ) -> AnyResult<()> {
-    let opt_shell = matches.value_of("shell").unwrap();
+    let opt_shell = matches.get_one::<Shell>("shell").unwrap();
 
     let (mut arg_parser, _) = crate::cli::create_complete_arg_parser();
-    let shell = match opt_shell {
-      "bash" => Shell::Bash,
-      "elvish" => Shell::Elvish,
-      "fish" => Shell::Fish,
-      "powershell" => Shell::PowerShell,
-      "zsh" => Shell::Zsh,
-      _ => unreachable!(),
-    };
     let mut out = io::stdout();
-    clap_complete::generate(shell, &mut arg_parser, env!("CARGO_BIN_NAME"), &mut out);
+    clap_complete::generate(*opt_shell, &mut arg_parser, env!("CARGO_BIN_NAME"), &mut out);
     out.write_all(b"\n")?;
     out.flush()?;
 

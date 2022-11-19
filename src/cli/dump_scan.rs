@@ -15,7 +15,7 @@ pub struct DumpScanCommand;
 impl super::Command for DumpScanCommand {
   fn name(&self) -> &'static str { "dump-scan" }
 
-  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
+  fn create_arg_parser(&self, app: clap::Command) -> clap::Command {
     common::DumpCommandCommonOpts::add_to_arg_parser(
       app
         .about(
@@ -26,7 +26,7 @@ impl super::Command for DumpScanCommand {
           clap::Arg::new("scan_db")
             .value_name("SCAN_DB_PATH")
             .value_hint(clap::ValueHint::FilePath)
-            .allow_invalid_utf8(true)
+            .value_parser(clap::value_parser!(PathBuf))
             .required(true)
             .help("Path to a scan database to dump."),
         ),
@@ -39,14 +39,15 @@ impl super::Command for DumpScanCommand {
     matches: &clap::ArgMatches,
     _progress: Box<dyn ProgressReporter>,
   ) -> AnyResult<()> {
-    let opt_scan_db = PathBuf::from(matches.value_of_os("scan_db").unwrap());
+    let opt_scan_db = matches.get_one::<PathBuf>("scan_db").unwrap();
     let common_opt = common::DumpCommandCommonOpts::from_matches(matches);
 
     let mut fmt = json::UltimateFormatter::new(common_opt.ultimate_formatter_config());
     let mut out = io::stdout();
     let mut stream_helper = common_opt.dump_stream_helper();
 
-    let scan_db = scan::ScanDb::open(opt_scan_db).context("Failed to open the scan database")?;
+    let scan_db =
+      scan::ScanDb::open(opt_scan_db.clone()).context("Failed to open the scan database")?;
 
     match dump_the_scan_db(scan_db, &mut fmt, &mut out, &mut stream_helper) {
       Err(e) if e.kind() == io::ErrorKind::BrokenPipe => {}

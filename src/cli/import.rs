@@ -18,7 +18,7 @@ pub struct ImportCommand;
 impl super::Command for ImportCommand {
   fn name(&self) -> &'static str { "import" }
 
-  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
+  fn create_arg_parser(&self, app: clap::Command) -> clap::Command {
     app
       .about(
         "Imports translations from a different format into a project, for example for migrating \
@@ -28,7 +28,7 @@ impl super::Command for ImportCommand {
         clap::Arg::new("project_dir")
           .value_name("PROJECT")
           .value_hint(clap::ValueHint::DirPath)
-          .allow_invalid_utf8(true)
+          .value_parser(clap::value_parser!(PathBuf))
           .required(true)
           .help("Path to the project directory."),
       )
@@ -36,8 +36,8 @@ impl super::Command for ImportCommand {
         clap::Arg::new("inputs")
           .value_name("IMPORT_PATH")
           .value_hint(clap::ValueHint::AnyPath)
-          .allow_invalid_utf8(true)
-          .multiple_values(true)
+          .value_parser(clap::value_parser!(PathBuf))
+          .action(clap::ArgAction::Append)
           .required(true)
           .conflicts_with("inputs_file")
           .help("Path to files to import translations from."),
@@ -46,7 +46,7 @@ impl super::Command for ImportCommand {
         clap::Arg::new("inputs_file")
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
-          .allow_invalid_utf8(true)
+          .value_parser(clap::value_parser!(PathBuf))
           .short('I')
           .long("read-inputs")
           .help(
@@ -61,7 +61,7 @@ impl super::Command for ImportCommand {
           .value_hint(clap::ValueHint::Other)
           .short('f')
           .long("format")
-          .possible_values(importers::REGISTRY.ids())
+          .value_parser(clap::builder::PossibleValuesParser::new(importers::REGISTRY.ids()))
           .required(true)
           .help("Format to import from."),
       )
@@ -86,8 +86,8 @@ impl super::Command for ImportCommand {
       )
       .arg(
         clap::Arg::new("delete_other_translations")
+          .action(clap::ArgAction::SetTrue)
           .long("delete-other-translations")
-          //
           .help(
             "Delete other translations (by other users) on fragments before adding the imported \
             translation.",
@@ -95,8 +95,8 @@ impl super::Command for ImportCommand {
       )
       .arg(
         clap::Arg::new("always_add_new_translations")
+          .action(clap::ArgAction::SetTrue)
           .long("always-add-new-translations")
-          //
           .help(
             "Always add new translations instead of editing the translations created from \
             previous imports. The import marker flag is used for determining if a translation \
@@ -108,8 +108,7 @@ impl super::Command for ImportCommand {
           .value_name("FLAG")
           .value_hint(clap::ValueHint::Other)
           .long("add-flag")
-          .multiple_values(true)
-          .number_of_values(1)
+          .action(clap::ArgAction::Append)
           .help("Add flags to the imported translations."),
       )
   }
@@ -120,18 +119,16 @@ impl super::Command for ImportCommand {
     matches: &clap::ArgMatches,
     _progress: Box<dyn ProgressReporter>,
   ) -> AnyResult<()> {
-    let opt_project_dir = PathBuf::from(matches.value_of_os("project_dir").unwrap());
-    let opt_inputs: Vec<_> = matches
-      .values_of_os("inputs")
-      .map_or_else(Vec::new, |values| values.map(PathBuf::from).collect());
-    let opt_inputs_file = matches.value_of_os("inputs_file").map(PathBuf::from);
-    let opt_format = RcString::from(matches.value_of("format").unwrap());
-    let opt_default_author = RcString::from(matches.value_of("default_author").unwrap());
-    let opt_marker_flag = RcString::from(matches.value_of("marker_flag").unwrap());
-    let opt_delete_other_translations = matches.is_present("delete_other_translations");
-    let opt_always_add_new_translations = matches.is_present("always_add_new_translations");
+    let opt_project_dir = matches.get_one::<PathBuf>("project_dir").unwrap();
+    let opt_inputs: Vec<_> = matches.get_many::<PathBuf>("inputs").unwrap().cloned().collect();
+    let opt_inputs_file = matches.get_one::<PathBuf>("inputs_file");
+    let opt_format = RcString::from(matches.get_one::<String>("format").unwrap());
+    let opt_default_author = RcString::from(matches.get_one::<String>("default_author").unwrap());
+    let opt_marker_flag = RcString::from(matches.get_one::<String>("marker_flag").unwrap());
+    let opt_delete_other_translations = matches.get_flag("delete_other_translations");
+    let opt_always_add_new_translations = matches.get_flag("always_add_new_translations");
     let opt_add_flags: HashSet<_> = matches
-      .values_of("add_flags")
+      .get_many::<String>("add_flags")
       .map_or_else(HashSet::new, |values| values.map(RcString::from).collect());
 
     info!(
@@ -140,12 +137,12 @@ impl super::Command for ImportCommand {
       opt_format,
     );
 
-    let project = Project::open(opt_project_dir).context("Failed to open the project")?;
+    let project = Project::open(opt_project_dir.clone()).context("Failed to open the project")?;
     let mut importer =
       importers::REGISTRY.create(&opt_format, ()).context("Failed to create the importer")?;
     let mut total_imported_fragments_count = 0;
 
-    let inputs = collect_input_files(&opt_inputs, &opt_inputs_file, importer.file_extension())?;
+    let inputs = collect_input_files(&opt_inputs, opt_inputs_file, importer.file_extension())?;
 
     let inputs_len = inputs.len();
     for (i, (_, input_entry)) in inputs.into_iter().enumerate() {
@@ -265,7 +262,7 @@ impl super::Command for ImportCommand {
 
 pub fn collect_input_files(
   opt_inputs: &[PathBuf],
-  opt_inputs_file: &Option<PathBuf>,
+  opt_inputs_file: Option<&PathBuf>,
   expected_file_ext: &str,
 ) -> AnyResult<Vec<(Rc<PathBuf>, walkdir::DirEntry)>> {
   let mut inputs_from_inputs_file: Vec<PathBuf>;

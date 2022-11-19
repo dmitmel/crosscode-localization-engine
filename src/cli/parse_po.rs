@@ -16,12 +16,22 @@ pub struct ParsePoCommand;
 impl super::Command for ParsePoCommand {
   fn name(&self) -> &'static str { "parse-po" }
 
-  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
+  fn create_arg_parser(&self, app: clap::Command) -> clap::Command {
     app
       .about("Debug command for testing the gettext po parser.")
       .hide(true)
-      .arg(clap::Arg::new("file").value_name("FILE").value_hint(clap::ValueHint::FilePath))
-      .arg(clap::Arg::new("json").short('J').long("json"))
+      .arg(
+        clap::Arg::new("file")
+          .value_name("FILE")
+          .value_hint(clap::ValueHint::FilePath)
+          .value_parser(clap::value_parser!(PathBuf)),
+      )
+      .arg(
+        clap::Arg::new("json")
+          .action(clap::ArgAction::SetTrue) //
+          .short('J')
+          .long("json"),
+      )
   }
 
   fn run(
@@ -30,8 +40,8 @@ impl super::Command for ParsePoCommand {
     matches: &clap::ArgMatches,
     _progress: Box<dyn ProgressReporter>,
   ) -> AnyResult<()> {
-    let opt_file = matches.value_of_os("file").map(PathBuf::from);
-    let opt_json = matches.is_present("json");
+    let opt_file = matches.get_one::<PathBuf>("file");
+    let opt_json = matches.get_flag("json");
 
     let (src, filename): (String, Cow<str>) = match &opt_file {
       Some(file) => (fs::read_to_string(file)?, file.to_string_lossy()),

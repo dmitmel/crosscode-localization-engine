@@ -21,7 +21,7 @@ pub struct ConvertCommand;
 impl super::Command for ConvertCommand {
   fn name(&self) -> &'static str { "convert" }
 
-  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
+  fn create_arg_parser(&self, app: clap::Command) -> clap::Command {
     app
       .about(
         "Converts between various translation file formats without the need for import/export.",
@@ -31,7 +31,7 @@ impl super::Command for ConvertCommand {
           .value_name("SCAN_DB_PATH")
           .value_hint(clap::ValueHint::FilePath)
           .long("scan")
-          .allow_invalid_utf8(true)
+          .value_parser(clap::value_parser!(PathBuf))
           .required(true)
           .help(
             "A scan database to use for referencing data like fragment descriptions if the \
@@ -53,8 +53,8 @@ impl super::Command for ConvertCommand {
         clap::Arg::new("inputs")
           .value_name("INPUT_PATH")
           .value_hint(clap::ValueHint::AnyPath)
-          .allow_invalid_utf8(true)
-          .multiple_values(true)
+          .value_parser(clap::value_parser!(PathBuf))
+          .action(clap::ArgAction::Append)
           .required(true)
           .conflicts_with("inputs_file")
           .help("Paths to the input files."),
@@ -63,7 +63,7 @@ impl super::Command for ConvertCommand {
         clap::Arg::new("inputs_file")
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
-          .allow_invalid_utf8(true)
+          .value_parser(clap::value_parser!(PathBuf))
           .short('I')
           .long("read-inputs")
           .help(
@@ -76,7 +76,7 @@ impl super::Command for ConvertCommand {
         clap::Arg::new("output")
           .value_name("PATH")
           .value_hint(clap::ValueHint::AnyPath)
-          .allow_invalid_utf8(true)
+          .value_parser(clap::value_parser!(PathBuf))
           .short('o')
           .long("output")
           .required(true)
@@ -91,7 +91,7 @@ impl super::Command for ConvertCommand {
           .value_hint(clap::ValueHint::Other)
           .short('f')
           .long("format")
-          .possible_values(importers::REGISTRY.ids())
+          .value_parser(clap::builder::PossibleValuesParser::new(importers::REGISTRY.ids()))
           .required(true)
           .help("The format to convert from."),
       )
@@ -101,7 +101,7 @@ impl super::Command for ConvertCommand {
           .value_hint(clap::ValueHint::Other)
           .short('F')
           .long("output-format")
-          .possible_values(exporters::REGISTRY.ids())
+          .value_parser(clap::builder::PossibleValuesParser::new(exporters::REGISTRY.ids()))
           .required(true)
           .help("The format to convert to."),
       )
@@ -121,13 +121,13 @@ impl super::Command for ConvertCommand {
           .value_name("SPLITTER")
           .value_hint(clap::ValueHint::Other)
           .long("splitter")
-          .possible_values(splitters::REGISTRY.ids())
+          .value_parser(clap::builder::PossibleValuesParser::new(splitters::REGISTRY.ids()))
           .help("Strategy used for splitting the output files."),
       )
       .arg(
         clap::Arg::new("remove_untranslated")
+          .action(clap::ArgAction::SetTrue)
           .long("remove-untranslated")
-          //
           .help(
             "Whether to remove untranslated fragments when converting. Note that some formats \
             and/or tasks may still need the empty translations.",
@@ -137,7 +137,7 @@ impl super::Command for ConvertCommand {
         clap::Arg::new("mapping_output")
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
-          .allow_invalid_utf8(true)
+          .value_parser(clap::value_parser!(PathBuf))
           .requires("splitter")
           .long("mapping-output")
           .help(
@@ -147,14 +147,15 @@ impl super::Command for ConvertCommand {
       )
       .arg(
         clap::Arg::new("mapping_lm_paths")
+          .action(clap::ArgAction::SetTrue)
           .requires("mapping_output")
           .long("mapping-lm-paths")
           .help("Use Localize Me-style paths of game files in the mapping table."),
       )
       .arg(
         clap::Arg::new("compact")
+          .action(clap::ArgAction::SetTrue) //
           .long("compact")
-          //
           .help(
             "Write output files compactly, for example before packaging them for distribution. \
             Note that this will mean different things depending on the output format.",
@@ -168,21 +169,19 @@ impl super::Command for ConvertCommand {
     matches: &clap::ArgMatches,
     _progress: Box<dyn ProgressReporter>,
   ) -> AnyResult<()> {
-    let opt_scan_db = PathBuf::from(matches.value_of_os("scan_db").unwrap());
-    let opt_original_locale = matches.value_of("original_locale");
-    let opt_inputs: Vec<_> = matches
-      .values_of_os("inputs")
-      .map_or_else(Vec::new, |values| values.map(PathBuf::from).collect());
-    let opt_inputs_file = matches.value_of_os("inputs_file").map(PathBuf::from);
-    let opt_output = PathBuf::from(matches.value_of_os("output").unwrap());
-    let opt_input_format = RcString::from(matches.value_of("input_format").unwrap());
-    let opt_output_format = RcString::from(matches.value_of("output_format").unwrap());
-    let opt_default_author = RcString::from(matches.value_of("default_author").unwrap());
-    let opt_splitter = matches.value_of("splitter").map(RcString::from);
-    let opt_remove_untranslated = matches.is_present("remove_untranslated");
-    let opt_mapping_output = matches.value_of_os("mapping_output").map(PathBuf::from);
-    let opt_mapping_lm_paths = matches.is_present("mapping_lm_paths");
-    let opt_compact = matches.is_present("compact");
+    let opt_scan_db = matches.get_one::<PathBuf>("scan_db").unwrap();
+    let opt_original_locale = matches.get_one::<String>("original_locale");
+    let opt_inputs: Vec<_> = matches.get_many::<PathBuf>("inputs").unwrap().cloned().collect();
+    let opt_inputs_file = matches.get_one::<PathBuf>("inputs_file");
+    let opt_output = matches.get_one::<PathBuf>("output").unwrap();
+    let opt_input_format = RcString::from(matches.get_one::<String>("input_format").unwrap());
+    let opt_output_format = RcString::from(matches.get_one::<String>("output_format").unwrap());
+    let opt_default_author = RcString::from(matches.get_one::<String>("default_author").unwrap());
+    let opt_splitter = matches.get_one::<String>("splitter");
+    let opt_remove_untranslated = matches.get_flag("remove_untranslated");
+    let opt_mapping_output = matches.get_one::<PathBuf>("mapping_output");
+    let opt_mapping_lm_paths = matches.get_flag("mapping_lm_paths");
+    let opt_compact = matches.get_flag("compact");
 
     info!("Converting files from {:?} to {:?}", opt_input_format, opt_output_format);
 
@@ -194,21 +193,19 @@ impl super::Command for ConvertCommand {
       .context("Failed to create the exporter")?;
     let mut splitter = match opt_splitter {
       Some(id) => {
-        Some(splitters::REGISTRY.create(&id, ()).context("Failed to create the splitter")?)
+        Some(splitters::REGISTRY.create(id, ()).context("Failed to create the splitter")?)
       }
       _ => None,
     };
-    let scan_db = scan::ScanDb::open(opt_scan_db).context("Failed to open the scan database")?;
+    let scan_db =
+      scan::ScanDb::open(opt_scan_db.clone()).context("Failed to open the scan database")?;
 
     let mut total_imported_fragments_count = 0;
     let mut all_imported_fragments =
       IndexMap::<RcString, Vec<(Rc<PathBuf>, ImportedFragment)>>::new();
 
-    let inputs = super::import::collect_input_files(
-      &opt_inputs,
-      &opt_inputs_file,
-      importer.file_extension(),
-    )?;
+    let inputs =
+      super::import::collect_input_files(&opt_inputs, opt_inputs_file, importer.file_extension())?;
 
     let inputs_len = inputs.len();
     for (i, (_, input_entry)) in inputs.into_iter().enumerate() {
@@ -397,14 +394,14 @@ impl super::Command for ConvertCommand {
         fragments_by_export_path.len(),
       );
     } else {
-      export_fragments_to_file(&opt_output, &all_exported_fragments)
+      export_fragments_to_file(opt_output, &all_exported_fragments)
         .with_context(|| format!("Failed to export all fragments to file {:?}", opt_output))?;
       info!("Converted {} fragments", total_converted_fragments_count);
     }
 
     if let Some(mapping_file_path) = opt_mapping_output {
       json::write_file(
-        &mapping_file_path,
+        mapping_file_path,
         &exported_files_mapping,
         if opt_compact {
           json::UltimateFormatterConfig::COMPACT

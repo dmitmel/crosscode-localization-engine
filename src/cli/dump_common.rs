@@ -4,21 +4,21 @@ use serde_json::ser::Formatter;
 use std::io;
 
 #[derive(Debug)]
-pub struct DumpCommandCommonOpts {
+pub struct DumpCommandCommonOpts<'arg> {
   pub compact_output: bool,
-  pub indent: String,
+  pub indent: &'arg str,
   pub unbuffered: bool,
   pub wrap_array: bool,
 }
 
-impl DumpCommandCommonOpts {
+impl<'arg> DumpCommandCommonOpts<'arg> {
   pub fn add_only_formatting_to_arg_parser(app: clap::Command) -> clap::Command {
     app
       .arg(
         clap::Arg::new("compact_output")
+          .action(clap::ArgAction::SetTrue)
           .long("compat-output")
           .short('c')
-          //
           .help(
             "Does exactly the same thing as jq's option of the same name: turns off pretty-\
             printing of the resulting JSON.",
@@ -30,7 +30,7 @@ impl DumpCommandCommonOpts {
           .value_hint(clap::ValueHint::Other)
           .long("indent")
           .help("Selects what to use for indentation.")
-          .possible_values(&["0", "1", "2", "3", "4", "5", "6", "7", "8", "tab"])
+          .value_parser(["0", "1", "2", "3", "4", "5", "6", "7", "8", "tab"])
           .default_value("2"),
       )
   }
@@ -39,8 +39,8 @@ impl DumpCommandCommonOpts {
     Self::add_only_formatting_to_arg_parser(app)
       .arg(
         clap::Arg::new("unbuffered")
+          .action(clap::ArgAction::SetTrue) //
           .long("unbuffered")
-          //
           .help(
             "Does exactly the same thing as the corresponding jq's option: flushes the output \
             stream after each JSON object is printed.",
@@ -48,9 +48,9 @@ impl DumpCommandCommonOpts {
       )
       .arg(
         clap::Arg::new("wrap_array")
+          .action(clap::ArgAction::SetTrue)
           .long("wrap-array")
           .short('w')
-          //
           .help(
             "Wrap the resulting JSON entries in a one big array. Alternatively, jq's --slurp \
             option can be used to achieve the same.",
@@ -58,12 +58,20 @@ impl DumpCommandCommonOpts {
       )
   }
 
-  pub fn from_matches(matches: &clap::ArgMatches) -> Self {
+  pub fn from_matches_only_formatting(matches: &'arg clap::ArgMatches) -> Self {
     Self {
-      compact_output: matches.is_present("compact_output"),
-      indent: matches.value_of("indent").unwrap().to_owned(),
-      unbuffered: matches.is_present("unbuffered"),
-      wrap_array: matches.is_present("wrap_array"),
+      compact_output: matches.get_flag("compact_output"),
+      indent: matches.get_one::<String>("indent").unwrap().as_str(),
+      unbuffered: false,
+      wrap_array: false,
+    }
+  }
+
+  pub fn from_matches(matches: &'arg clap::ArgMatches) -> Self {
+    Self {
+      unbuffered: matches.get_flag("unbuffered"),
+      wrap_array: matches.get_flag("wrap_array"),
+      ..Self::from_matches_only_formatting(matches)
     }
   }
 
@@ -73,7 +81,7 @@ impl DumpCommandCommonOpts {
       indent: if self.compact_output {
         None
       } else {
-        Some(match self.indent.as_str() {
+        Some(match self.indent {
           "0" => "",
           "1" => " ",
           "2" => "  ",

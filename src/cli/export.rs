@@ -19,7 +19,7 @@ pub struct ExportCommand;
 impl super::Command for ExportCommand {
   fn name(&self) -> &'static str { "export" }
 
-  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
+  fn create_arg_parser(&self, app: clap::Command) -> clap::Command {
     app
       .about(
         "Exports translations from a project into a different format, for example for compiling \
@@ -29,7 +29,7 @@ impl super::Command for ExportCommand {
         clap::Arg::new("project_dir")
           .value_name("PROJECT")
           .value_hint(clap::ValueHint::DirPath)
-          .allow_invalid_utf8(true)
+          .value_parser(clap::value_parser!(PathBuf))
           .required(true)
           .help("Path to the project directory."),
       )
@@ -37,7 +37,7 @@ impl super::Command for ExportCommand {
         clap::Arg::new("output")
           .value_name("PATH")
           .value_hint(clap::ValueHint::AnyPath)
-          .allow_invalid_utf8(true)
+          .value_parser(clap::value_parser!(PathBuf))
           .short('o')
           .long("output")
           .required(true)
@@ -52,7 +52,7 @@ impl super::Command for ExportCommand {
           .value_hint(clap::ValueHint::Other)
           .short('f')
           .long("format")
-          .possible_values(exporters::REGISTRY.ids())
+          .value_parser(clap::builder::PossibleValuesParser::new(exporters::REGISTRY.ids()))
           .required(true)
           .help("Format to export to."),
       )
@@ -61,13 +61,13 @@ impl super::Command for ExportCommand {
           .value_name("NAME")
           .value_hint(clap::ValueHint::Other)
           .long("splitter")
-          .possible_values(splitters::REGISTRY.ids())
+          .value_parser(clap::builder::PossibleValuesParser::new(splitters::REGISTRY.ids()))
           .help("Strategy used for splitting the exported files."),
       )
       .arg(
         clap::Arg::new("remove_untranslated")
+          .action(clap::ArgAction::SetTrue)
           .long("remove-untranslated")
-          //
           .help(
             "Whether to remove untranslated strings from the exported files. Note that some \
             formats and/or tasks may still need the empty translations.",
@@ -77,7 +77,7 @@ impl super::Command for ExportCommand {
         clap::Arg::new("mapping_output")
           .value_name("PATH")
           .value_hint(clap::ValueHint::FilePath)
-          .allow_invalid_utf8(true)
+          .value_parser(clap::value_parser!(PathBuf))
           .requires("splitter")
           .long("mapping-output")
           .help(
@@ -87,14 +87,15 @@ impl super::Command for ExportCommand {
       )
       .arg(
         clap::Arg::new("mapping_lm_paths")
+          .action(clap::ArgAction::SetTrue)
           .requires("mapping_output")
           .long("mapping-lm-paths")
           .help("Use Localize Me-style paths of game files in the mapping table."),
       )
       .arg(
         clap::Arg::new("compact")
+          .action(clap::ArgAction::SetTrue) //
           .long("compact")
-          //
           .help(
             "Write exported files compactly, for example before packaging them for distribution. \
             Note that this will mean different things depending on the output format.",
@@ -108,21 +109,21 @@ impl super::Command for ExportCommand {
     matches: &clap::ArgMatches,
     _progress: Box<dyn ProgressReporter>,
   ) -> AnyResult<()> {
-    let opt_project_dir = PathBuf::from(matches.value_of_os("project_dir").unwrap());
-    let opt_output = PathBuf::from(matches.value_of_os("output").unwrap());
-    let opt_format = RcString::from(matches.value_of("format").unwrap());
-    let opt_splitter = matches.value_of("splitter").map(RcString::from);
-    let opt_remove_untranslated = matches.is_present("remove_untranslated");
-    let opt_mapping_output = matches.value_of_os("mapping_output").map(PathBuf::from);
-    let opt_mapping_lm_paths = matches.is_present("mapping_lm_paths");
-    let opt_compact = matches.is_present("compact");
+    let opt_project_dir = matches.get_one::<PathBuf>("project_dir").unwrap();
+    let opt_output = matches.get_one::<PathBuf>("output").unwrap();
+    let opt_format = RcString::from(matches.get_one::<String>("format").unwrap());
+    let opt_splitter = matches.get_one::<String>("splitter").map(RcString::from);
+    let opt_remove_untranslated = matches.get_flag("remove_untranslated");
+    let opt_mapping_output = matches.get_one::<PathBuf>("mapping_output");
+    let opt_mapping_lm_paths = matches.get_flag("mapping_lm_paths");
+    let opt_compact = matches.get_flag("compact");
 
     info!(
       "Exporting a translation project in {:?} as {:?} into {:?}",
       opt_project_dir, opt_format, opt_output,
     );
 
-    let project = Project::open(opt_project_dir).context("Failed to open the project")?;
+    let project = Project::open(opt_project_dir.clone()).context("Failed to open the project")?;
     let mut exporter = exporters::REGISTRY
       .create(&opt_format, exporters::ExporterConfig { compact: opt_compact })
       .context("Failed to create the exporter")?;
@@ -232,14 +233,14 @@ impl super::Command for ExportCommand {
         fragments_by_export_path.len(),
       );
     } else {
-      export_fragments_to_file(&opt_output, &all_exported_fragments)
+      export_fragments_to_file(opt_output, &all_exported_fragments)
         .with_context(|| format!("Failed to export all fragments to file {:?}", opt_output))?;
       info!("Exported {} fragments", total_exported_fragments_count);
     }
 
     if let Some(mapping_file_path) = opt_mapping_output {
       json::write_file(
-        &mapping_file_path,
+        mapping_file_path,
         &exported_files_mapping,
         if opt_compact {
           json::UltimateFormatterConfig::COMPACT

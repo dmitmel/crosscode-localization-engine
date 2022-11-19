@@ -1,0 +1,14 @@
+[package]
+edition = "2018"
+publish = false
+name = "terminal_size"
+version = "0.2.2"
+description = "A smaller substitute for the terminal_size crate"
+authors = ["Dmytro Meleshko <dmytro.meleshko@gmail.com>"]
+license = "MIT"
+
+[target.'cfg(unix)'.dependencies]
+libc = { version = "0.2" }
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["handleapi", "processenv", "winbase", "wincon", "winnt"] }

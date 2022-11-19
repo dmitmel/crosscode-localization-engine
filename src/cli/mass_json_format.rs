@@ -9,7 +9,6 @@ use std::convert::TryFrom;
 use std::fs;
 use std::io::{self, Read, Seek, Write};
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::sync::mpsc;
 
 #[derive(Debug)]
@@ -18,7 +17,7 @@ pub struct MassJsonFormatCommand;
 impl super::Command for MassJsonFormatCommand {
   fn name(&self) -> &'static str { "mass-json-format" }
 
-  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
+  fn create_arg_parser(&self, app: clap::Command) -> clap::Command {
     dump_common::DumpCommandCommonOpts::add_only_formatting_to_arg_parser(
       app
         .about(
@@ -30,8 +29,8 @@ impl super::Command for MassJsonFormatCommand {
           clap::Arg::new("inputs")
             .value_name("INPUT_PATH")
             .value_hint(clap::ValueHint::AnyPath)
-            .allow_invalid_utf8(true)
-            .multiple_values(true)
+            .value_parser(clap::value_parser!(PathBuf))
+            .action(clap::ArgAction::Append)
             .help(
               "Files to format. Directories may be passed as well, in which case all .json files \
               contained within the directory will be formatted recursively.",
@@ -41,7 +40,7 @@ impl super::Command for MassJsonFormatCommand {
           clap::Arg::new("inputs_file")
             .value_name("PATH")
             .value_hint(clap::ValueHint::FilePath)
-            .allow_invalid_utf8(true)
+            .value_parser(clap::value_parser!(PathBuf))
             .short('I')
             .long("read-inputs")
             .help(
@@ -54,20 +53,21 @@ impl super::Command for MassJsonFormatCommand {
           clap::Arg::new("output")
             .value_name("PATH")
             .value_hint(clap::ValueHint::AnyPath)
-            .allow_invalid_utf8(true)
+            .value_parser(clap::value_parser!(PathBuf))
             .short('o')
             .long("output")
             .help("Path to the destination file or directory."),
         )
         .arg(
           clap::Arg::new("in_place")
+            .action(clap::ArgAction::SetTrue)
             .short('i')
             .long("in-place")
-            //
             .help("Format files in-place."),
         )
         .arg(
           clap::Arg::new("pipe")
+            .action(clap::ArgAction::SetTrue)
             .short('P')
             .long("pipe")
             .help("Use the program as a filter in shell pipes."),
@@ -94,7 +94,7 @@ impl super::Command for MassJsonFormatCommand {
               "The number of parallel worker threads allocated for formatting. Zero means using \
               as many threads as there are CPU cores available.",
             )
-            .validator(|s| usize::from_str(s).map(|_| ()))
+            .value_parser(clap::value_parser!(usize))
             .default_value("0"),
         ),
     )
@@ -106,15 +106,14 @@ impl super::Command for MassJsonFormatCommand {
     matches: &clap::ArgMatches,
     mut progress: Box<dyn ProgressReporter>,
   ) -> anyhow::Result<()> {
-    let opt_inputs: Vec<_> = matches
-      .values_of_os("inputs")
-      .map_or_else(Vec::new, |values| values.map(PathBuf::from).collect());
-    let opt_inputs_file = matches.value_of_os("inputs_file").map(PathBuf::from);
-    let opt_output = matches.value_of_os("output").map(PathBuf::from);
-    let _opt_in_place = matches.is_present("in_place");
-    let opt_pipe = matches.is_present("pipe");
-    let dump_common_opt = dump_common::DumpCommandCommonOpts::from_matches(matches);
-    let opt_jobs = usize::from_str(matches.value_of("jobs").unwrap()).unwrap();
+    let opt_inputs: Vec<_> = matches.get_many::<PathBuf>("inputs").unwrap().cloned().collect();
+    let opt_inputs_file = matches.get_one::<PathBuf>("inputs_file");
+    let opt_output = matches.get_one::<PathBuf>("output");
+    let _opt_in_place = matches.get_flag("in_place");
+    let opt_pipe = matches.get_flag("pipe");
+    let dump_common_opt =
+      dump_common::DumpCommandCommonOpts::from_matches_only_formatting(matches);
+    let opt_jobs = *matches.get_one::<usize>("jobs").unwrap();
 
     let json_config = dump_common_opt.ultimate_formatter_config();
 
@@ -128,7 +127,7 @@ impl super::Command for MassJsonFormatCommand {
       return Ok(());
     }
 
-    let inputs = super::import::collect_input_files(&opt_inputs, &opt_inputs_file, "json")?;
+    let inputs = super::import::collect_input_files(&opt_inputs, opt_inputs_file, "json")?;
     if inputs.is_empty() {
       warn!("Found no files to format!");
       return Ok(());
@@ -169,7 +168,7 @@ impl super::Command for MassJsonFormatCommand {
     let mut errors_count: usize = 0;
     for (task_index, (input_entry_arg, input_entry)) in inputs.into_iter().enumerate() {
       let task_results_tx = task_results_tx.clone();
-      let opt_output = opt_output.clone();
+      let opt_output = opt_output.cloned();
       let json_config = json_config.clone();
       let input_entry_arg: PathBuf = input_entry_arg.rc_clone_inner();
 

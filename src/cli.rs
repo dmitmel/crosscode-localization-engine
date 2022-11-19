@@ -17,13 +17,13 @@ use crate::progress::ProgressReporter;
 
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
-pub struct GlobalOpts {
+pub struct GlobalOpts<'arg> {
   pub verbose: bool,
   pub progress_mode: ProgressMode,
-  pub cd: Option<PathBuf>,
+  pub cd: Option<&'arg Path>,
   pub no_banner_message: bool,
 }
 
@@ -34,17 +34,29 @@ pub enum ProgressMode {
   Never,
 }
 
-impl GlobalOpts {
-  pub fn create_arg_parser<'help>() -> clap::Command<'help> {
+impl clap::ValueEnum for ProgressMode {
+  fn value_variants<'a>() -> &'a [Self] { &[Self::Auto, Self::Always, Self::Never] }
+
+  fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+    Some(clap::builder::PossibleValue::new(match self {
+      Self::Auto => "auto",
+      Self::Always => "always",
+      Self::Never => "never",
+    }))
+  }
+}
+
+impl<'arg> GlobalOpts<'arg> {
+  pub fn create_arg_parser() -> clap::Command {
     clap::Command::new(crate::CRATE_TITLE)
       .version(crate::CRATE_NICE_VERSION)
       .about("CrossCode Localization Engine command-line tool")
-      .allow_hyphen_values(true)
       .next_line_help(true)
       .subcommand_required(true)
       .arg_required_else_help(true)
       .arg(
         clap::Arg::new("verbose")
+          .action(clap::ArgAction::SetTrue)
           .short('v')
           .long("verbose")
           .help("Print more logs, may be helpful for troubleshooting.")
@@ -57,7 +69,7 @@ impl GlobalOpts {
           .short('p')
           .long("progress")
           .help("Enable the fancy progress bars.")
-          .possible_values(&["auto", "always", "never"])
+          .value_parser(["auto", "always", "never"])
           .default_value("auto")
           .global(true),
       )
@@ -65,7 +77,7 @@ impl GlobalOpts {
         clap::Arg::new("cd")
           .value_name("DIR")
           .value_hint(clap::ValueHint::DirPath)
-          .allow_invalid_utf8(true)
+          .value_parser(clap::value_parser!(PathBuf))
           .short('C')
           .long("cd")
           .help("Change the working directory first before doing anything.")
@@ -73,23 +85,24 @@ impl GlobalOpts {
       )
       .arg(
         clap::Arg::new("no_banner_message")
+          .action(clap::ArgAction::SetTrue)
           .long("no-banner-message")
           .help("Don't print the banner message with the program information when starting.")
           .global(true),
       )
   }
 
-  pub fn from_matches(matches: &clap::ArgMatches) -> Self {
+  pub fn from_matches(matches: &'arg clap::ArgMatches) -> Self {
     Self {
-      verbose: matches.is_present("verbose"),
-      progress_mode: match matches.value_of("progress_mode").unwrap() {
+      verbose: matches.get_flag("verbose"),
+      progress_mode: match matches.get_one::<String>("progress_mode").unwrap().as_str() {
         "auto" => ProgressMode::Auto,
         "always" => ProgressMode::Always,
         "never" => ProgressMode::Never,
         _ => unreachable!(),
       },
-      cd: matches.value_of_os("cd").map(PathBuf::from),
-      no_banner_message: matches.is_present("no_banner_message"),
+      cd: matches.get_one::<PathBuf>("cd").map(|p| p.as_path()),
+      no_banner_message: matches.get_flag("no_banner_message"),
     }
   }
 }
@@ -97,7 +110,7 @@ impl GlobalOpts {
 assert_trait_is_object_safe!(Command);
 pub trait Command: Send + Sync {
   fn name(&self) -> &'static str;
-  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help>;
+  fn create_arg_parser(&self, app: clap::Command) -> clap::Command;
   fn run(
     &self,
     global_opts: GlobalOpts,
@@ -123,8 +136,8 @@ pub static ALL_COMMANDS: Lazy<Vec<&'static dyn Command>> = Lazy::new(|| {
   ]
 });
 
-pub fn create_complete_arg_parser<'help>(
-) -> (clap::Command<'help>, HashMap<&'static str, &'static dyn Command>) {
+pub fn create_complete_arg_parser() -> (clap::Command, HashMap<&'static str, &'static dyn Command>)
+{
   let mut arg_parser = GlobalOpts::create_arg_parser();
   let mut all_commands_map = HashMap::new();
   for command in ALL_COMMANDS.iter() {

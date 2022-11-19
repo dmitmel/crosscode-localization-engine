@@ -110,7 +110,7 @@ impl ProgressReporter for TuiProgresReporter {
     };
     let elapsed: Duration = start_time.elapsed();
 
-    let term_width = terminal_size().map(|(w, _h): (u16, u16)| w as usize).unwrap_or(80);
+    let term_width = terminal_size::terminal_size().map(|(w, _h)| w.0 as usize).unwrap_or(80);
 
     let rate = current as f64 / elapsed.as_secs_f64();
 
@@ -192,44 +192,5 @@ impl ProgressReporter for TuiProgresReporter {
 
     self.prev_redraw_time = Some(Instant::now());
     Ok(())
-  }
-}
-
-/// Copied from <https://github.com/eminence/terminal-size/blob/68753331337bbf61f19d60511811fc981e67a528/src/unix.rs>
-/// and <https://github.com/eminence/terminal-size/blob/68753331337bbf61f19d60511811fc981e67a528/src/windows.rs>.
-pub fn terminal_size() -> Option<(u16, u16)> {
-  use std::mem;
-
-  #[cfg(unix)]
-  unsafe {
-    let fd = libc::STDERR_FILENO;
-    if libc::isatty(fd) != 1 {
-      return None;
-    }
-    let mut winsize: libc::winsize = mem::zeroed();
-    if libc::ioctl(fd, libc::TIOCGWINSZ, &mut winsize) != 0 {
-      return None;
-    }
-    Some((winsize.ws_col, winsize.ws_row))
-  }
-
-  #[cfg(windows)]
-  unsafe {
-    use winapi::um::handleapi::INVALID_HANDLE_VALUE;
-    use winapi::um::processenv::GetStdHandle;
-    use winapi::um::winbase::STD_ERROR_HANDLE;
-    use winapi::um::wincon::{GetConsoleScreenBufferInfo, CONSOLE_SCREEN_BUFFER_INFO};
-
-    let handle = GetStdHandle(STD_ERROR_HANDLE);
-    if handle == INVALID_HANDLE_VALUE {
-      return None;
-    }
-    let mut csbi: CONSOLE_SCREEN_BUFFER_INFO = mem::zeroed();
-    if GetConsoleScreenBufferInfo(handle, &mut csbi) == 0 {
-      return None;
-    }
-    let w = (csbi.srWindow.Right - csbi.srWindow.Left + 1) as u16;
-    let h = (csbi.srWindow.Bottom - csbi.srWindow.Top + 1) as u16;
-    Some((w, h))
   }
 }

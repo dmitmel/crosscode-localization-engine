@@ -12,7 +12,7 @@ pub struct StatusCommand;
 impl super::Command for StatusCommand {
   fn name(&self) -> &'static str { "status" }
 
-  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
+  fn create_arg_parser(&self, app: clap::Command) -> clap::Command {
     app
       .about("Displays general information about the project, such as translation progress.")
       //
@@ -20,7 +20,7 @@ impl super::Command for StatusCommand {
         clap::Arg::new("project_dir")
           .value_name("PROJECT")
           .value_hint(clap::ValueHint::DirPath)
-          .allow_invalid_utf8(true)
+          .value_parser(clap::value_parser!(PathBuf))
           .required(true)
           .help("Path to the project directory."),
       )
@@ -32,9 +32,9 @@ impl super::Command for StatusCommand {
     matches: &clap::ArgMatches,
     _progress: Box<dyn ProgressReporter>,
   ) -> AnyResult<()> {
-    let opt_project_dir = PathBuf::from(matches.value_of_os("project_dir").unwrap());
+    let opt_project_dir = matches.get_one::<PathBuf>("project_dir").unwrap();
 
-    let project = Project::open(opt_project_dir).context("Failed to open the project")?;
+    let project = Project::open(opt_project_dir.clone()).context("Failed to open the project")?;
 
     let mut total_fragments: u64 = 0;
     let mut unique_fragments = HashMap::<RcString, u64>::new();

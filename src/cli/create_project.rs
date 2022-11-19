@@ -16,14 +16,14 @@ pub struct CreateProjectCommand;
 impl super::Command for CreateProjectCommand {
   fn name(&self) -> &'static str { "create-project" }
 
-  fn create_arg_parser<'help>(&self, app: clap::Command<'help>) -> clap::Command<'help> {
+  fn create_arg_parser(&self, app: clap::Command) -> clap::Command {
     app
       .about("Creates an empty translation project using the data obtained by scanning the game.")
       .arg(
         clap::Arg::new("project_dir")
           .value_name("PROJECT")
           .value_hint(clap::ValueHint::DirPath)
-          .allow_invalid_utf8(true)
+          .value_parser(clap::value_parser!(PathBuf))
           .required(true)
           .help("Path to the project directory."),
       )
@@ -31,7 +31,7 @@ impl super::Command for CreateProjectCommand {
         clap::Arg::new("main_scan_db")
           .value_name("MAIN_SCAN_DB_PATH")
           .value_hint(clap::ValueHint::FilePath)
-          .allow_invalid_utf8(true)
+          .value_parser(clap::value_parser!(PathBuf))
           .required(true)
           .help("Path to the main scan database from which the project will be generated."),
       )
@@ -39,8 +39,8 @@ impl super::Command for CreateProjectCommand {
         clap::Arg::new("extra_scan_dbs")
           .value_name("EXTRA_SCAN_DB_PATHS")
           .value_hint(clap::ValueHint::FilePath)
-          .allow_invalid_utf8(true)
-          .multiple_values(true)
+          .value_parser(clap::value_parser!(PathBuf))
+          .action(clap::ArgAction::Append)
           .help(
             "Paths to extra scan databases from which additional fragments will be read. Keep \
             in mind that the metadata only of the main database will be used.",
@@ -58,8 +58,6 @@ impl super::Command for CreateProjectCommand {
         clap::Arg::new("reference_locales")
           .value_name("LOCALE")
           .value_hint(clap::ValueHint::Other)
-          .multiple_values(true)
-          .number_of_values(1)
           .long("reference-locales")
           .help("Other original locales to include for reference."),
       )
@@ -76,7 +74,7 @@ impl super::Command for CreateProjectCommand {
           .value_name("NAME")
           .value_hint(clap::ValueHint::Other)
           .long("splitter")
-          .possible_values(splitters::REGISTRY.ids())
+          .value_parser(clap::builder::PossibleValuesParser::new(splitters::REGISTRY.ids()))
           .default_value(splitters::NextGenerationSplitter::ID)
           .help(
             "Strategy used for assigning game files (and individual fragments in them) to \
@@ -88,11 +86,11 @@ impl super::Command for CreateProjectCommand {
           .value_name("PATH")
           .value_hint(clap::ValueHint::DirPath)
           .long("translations-dir")
-          .validator_os(|s| {
+          .value_parser(|s: &str| {
             if !Path::new(s).is_relative() {
               return Err("Path must be relative".to_owned());
             }
-            Ok(())
+            Ok(s.to_owned())
           })
           .default_value("tr")
           .help("Path to project's translation storage files, relative to project's directory."),
@@ -105,18 +103,21 @@ impl super::Command for CreateProjectCommand {
     matches: &clap::ArgMatches,
     _progress: Box<dyn ProgressReporter>,
   ) -> AnyResult<()> {
-    let opt_project_dir = PathBuf::from(matches.value_of_os("project_dir").unwrap());
-    let opt_main_scan_db = PathBuf::from(matches.value_of_os("main_scan_db").unwrap());
+    let opt_project_dir = matches.get_one::<PathBuf>("project_dir").unwrap();
+    let opt_main_scan_db = matches.get_one::<PathBuf>("main_scan_db").unwrap();
     let opt_extra_scan_dbs: Vec<_> = matches
-      .values_of_os("extra_scan_dbs")
-      .map_or_else(Vec::new, |values| values.map(PathBuf::from).collect());
-    let opt_original_locale = RcString::from(matches.value_of("original_locale").unwrap());
+      .get_many::<PathBuf>("extra_scan_dbs")
+      .map_or_else(Vec::new, |values| values.cloned().collect());
+    let opt_original_locale =
+      RcString::from(matches.get_one::<String>("original_locale").unwrap());
     let opt_reference_locales: HashSet<_> = matches
-      .values_of("reference_locales")
+      .get_many::<String>("reference_locales")
       .map_or_else(HashSet::new, |values| values.map(RcString::from).collect());
-    let opt_translation_locale = RcString::from(matches.value_of("translation_locale").unwrap());
-    let opt_splitter = RcString::from(matches.value_of("splitter").unwrap());
-    let opt_translations_dir = RcString::from(matches.value_of("translations_dir").unwrap());
+    let opt_translation_locale =
+      RcString::from(matches.get_one::<String>("translation_locale").unwrap());
+    let opt_splitter = RcString::from(matches.get_one::<String>("splitter").unwrap());
+    let opt_translations_dir =
+      RcString::from(matches.get_one::<String>("translations_dir").unwrap());
 
     info!(
       "Creating a translation project in {:?}, translation from {:?} to {:?}",
@@ -125,7 +126,7 @@ impl super::Command for CreateProjectCommand {
 
     info!("Reading the main scan database from {:?}", opt_main_scan_db);
     let main_scan_db =
-      scan::ScanDb::open(opt_main_scan_db).context("Failed to open a scan database")?;
+      scan::ScanDb::open(opt_main_scan_db.clone()).context("Failed to open a scan database")?;
     let scan_game_version = main_scan_db.meta().game_version.share_rc();
 
     let mut scan_dbs = Vec::with_capacity(1 + opt_extra_scan_dbs.len());
@@ -144,20 +145,21 @@ impl super::Command for CreateProjectCommand {
       scan_dbs.push(extra_scan_db);
     }
 
-    utils::create_dir_recursively(&opt_project_dir).context("Failed to create the project dir")?;
+    utils::create_dir_recursively(opt_project_dir).context("Failed to create the project dir")?;
     let timestamp = utils::get_timestamp();
-    let project = project::Project::create(opt_project_dir, project::ProjectMetaInitOpts {
-      id: utils::new_uuid(),
-      creation_timestamp: timestamp,
-      modification_timestamp: timestamp,
-      game_version: scan_game_version,
-      original_locale: opt_original_locale,
-      reference_locales: Rc::new(opt_reference_locales),
-      translation_locale: opt_translation_locale,
-      translations_dir: opt_translations_dir,
-      splitter: opt_splitter,
-    })
-    .context("Failed to create the project structure")?;
+    let project =
+      project::Project::create(opt_project_dir.clone(), project::ProjectMetaInitOpts {
+        id: utils::new_uuid(),
+        creation_timestamp: timestamp,
+        modification_timestamp: timestamp,
+        game_version: scan_game_version,
+        original_locale: opt_original_locale,
+        reference_locales: Rc::new(opt_reference_locales),
+        translation_locale: opt_translation_locale,
+        translations_dir: opt_translations_dir,
+        splitter: opt_splitter,
+      })
+      .context("Failed to create the project structure")?;
 
     info!("Generating project translation files");
 
