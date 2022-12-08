@@ -148,13 +148,20 @@ public:
   }
 
   std::vector<napi_value> GetResult(Napi::Env env) override {
-    if (!this->has_error) {
-      return {env.Null(),
-        Napi::Buffer<uint8_t>::Copy(env, this->message_str->ptr, this->message_str->len)};
-    } else {
+    if (this->has_error) {
       Napi::Error obj = error.to_node_error(env);
       return {obj.Value()};
     }
+    // Here's a similar use-case in a very popular library.
+    // <https://github.com/zeromq/zeromq.js/blob/47bb35c1941cb4fa8b510fb7da4d40b37cfa2e5f/src/incoming_msg.cc#L17-L56>
+    FfiMessage* message = this->message_str.release();
+    Napi::MemoryManagement::AdjustExternalMemory(env, message->len);
+    auto free_message_buffer = [](Napi::Env env, uint8_t* ptr, FfiMessage* message) {
+      Napi::MemoryManagement::AdjustExternalMemory(env, -message->len);
+      delete message;
+    };
+    return {env.Null(),
+      Napi::Buffer<uint8_t>::New(env, message->ptr, message->len, free_message_buffer, message)};
   }
 
 private:

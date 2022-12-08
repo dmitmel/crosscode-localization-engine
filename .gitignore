@@ -4,6 +4,7 @@
 
 node_modules/
 .ccls-cache/
+**/.cache/clangd/
 compile_commands.json
 /node-bindings/build/
 
