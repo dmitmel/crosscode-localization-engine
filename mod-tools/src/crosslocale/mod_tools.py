@@ -565,15 +565,15 @@ class Project:
       "localize_me_url":
         "https://github.com/L-Sherry/Localize-me/tarball/${localize_me_commit}",
       "ccloader_build":
-        "20220627193202",
+        "20221224174139",
       "ccloader_file":
         "ccloader-${ccloader_build}.tgz",
       "ccloader_url":
         "https://stronghold.openkrosskod.org/~dmitmel/ccloader3/${ccloader_build}/ccloader_3.0.0-alpha_quick-install.tgz",
       "ultimate_ui_cc_ru_version":
-        "1.3.5",
+        "1.3.6",
       "ultimate_ui_version":
-        "1.2.1",
+        "1.3.0",
       "ultimate_ui_file":
         "ultimate-localized-ui-${ultimate_ui_version}.tgz",
       "ultimate_ui_url":
